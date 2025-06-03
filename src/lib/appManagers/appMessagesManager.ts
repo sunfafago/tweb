@@ -920,7 +920,740 @@ export class AppMessagesManager extends AppManager {
 
     return Promise.all(promises).then(noop);
   }
+  public async _sendText(
+    options: MessageSendingParams & Partial<{
+      text: string,
+      entities: MessageEntity[],
+      viaBotId: BotId,
+      queryId: string,
+      resultId: string,
+      noWebPage: true,
+      replyMarkup: ReplyMarkup,
+      clearDraft: true,
+      invertMedia: boolean,
+      webPage: WebPage,
+      webPageOptions: Partial<{
+        largeMedia: boolean,
+        smallMedia: boolean,
+        optional: boolean
+      }>
+    }>
+  ) {
+    let {peerId, text} = options;
+    if(!text.trim()) {
+      return;
+    }
 
+    options.entities ??= [];
+    options.webPageOptions ??= {};
+
+    this.checkSendOptions(options);
+
+    const config = await this.apiManager.getConfig();
+    const MAX_LENGTH = config.message_length_max;
+    const splitted = splitStringByLength(text, MAX_LENGTH);
+    text = splitted[0];
+    if(splitted.length > 1) {
+      if(options.webPage?._ === 'webPage' && !text.includes(options.webPage.url)) {
+        delete options.webPage;
+      }
+    }
+
+    peerId = this.appPeersManager.getPeerMigratedTo(peerId) || peerId;
+
+    let entities = options.entities;
+    if(!options.viaBotId) {
+      [text, entities] = parseMarkdown(text, entities);
+    }
+
+    const sendEntities = this.getInputEntities(entities);
+
+    const message = this.generateOutgoingMessage(peerId, options);
+    message.entities = entities;
+    message.message = text;
+
+    const isChannel = this.appPeersManager.isChannel(peerId);
+
+    const webPageSend = this.generateOutgoingWebPage(message, options);
+
+    const toggleError = (error?: ApiError) => {
+      this.onMessagesSendError([message], error);
+      this.rootScope.dispatchEvent('messages_pending');
+    };
+
+    const paidStars = options.confirmedPaymentResult?.starsAmount || undefined;
+
+    message.send = () => {
+      toggleError();
+      const sentRequestOptions: PendingAfterMsg = {};
+      if(this.pendingAfterMsgs[peerId]) {
+        sentRequestOptions.afterMessageId = this.pendingAfterMsgs[peerId].messageId;
+      }
+
+      const sendAs = options.sendAsPeerId ? this.appPeersManager.getInputPeerById(options.sendAsPeerId) : undefined
+      const inputPeer = this.appPeersManager.getInputPeerById(peerId);
+      const replyTo = options.replyTo;
+      let apiPromise: any;
+      if(options.viaBotId) {
+        apiPromise = this.apiManager.invokeApiAfter('messages.sendInlineBotResult', {
+          peer: inputPeer,
+          random_id: message.random_id,
+          reply_to: replyTo,
+          query_id: options.queryId,
+          id: options.resultId,
+          clear_draft: options.clearDraft,
+          send_as: sendAs,
+          allow_paid_stars: paidStars
+        }, sentRequestOptions);
+      } else {
+        const commonOptions: Partial<MessagesSendMessage | MessagesSendMedia> = {
+          peer: inputPeer,
+          message: text,
+          random_id: message.random_id,
+          reply_to: replyTo,
+          entities: sendEntities,
+          clear_draft: options.clearDraft,
+          schedule_date: options.scheduleDate || undefined,
+          silent: options.silent,
+          send_as: sendAs,
+          update_stickersets_order: options.updateStickersetOrder,
+          invert_media: options.invertMedia,
+          effect: options.effect,
+          allow_paid_stars: paidStars
+        };
+
+        const mergedOptions: MessagesSendMessage | MessagesSendMedia = {
+          ...commonOptions as any,
+          ...webPageSend
+        };
+
+        apiPromise = this.apiManager.invokeApiAfter(
+          options.webPage ? 'messages.sendMedia' : 'messages.sendMessage',
+          mergedOptions,
+          sentRequestOptions
+        );
+      }
+
+      this.pendingAfterMsgs[peerId] = sentRequestOptions;
+
+      return apiPromise.then((updates: Updates) => {
+        if(updates._ === 'updateShortSentMessage') {
+          // * fix copying object with promise
+          const promise = message.promise;
+          delete message.promise;
+          const newMessage = copy(message);
+          defineNotNumerableProperties(message, ['promise']);
+          message.promise = promise;
+
+          newMessage.date = updates.date;
+          newMessage.id = updates.id;
+          newMessage.media = updates.media;
+          newMessage.entities = updates.entities;
+          newMessage.ttl_period = updates.ttl_period;
+          this.wrapMessageEntities(newMessage);
+          if(updates.pFlags.out) {
+            newMessage.pFlags.out = true;
+          }
+
+          // * override with new updates
+          const {pts, pts_count} = updates;
+
+          this.apiUpdatesManager.processLocalUpdate({
+            _: 'updateMessageID',
+            random_id: message.random_id,
+            id: newMessage.id
+          });
+
+          this.apiUpdatesManager.processLocalUpdate({
+            _: options.scheduleDate ? 'updateNewScheduledMessage' : (isChannel ? 'updateNewChannelMessage' : 'updateNewMessage'),
+            message: newMessage,
+            pts,
+            pts_count
+          });
+
+          updates = undefined;
+        } else if((updates as Updates.updates).updates) {
+          (updates as Updates.updates).updates.forEach((update) => {
+            if(update._ === 'updateDraftMessage') {
+              update.local = true;
+            }
+          });
+        }
+
+        if(updates) {
+          this.apiUpdatesManager.processUpdateMessage(updates);
+          this.apiUpdatesManager.processPaidMessageUpdate({
+            paidStars,
+            wereStarsReserved: options.confirmedPaymentResult?.canUndo
+          });
+        }
+
+        return updates;
+      }, (error: ApiError) => {
+        toggleError(error);
+        throw error;
+      }).finally(() => {
+        if(this.pendingAfterMsgs[peerId] === sentRequestOptions) {
+          delete this.pendingAfterMsgs[peerId];
+        }
+      });
+    };
+
+    this.beforeMessageSending(message, {
+      isScheduled: !!options.scheduleDate || undefined,
+      threadId: options.threadId,
+      clearDraft: options.clearDraft,
+      sequential: true,
+      confirmedPaymentResult: options.confirmedPaymentResult
+    });
+
+    // 直接返回message.send()的结果
+    if(splitted.length === 1) {
+      return message.send();
+    }
+
+    // 如果消息需要分片发送，则返回第一条消息的发送结果
+    const otherPromises = [];
+    for(let i = 1; i < splitted.length; ++i) {
+      otherPromises.push(this.sendText({
+        ...options,
+        peerId,
+        text: splitted[i]
+      }));
+    }
+
+    // 在后台处理其他分片的发送
+    Promise.all(otherPromises).catch(console.error);
+    
+    return message.send();
+  }
+
+  public _sendFile(options: MessageSendingParams & SendFileDetails & Partial<{
+    isRoundMessage: boolean,
+    isVoiceMessage: boolean,
+    isGroupedItem: boolean,
+    isMedia: boolean,
+
+    groupId: string,
+    caption: string,
+    entities: MessageEntity[],
+    background: boolean,
+    clearDraft: boolean,
+    noSound: boolean,
+
+    waveform: Uint8Array,
+
+    stars: number,
+    groupedMessage: Message.message,
+    useTempMediaId: boolean,
+
+    // ! only for internal use
+    processAfter?: typeof processAfter
+  }>) {
+    let file = options.file;
+    let {peerId} = options;
+    peerId = this.appPeersManager.getPeerMigratedTo(peerId) || peerId;
+
+    this.checkSendOptions(options);
+
+    const isDocument = !(file instanceof File) && !(file instanceof Blob);
+    if(isDocument) {
+      file = this.appDocsManager.getDoc((file as MyDocument).id) || file;
+    }
+
+    const hadMessageBefore = !!options.groupedMessage;
+    const message = options.groupedMessage || this.generateOutgoingMessage(peerId, options);
+
+    let attachType: 'document' | 'audio' | 'video' | 'voice' | 'photo', apiFileName: string;
+
+    const fileType = (file as Document.document).mime_type || file.type;
+    const fileName = file instanceof File ? file.name : '';
+    let caption = options.caption || '';
+
+    this.log('sendFile', file, fileType);
+
+    let entities = options.entities || [];
+    if(caption) {
+      [caption, entities] = parseMarkdown(caption, entities);
+    }
+
+    const attributes: DocumentAttribute[] = [];
+
+    const isPhoto = getEnvironment().IMAGE_MIME_TYPES_SUPPORTED.has(fileType);
+
+    const strippedPhotoSize: PhotoSize.photoStrippedSize = options.strippedBytes && {
+      _: 'photoStrippedSize',
+      bytes: options.strippedBytes,
+      type: 'i'
+    };
+
+    const mediaTempId = options.useTempMediaId ? this.mediaTempId++ : message.id;
+    let photo: MyPhoto, document: MyDocument;
+
+    let actionName: Extract<SendMessageAction['_'], 'sendMessageUploadAudioAction' | 'sendMessageUploadDocumentAction' | 'sendMessageUploadPhotoAction' | 'sendMessageUploadVideoAction'>;
+    if(isDocument) { // maybe it's a sticker or gif
+      attachType = 'document';
+      apiFileName = '';
+    } else if(fileType.indexOf('audio/') === 0 || ['video/ogg'].indexOf(fileType) >= 0) {
+      attachType = 'audio';
+      apiFileName = 'audio.' + (fileType.split('/')[1] === 'ogg' ? 'ogg' : 'mp3');
+      actionName = 'sendMessageUploadAudioAction';
+
+      if(options.isVoiceMessage) {
+        attachType = 'voice';
+        if(message) message.pFlags.media_unread = true;
+      }
+
+      const attribute: DocumentAttribute.documentAttributeAudio = {
+        _: 'documentAttributeAudio',
+        pFlags: {
+          voice: options.isVoiceMessage || undefined
+        },
+        waveform: options.waveform,
+        duration: options.duration || undefined
+      };
+
+      attributes.push(attribute);
+    } else if(!options.isMedia) {
+      attachType = 'document';
+      apiFileName = 'document.' + fileType.split('/')[1];
+      actionName = 'sendMessageUploadDocumentAction';
+    } else if(isPhoto) {
+      attachType = 'photo';
+      apiFileName = 'photo.' + fileType.split('/')[1];
+      actionName = 'sendMessageUploadPhotoAction';
+
+      const photoSize = {
+        _: 'photoSize',
+        w: options.width,
+        h: options.height,
+        type: THUMB_TYPE_FULL,
+        location: null,
+        size: file.size
+      } as PhotoSize.photoSize;
+
+      photo = {
+        _: 'photo',
+        id: mediaTempId,
+        sizes: [photoSize],
+        w: options.width,
+        h: options.height
+      } as any;
+
+      if(strippedPhotoSize) {
+        photo.sizes.unshift(strippedPhotoSize);
+      }
+
+      this.thumbsStorage.setCacheContextURL(
+        photo,
+        photoSize.type,
+        options.objectURL || '',
+        file.size
+      );
+
+      photo = this.appPhotosManager.savePhoto(photo);
+    } else if(getEnvironment().VIDEO_MIME_TYPES_SUPPORTED.has(fileType as VIDEO_MIME_TYPE)) {
+      attachType = 'video';
+      apiFileName = 'video.mp4';
+      actionName = 'sendMessageUploadVideoAction';
+
+      const videoAttribute: DocumentAttribute.documentAttributeVideo = {
+        _: 'documentAttributeVideo',
+        pFlags: {
+          round_message: options.isRoundMessage || undefined,
+          supports_streaming: true
+        },
+        duration: options.duration,
+        w: options.width,
+        h: options.height
+      };
+
+      attributes.push(videoAttribute);
+
+      // * must follow after video attribute
+      if(options.noSound &&
+        file.size > (10 * 1024) &&
+        file.size < (10 * 1024 * 1024)) {
+        attributes.push({
+          _: 'documentAttributeAnimated'
+        });
+      }
+    } else {
+      attachType = 'document';
+      apiFileName = 'document.' + fileType.split('/')[1];
+      actionName = 'sendMessageUploadDocumentAction';
+    }
+
+    attributes.push({_: 'documentAttributeFilename', file_name: fileName || apiFileName});
+
+    if(
+      (['document', 'video', 'audio', 'voice'] as (typeof attachType)[]).includes(attachType) &&
+      !isDocument
+    ) {
+      const thumbs: PhotoSize[] = [];
+      document = {
+        _: 'document',
+        id: mediaTempId,
+        duration: options.duration,
+        attributes,
+        w: options.width,
+        h: options.height,
+        thumbs,
+        mime_type: fileType,
+        size: file.size
+      } as any;
+
+      if(options.objectURL) {
+        this.thumbsStorage.setCacheContextURL(
+          document,
+          undefined,
+          options.objectURL,
+          file.size
+        );
+      }
+
+      let thumb: PhotoSize.photoSize;
+      if(isPhoto) {
+        attributes.push({
+          _: 'documentAttributeImageSize',
+          w: options.width,
+          h: options.height
+        });
+
+        thumb = {
+          _: 'photoSize',
+          w: options.width,
+          h: options.height,
+          type: THUMB_TYPE_FULL,
+          size: file.size
+        };
+      } else if(attachType === 'video') {
+        if(options.thumb) {
+          thumb = {
+            _: 'photoSize',
+            w: options.thumb.size.width,
+            h: options.thumb.size.height,
+            type: 'local-thumb',
+            size: options.thumb.blob.size
+          };
+
+          this.thumbsStorage.setCacheContextURL(
+            document,
+            thumb.type,
+            options.thumb.url,
+            thumb.size
+          );
+        }
+      }
+
+      if(thumb) {
+        thumbs.push(thumb);
+      }
+
+      if(strippedPhotoSize) {
+        thumbs.unshift(strippedPhotoSize);
+      }
+
+      /* if(thumbs.length) {
+        const thumb = thumbs[0] as PhotoSize.photoSize;
+        const docThumb = appPhotosManager.getDocumentCachedThumb(document.id);
+        docThumb.downloaded = thumb.size;
+        docThumb.url = thumb.url;
+      } */
+
+      document = this.appDocsManager.saveDoc(document);
+    }
+
+    this.log('sendFile', attachType, apiFileName, file.type, options);
+
+    const sentDeferred = deferredPromise<InputMedia>();
+    // sentDeferred.cancel = () => {
+    //   const error = new Error('Download canceled');
+    //   error.name = 'AbortError';
+    //   sentDeferred.reject(error);
+
+    //   if(uploadPromise?.cancel) {
+    //     uploadPromise.cancel();
+    //   }
+    // };
+
+    const media: MessageMedia = isDocument ? undefined : {
+      _: photo ? 'messageMediaPhoto' : 'messageMediaDocument',
+      pFlags: {},
+      // preloader,
+      photo,
+      document
+    };
+
+    if(media) {
+      defineNotNumerableProperties(media as any, ['promise']);
+      (media as any).promise = sentDeferred;
+
+      if(options.spoiler) {
+        (media as MessageMedia.messageMediaPhoto).pFlags.spoiler = true;
+      }
+    }
+
+    const sendEntities = this.getInputEntities(entities);
+
+    const uploadingFileName = !isDocument ? getFileNameForUpload(file as File | Blob) : undefined;
+    if(uploadingFileName) {
+      this.uploadFilePromises[uploadingFileName] = sentDeferred;
+    }
+
+    if(!hadMessageBefore) {
+      if(options.invertMedia) {
+        message.pFlags.invert_media = true;
+      }
+
+      message.entities = entities;
+      message.message = caption;
+      message.media = isDocument ? {
+        _: 'messageMediaDocument',
+        pFlags: {},
+        document: file
+      } as MessageMedia.messageMediaDocument : media;
+      message.uploadingFileName = [uploadingFileName];
+
+      if(options.stars) {
+        message.media = this.generateOutgoingPaidMedia([message], options.stars);
+      }
+    }
+
+    const toggleError = (error?: ApiError) => {
+      this.onMessagesSendError([message], error);
+      this.rootScope.dispatchEvent('messages_pending');
+    };
+
+    let uploaded = false,
+      uploadPromise: ReturnType<ApiFileManager['upload']> = null;
+
+    const upload = () => {
+      if(isDocument) {
+        const inputMedia: InputMedia = {
+          _: 'inputMediaDocument',
+          id: getDocumentInput(file as MyDocument),
+          pFlags: {}
+        };
+
+        sentDeferred.resolve(inputMedia);
+      } else if(file instanceof File || file instanceof Blob) {
+        const load = () => {
+          if(!uploaded || message?.error) {
+            uploaded = false;
+
+            uploadPromise = this.apiFileManager.upload({file, fileName: uploadingFileName});
+            uploadPromise.catch((err) => {
+              if(uploaded) {
+                return;
+              }
+
+              this.log('cancelling upload', media);
+
+              message && this.cancelPendingMessage(message.random_id);
+              this.setTyping(peerId, {_: 'sendMessageCancelAction'}, undefined, options.threadId);
+              sentDeferred.reject(err);
+            });
+
+            uploadPromise.addNotifyListener((progress: Progress) => {
+              /* if(DEBUG) {
+                this.log('upload progress', progress);
+              } */
+
+              const percents = Math.max(1, Math.floor(100 * progress.done / progress.total));
+              if(actionName) {
+                this.setTyping(peerId, {_: actionName, progress: percents | 0}, undefined, options.threadId);
+              }
+              sentDeferred.notifyAll(progress);
+            });
+
+            sentDeferred.notifyAll({done: 0, total: file.size});
+          }
+
+          let thumbUploadPromise: typeof uploadPromise;
+          if(attachType === 'video' && options.objectURL && options.thumb?.blob) {
+            thumbUploadPromise = this.apiFileManager.upload({file: options.thumb.blob});
+          }
+
+          uploadPromise && uploadPromise.then(async(inputFile) => {
+            /* if(DEBUG) {
+              this.log('appMessagesManager: sendFile uploaded:', inputFile);
+            } */
+
+            (inputFile as InputFile.inputFile).name = apiFileName;
+            uploaded = true;
+            let inputMedia: InputMedia;
+            switch(attachType) {
+              case 'photo':
+                inputMedia = {
+                  _: 'inputMediaUploadedPhoto',
+                  file: inputFile,
+                  pFlags: {
+                    spoiler: options.spoiler || undefined
+                  }
+                };
+                break;
+
+              default:
+                inputMedia = {
+                  _: 'inputMediaUploadedDocument',
+                  file: inputFile,
+                  mime_type: fileType,
+                  pFlags: {
+                    force_file: actionName === 'sendMessageUploadDocumentAction' || undefined,
+                    spoiler: options.spoiler || undefined
+                    // nosound_video: options.noSound ? true : undefined
+                  },
+                  attributes
+                };
+            }
+
+            if(options.stars && !options.isGroupedItem) {
+              inputMedia = {
+                _: 'inputMediaPaidMedia',
+                extended_media: [inputMedia],
+                stars_amount: '' + options.stars
+              };
+            }
+
+            if(thumbUploadPromise) {
+              try {
+                const inputFile = await thumbUploadPromise;
+                (inputMedia as InputMedia.inputMediaUploadedDocument).thumb = inputFile;
+              } catch(err) {
+                this.log.error('sendFile thumb upload error:', err);
+              }
+            }
+
+            sentDeferred.resolve(inputMedia);
+          }, (error: ApiError) => {
+            toggleError(error);
+          });
+
+          return sentDeferred;
+        };
+
+        if(options.isGroupedItem) {
+          load();
+        } else {
+          this.sendSmthLazyLoadQueue.push({
+            load
+          });
+        }
+      }
+
+      return sentDeferred;
+    };
+
+    if(!hadMessageBefore && !options.confirmedPaymentResult?.canUndo) {
+      message.send = upload;
+    }
+
+    if(!hadMessageBefore) this.beforeMessageSending(message, {
+      isGroupedItem: options.isGroupedItem,
+      isScheduled: !!options.scheduleDate || undefined,
+      threadId: options.threadId,
+      clearDraft: options.clearDraft,
+      processAfter: options.processAfter
+    });
+
+    if(!options.isGroupedItem) {
+      const invokeSend = (inputMedia: Awaited<typeof sentDeferred>) => {
+        const paidStars = options.confirmedPaymentResult?.starsAmount || undefined;
+        return this.apiManager.invokeApi('messages.sendMedia', {
+          background: options.background,
+          peer: this.appPeersManager.getInputPeerById(peerId),
+          media: inputMedia,
+          message: caption,
+          random_id: message.random_id,
+          reply_to: options.replyTo,
+          schedule_date: options.scheduleDate,
+          silent: options.silent,
+          entities: sendEntities,
+          clear_draft: options.clearDraft,
+          send_as: options.sendAsPeerId ? this.appPeersManager.getInputPeerById(options.sendAsPeerId) : undefined,
+          update_stickersets_order: options.updateStickersetOrder,
+          invert_media: options.invertMedia,
+          effect: options.effect,
+          allow_paid_stars: paidStars
+        }).then((updates) => {
+          this.apiUpdatesManager.processUpdateMessage(updates)
+          this.apiUpdatesManager.processPaidMessageUpdate({
+            paidStars,
+            wereStarsReserved: options.confirmedPaymentResult?.canUndo
+          });
+        });
+      };
+
+      const send = () => {
+        sentDeferred.then((inputMedia) => {
+          this.setTyping(peerId, {_: 'sendMessageCancelAction'}, undefined, options.threadId);
+
+          let promise: Promise<void>;
+          if(inputMedia._ === 'inputMediaDocument') {
+            promise = this.apiFileManager.invokeApiWithReference({
+              context: inputMedia.id as InputDocument.inputDocument,
+              callback: () => invokeSend(inputMedia)
+            });
+          } else {
+            promise = invokeSend(inputMedia);
+          }
+
+          return promise.catch((error: ApiError) => {
+            if(attachType === 'photo' &&
+              (error.type === 'PHOTO_INVALID_DIMENSIONS' ||
+              error.type === 'PHOTO_SAVE_FILE_INVALID')) {
+              error.handled = true;
+              attachType = 'document';
+              message.send();
+              return;
+            }
+
+            toggleError(error);
+            throw error;
+          });
+        });
+
+        const messagePromise = message.promise as CancellablePromise<void>;
+        sentDeferred.then(
+          () => messagePromise.resolve(),
+          (err) => messagePromise.reject(err)
+        );
+      };
+
+      if(options.confirmedPaymentResult?.canUndo) {
+        upload();
+
+        this.paidMessagesQueue.add(peerId, {
+          send,
+          cancel: () => {
+            this.cancelPendingMessage(message.random_id);
+            (message.promise as CancellablePromise<void>)?.reject();
+          }
+        });
+      } else {
+        send();
+      }
+    }
+
+    const ret: {
+      message: typeof message,
+      promise: typeof sentDeferred,
+      send: typeof upload,
+      media: typeof media,
+      uploadingFileName: typeof uploadingFileName
+    } = {
+      message,
+      media,
+      uploadingFileName
+    } as any;
+
+    defineNotNumerableProperties(ret, ['promise', 'send']);
+    ret.promise = sentDeferred;
+    ret.send = upload;
+
+    return ret.send();
+  }
   public sendFile(options: MessageSendingParams & SendFileDetails & Partial<{
     isRoundMessage: boolean,
     isVoiceMessage: boolean,

@@ -23,7 +23,7 @@ const handlebarsPlugin = handlebars({
 
 const serverOptions: ServerOptions = {
   // host: '192.168.95.17',
-  port: 8080,
+  port: 8888,
   sourcemapIgnoreList(sourcePath, sourcemapPath) {
     return sourcePath.includes('node_modules') || sourcePath.includes('logger');
   }

@@ -6,23 +6,23 @@
 
 import type lang from '../lang';
 import type langSign from '../langSign';
-import type {State} from '../config/state';
-import DEBUG, {MOUNT_CLASS_TO} from '../config/debug';
-import {HelpCountriesList, HelpCountry, LangPackDifference, LangPackString} from '../layer';
+import type { State } from '../config/state';
+import DEBUG, { MOUNT_CLASS_TO } from '../config/debug';
+import { HelpCountriesList, HelpCountry, LangPackDifference, LangPackString } from '../layer';
 import App from '../config/app';
 import rootScope from './rootScope';
-import {IS_MOBILE} from '../environment/userAgent';
+import { IS_MOBILE } from '../environment/userAgent';
 import deepEqual from '../helpers/object/deepEqual';
 import safeAssign from '../helpers/object/safeAssign';
 import capitalizeFirstLetter from '../helpers/string/capitalizeFirstLetter';
 import matchUrlProtocol from './richTextProcessor/matchUrlProtocol';
 import wrapUrl from './richTextProcessor/wrapUrl';
-import {setDirection} from '../helpers/dom/setInnerHTML';
+import { setDirection } from '../helpers/dom/setInnerHTML';
 import setBlankToAnchor from './richTextProcessor/setBlankToAnchor';
-import {createSignal} from 'solid-js';
+import { createSignal } from 'solid-js';
 import commonStateStorage from './commonStateStorage';
 
-export const langPack: {[actionType: string]: LangPackKey} = {
+export const langPack: { [actionType: string]: LangPackKey } = {
   'messageActionChatCreate': 'ActionCreateGroup',
   'messageActionChatCreateYou': 'ActionYouCreateGroup',
   'messageActionChatEditTitle': 'ActionChangedTitle',
@@ -98,26 +98,29 @@ namespace I18n {
   }
 
   function setLangCode(langCode: string) {
+    if (!langCode) {
+      langCode = 'zh';  // Default to English if langCode is undefined
+    }
     lastRequestedLangCode = langCode;
     lastRequestedNormalizedLangCode = langCode.split('-')[0];
     setLangCodeNormalized(lastRequestedNormalizedLangCode.split('-')[0] as any);
   }
 
   export function getCacheLangPack(): Promise<LangPackDifference> {
-    if(cacheLangPackPromise) return cacheLangPackPromise;
+    if (cacheLangPackPromise) return cacheLangPackPromise;
     return cacheLangPackPromise = Promise.all([
       commonStateStorage.get('langPack') as Promise<LangPackDifference>,
       polyfillPromise
     ]).then(([langPack]) => {
-      if(!langPack/*  || true */) {
-        return loadLocalLangPack();
-      } else if(DEBUG && false) {
+      if (!langPack/*  || true */) {
+        return loadLocalZhLangPack();
+      } else if (DEBUG && false) {
         return getLangPack(langPack.lang_code);
       }/*  else if(langPack.appVersion !== App.langPackVersion) {
         return getLangPack(langPack.lang_code);
       } */
 
-      if(!lastRequestedLangCode) {
+      if (!lastRequestedLangCode) {
         setLangCode(langPack.lang_code);
       }
 
@@ -129,9 +132,9 @@ namespace I18n {
   }
 
   function updateAmPm() {
-    if(timeFormat === 'h12') {
+    if (timeFormat === 'h12') {
       try {
-        const dateTimeFormat = getDateTimeFormat({hour: 'numeric', minute: 'numeric', hour12: true});
+        const dateTimeFormat = getDateTimeFormat({ hour: 'numeric', minute: 'numeric', hour12: true });
         const date = new Date();
         date.setHours(0);
         const amText = dateTimeFormat.format(date);
@@ -139,9 +142,9 @@ namespace I18n {
         date.setHours(12);
         const pmText = dateTimeFormat.format(date);
         amPmCache.pm = pmText.split(/\s/)[1];
-      } catch(err) {
+      } catch (err) {
         console.error('cannot get am/pm', err);
-        amPmCache = {am: 'AM', pm: 'PM'};
+        amPmCache = { am: 'AM', pm: 'PM' };
       }
     }
   }
@@ -154,13 +157,13 @@ namespace I18n {
 
     updateAmPm();
 
-    if(haveToUpdate) {
+    if (haveToUpdate) {
       cachedDateTimeFormats.clear();
       const elements = Array.from(document.querySelectorAll(`.i18n`)) as HTMLElement[];
       elements.forEach((element) => {
         const instance = weakMap.get(element);
 
-        if(instance instanceof IntlDateElement) {
+        if (instance instanceof IntlDateElement) {
           instance.update();
         }
       });
@@ -186,7 +189,31 @@ namespace I18n {
         strings,
         version: 0,
         local: true,
-        countries: countries.default
+        countries: countries.default,
+      };
+      return saveLangPack(langPack);
+    });
+  }
+
+  export function loadLocalZhLangPack() {
+    setLangCode('zh');
+    return Promise.all([
+      import('../lang-zh'),
+      import('../langSign-zh'),
+      import('../countries.zh'),
+    ]).then(([lang, langSign, countries]) => {
+      const strings: LangPackString[] = [];
+      formatLocalStrings(lang.default, strings);
+      formatLocalStrings(langSign.default, strings);
+
+      const langPack: LangPackDifference = {
+        _: 'langPackDifference',
+        from_version: 0,
+        lang_code: 'zh',
+        strings,
+        version: 0,
+        local: true,
+        countries: countries.default,
       };
       return saveLangPack(langPack);
     });
@@ -205,8 +232,8 @@ namespace I18n {
         lang_code: langCode,
         lang_pack: 'android'
       }),
-      import('../lang'),
-      import('../langSign'),
+      import('../lang-zh'),
+      import('../langSign-zh'),
       managers.apiManager.invokeApiCacheable('help.getCountriesList', {
         lang_code: langCode,
         hash: 0
@@ -224,10 +251,10 @@ namespace I18n {
   }
 
   export function formatLocalStrings(strings: any, pushTo: LangPackString[] = []) {
-    for(const i in strings) {
+    for (const i in strings) {
       // @ts-ignore
       const v = strings[i];
-      if(typeof(v) === 'string') {
+      if (typeof (v) === 'string') {
         pushTo.push({
           _: 'langPackString',
           key: i,
@@ -247,72 +274,78 @@ namespace I18n {
 
   export function getLangPack(langCode: string, web?: boolean) {
     setLangCode(langCode);
-    return loadLangPack(langCode, web).then(([langPack1, langPack2, localLangPack1, localLangPack2, countries, _]) => {
-      let strings: LangPackString[] = [];
+    if (langCode === 'zh') {
+      return loadLocalZhLangPack();
+    } else {
+      return loadLangPack(langCode, web).then(([langPack1, langPack2, localLangPack1, localLangPack2, countries, _]) => {
+        let strings: LangPackString[] = [];
 
-      [localLangPack1, localLangPack2].forEach((l) => {
-        formatLocalStrings(l.default as any, strings);
+        [localLangPack1, localLangPack2].forEach((l) => {
+          formatLocalStrings(l.default as any, strings);
+        });
+
+        strings = strings.concat(...[langPack1.strings, langPack2.strings].filter(Boolean));
+
+        langPack1.strings = strings;
+        langPack1.countries = countries;
+        return saveLangPack(langPack1);
+      }).catch((err) => {
+        throw err;
       });
-
-      strings = strings.concat(...[langPack1.strings, langPack2.strings].filter(Boolean));
-
-      langPack1.strings = strings;
-      langPack1.countries = countries;
-      return saveLangPack(langPack1);
-    });
+    }
   }
 
   export function saveLangPack(langPack: LangPackDifference) {
     langPack.appVersion = App.langPackVersion;
 
-    return commonStateStorage.set({langPack}).then(() => {
+    return commonStateStorage.set({ langPack }).then(() => {
       applyLangPack(langPack);
       return langPack;
     });
   }
 
   export const polyfillPromise = (function checkIfPolyfillNeeded() {
-    if(typeof(Intl) !== 'undefined' && typeof(Intl.PluralRules) !== 'undefined'/*  && false */) {
+    if (typeof (Intl) !== 'undefined' && typeof (Intl.PluralRules) !== 'undefined'/*  && false */) {
       return Promise.resolve();
     } else {
       return import('./pluralPolyfill').then((_Intl) => {
-        (window as any).Intl = Object.assign(typeof(Intl) !== 'undefined' ? Intl : {}, _Intl.default);
+        (window as any).Intl = Object.assign(typeof (Intl) !== 'undefined' ? Intl : {}, _Intl.default);
       });
     }
   })();
 
   export function applyLangPack(langPack: LangPackDifference) {
     const currentLangCode = lastRequestedLangCode;
-    if(langPack.lang_code !== currentLangCode) {
+    if (langPack.lang_code !== currentLangCode) {
       return;
     }
 
     try {
       pluralRules = new Intl.PluralRules(lastRequestedNormalizedLangCode);
-    } catch(err) {
+    } catch (err) {
       console.error('pluralRules error', err);
       pluralRules = new Intl.PluralRules(lastRequestedNormalizedLangCode.split('-', 1)[0]);
     }
 
     try {
       pluralRules = new Intl.PluralRules(langPack.lang_code);
-    } catch(err) {
+    } catch (err) {
       console.error('pluralRules error', err);
       pluralRules = new Intl.PluralRules(langPack.lang_code.split('-', 1)[0]);
     }
 
     strings.clear();
 
-    for(const string of langPack.strings) {
+    for (const string of langPack.strings) {
       strings.set(string.key as LangPackKey, string);
     }
 
-    if(langPack.countries) {
+    if (langPack.countries) {
       countriesList.length = 0;
       countriesList.push(...langPack.countries.countries);
 
       langPack.countries.countries.forEach((country) => {
-        if(country.name) {
+        if (country.name) {
           const langPackKey: any = country.default_name;
           strings.set(langPackKey, {
             _: 'langPackString',
@@ -323,8 +356,8 @@ namespace I18n {
       });
     }
 
-    if(lastAppliedLangCode !== currentLangCode) {
-      if(lastAppliedLangCode && rootScope.myId) {
+    if (lastAppliedLangCode !== currentLangCode) {
+      if (lastAppliedLangCode && rootScope.myId) {
         rootScope.managers.appReactionsManager.resetAvailableReactions();
         rootScope.managers.appUsersManager.indexMyself();
         rootScope.managers.dialogsStorage.indexMyDialog();
@@ -340,26 +373,26 @@ namespace I18n {
     elements.forEach((element) => {
       const instance = weakMap.get(element);
 
-      if(instance) {
+      if (instance) {
         instance.update();
       }
     });
   }
 
-  function pushNextArgument(out: ReturnType<typeof superFormatter>, args: FormatterArguments, indexHolder: {i: number}, i?: number) {
+  function pushNextArgument(out: ReturnType<typeof superFormatter>, args: FormatterArguments, indexHolder: { i: number }, i?: number) {
     const arg = args[i === undefined ? indexHolder.i++ : i];
-    if(Array.isArray(arg)) {
+    if (Array.isArray(arg)) {
       out.push(...arg as any);
     } else {
       out.push(arg);
     }
   }
 
-  export function superFormatter(input: string, args?: FormatterArguments, indexHolder?: {i: number}): Exclude<FormatterArgument, FormatterArgument[]>[] {
-    if(!indexHolder) { // set starting index for arguments without order
-      indexHolder = {i: 0};
+  export function superFormatter(input: string, args?: FormatterArguments, indexHolder?: { i: number }): Exclude<FormatterArgument, FormatterArgument[]>[] {
+    if (!indexHolder) { // set starting index for arguments without order
+      indexHolder = { i: 0 };
       const indexes = input.match(/(%|un)\d+/g);
-      if(indexes?.length) {
+      if (indexes?.length) {
         indexHolder.i = Math.max(...indexes.map((str) => +str.replace(/\D/g, '')));
       }
     }
@@ -371,14 +404,14 @@ namespace I18n {
     input.replace(regExp, (match, p1: any, p2: any, p3: any, p4: string, offset: number, string: string) => {
       // console.table({match, p1, p2, offset, string});
 
-      if(offset > lastIndex) {
+      if (offset > lastIndex) {
         out.push(string.slice(lastIndex, offset));
       }
 
-      if(p1) {
+      if (p1) {
         // offset += p1.length;
         let element: HTMLElement;
-        switch(p1) {
+        switch (p1) {
           case '**': {
             element = document.createElement('b');
             break;
@@ -392,40 +425,44 @@ namespace I18n {
 
         element.append(...superFormatter(p2, args, indexHolder) as any);
         out.push(element);
-      } else if(p3) {
+      } else if (p3) {
         out.push(document.createElement('br'));
-      } else if(p4) {
+      } else if (p4) {
         const idx = p4.lastIndexOf(']');
         const text = p4.slice(1, idx);
 
         const url = p4.slice(idx + 2, p4.length - 1);
         let a: HTMLAnchorElement;
-        if(url && matchUrlProtocol(url)) {
+        if (url && matchUrlProtocol(url)) {
           a = document.createElement('a');
           const wrappedUrl = wrapUrl(url);
           a.href = wrappedUrl.url;
-          if(wrappedUrl.onclick) a.setAttribute('onclick', wrappedUrl.onclick + '(this)');
+          if (wrappedUrl.onclick) a.setAttribute('onclick', wrappedUrl.onclick + '(this)');
           setBlankToAnchor(a);
         } else {
           a = args[indexHolder.i++] as HTMLAnchorElement;
 
-          if(a instanceof DocumentFragment) { // right after wrapRichText
+          if (a instanceof DocumentFragment) { // right after wrapRichText
             a = a.firstChild as any;
           }
 
-          if(typeof(a) !== 'string') {
-            a.textContent = ''; // reset content
+          if (typeof (a) !== 'string') {
+            if(a && a instanceof HTMLElement) {  // Add safety check
+              a.textContent = ''; // reset content
+            }
           }
         }
 
         const formatted = superFormatter(text, args, indexHolder) as any;
-        if(typeof(a) === 'string') {
+        if (typeof (a) === 'string') {
           out.push(...formatted);
-        } else {
+        } else if(a && typeof a.append === 'function') {  // Add safety check for append method
           a.append(...formatted);
           out.push(a);
+        } else {
+          out.push(...formatted);  // Fallback: just push the formatted content
         }
-      } else if(args) {
+      } else if (args) {
         const index = match.replace(/\D/g, '');
         pushNextArgument(
           out,
@@ -439,7 +476,7 @@ namespace I18n {
       return '';
     });
 
-    if(lastIndex !== input.length) {
+    if (lastIndex !== input.length) {
       out.push(input.slice(lastIndex));
     }
 
@@ -451,14 +488,14 @@ namespace I18n {
   export function format(key: LangPackKey, plain = false, args?: FormatterArguments): ReturnType<typeof superFormatter> | string {
     const str = strings.get(key);
     let input: string;
-    if(str) {
-      if(str._ === 'langPackStringPluralized' && args?.length) {
+    if (str) {
+      if (str._ === 'langPackStringPluralized' && args?.length) {
         let v = args[0] as number | string;
-        if(typeof(v) === 'string') v = +v.replace(/\D/g, '');
+        if (typeof (v) === 'string') v = +v.replace(/\D/g, '');
         const s = pluralRules.select(v);
         // @ts-ignore
         input = str[s + '_value'] || str['other_value'];
-      } else if(str._ === 'langPackString') {
+      } else if (str._ === 'langPackString') {
         input = str.value;
       } else {
         // input = '[' + key + ']';
@@ -470,7 +507,7 @@ namespace I18n {
     }
 
     const result = superFormatter(input, args);
-    if(plain) { // * let's try a hack now... (don't want to replace []() entity)
+    if (plain) { // * let's try a hack now... (don't want to replace []() entity)
       return result.map((item) => item instanceof Node ? item.textContent : item).join('');
     } else {
       return result;
@@ -523,9 +560,9 @@ namespace I18n {
     public args: IntlElementOptions['args'];
 
     constructor(options: IntlElementOptions = {}) {
-      super({...options, property: options.property ?? 'innerHTML'});
+      super({ ...options, property: options.property ?? 'innerHTML' });
 
-      if(options?.key) {
+      if (options?.key) {
         this.update(options);
       }
     }
@@ -533,14 +570,14 @@ namespace I18n {
     public update(options?: IntlElementOptions) {
       safeAssign(this, options);
 
-      if(!this.key) {
+      if (!this.key) {
         this.element.replaceChildren();
         return;
       }
 
-      if(this.property === 'innerHTML') {
+      if (this.property === 'innerHTML') {
         this.element.replaceChildren(...format(this.key, false, this.args) as any);
-        if(this.args?.length) {
+        if (this.args?.length) {
           this.element.normalize();
         }
       } else {
@@ -549,13 +586,13 @@ namespace I18n {
         const formatted = format(this.key, true, this.args);
 
         // * hasOwnProperty won't work here
-        if(v === undefined) this.element.dataset[this.property] = formatted;
+        if (v === undefined) this.element.dataset[this.property] = formatted;
         else (this.element as HTMLInputElement)[this.property] = formatted;
       }
     }
 
     public compareAndUpdateBool(options?: IntlElementOptions): boolean {
-      if(this.key === options.key && deepEqual(this.args, options.args)) {
+      if (this.key === options.key && deepEqual(this.args, options.args)) {
         return false;
       }
 
@@ -564,7 +601,7 @@ namespace I18n {
     }
 
     public compareAndUpdate(options?: IntlElementOptions) {
-      if(this.key === options.key && deepEqual(this.args, options.args)) {
+      if (this.key === options.key && deepEqual(this.args, options.args)) {
         return;
       }
 
@@ -576,7 +613,7 @@ namespace I18n {
   export function getDateTimeFormat(options: Intl.DateTimeFormatOptions = {}) {
     const json = JSON.stringify(options);
     let dateTimeFormat = cachedDateTimeFormats.get(json);
-    if(!dateTimeFormat) {
+    if (!dateTimeFormat) {
       dateTimeFormat = new Intl.DateTimeFormat(lastRequestedNormalizedLangCode + '-u-hc-' + timeFormat, options);
       cachedDateTimeFormats.set(json, dateTimeFormat);
     }
@@ -584,7 +621,7 @@ namespace I18n {
     return dateTimeFormat;
   }
 
-  export let amPmCache = {am: 'AM', pm: 'PM'};
+  export let amPmCache = { am: 'AM', pm: 'PM' };
   export type IntlDateElementOptions = IntlElementBaseOptions & {
     date?: Date,
     options: Intl.DateTimeFormatOptions
@@ -594,10 +631,10 @@ namespace I18n {
     public options: IntlDateElementOptions['options'];
 
     constructor(options: IntlDateElementOptions) {
-      super({...options, property: options.property ?? 'textContent'});
+      super({ ...options, property: options.property ?? 'textContent' });
       setDirection(this.element);
 
-      if(options?.date) {
+      if (options?.date) {
         this.update(options);
       }
     }
@@ -606,14 +643,14 @@ namespace I18n {
       safeAssign(this, options);
 
       let text: string;
-      if(this.options.hour && this.options.minute && Object.keys(this.options).length === 2/*  && false */) {
+      if (this.options.hour && this.options.minute && Object.keys(this.options).length === 2/*  && false */) {
         const hours = this.date.getHours();
         text = ('0' + (timeFormat === 'h12' ? (hours % 12) || 12 : hours)).slice(-2) + ':' + ('0' + this.date.getMinutes()).slice(-2);
         // if(this.options.second) {
         //   text += ':' + ('0' + this.date.getSeconds()).slice(-2);
         // }
 
-        if(timeFormat === 'h12') {
+        if (timeFormat === 'h12') {
           text += ' ' + (hours < 12 ? amPmCache.am : amPmCache.pm);
         }
       } else {
@@ -627,7 +664,7 @@ namespace I18n {
   }
 
   export function i18n(key: LangPackKey, args?: FormatterArguments) {
-    return new IntlElement({key, args}).element;
+    return new IntlElement({ key, args }).element;
   }
 
   export function i18n_(options: IntlElementOptions) {
@@ -635,30 +672,30 @@ namespace I18n {
   }
 
   export function _i18n(element: HTMLElement, key: LangPackKey, args?: FormatterArguments, property?: IntlElementOptions['property']) {
-    return new IntlElement({element, key, args, property}).element;
+    return new IntlElement({ element, key, args, property }).element;
   }
 }
 
-export {I18n};
+export { I18n };
 export default I18n;
 
 const i18n = I18n.i18n;
-export {i18n};
+export { i18n };
 
 const i18n_ = I18n.i18n_;
-export {i18n_};
+export { i18n_ };
 
 const _i18n = I18n._i18n;
-export {_i18n};
+export { _i18n };
 
 export function joinElementsWith<T extends Node | string | Array<Node | string>>(
   elements: T[],
   joiner: T | string | ((isLast: boolean) => T)
 ): T[] {
   const arr = elements.slice(0, 1) as T[];
-  for(let i = 1; i < elements.length; ++i) {
+  for (let i = 1; i < elements.length; ++i) {
     const isLast = (elements.length - 1) === i;
-    arr.push(typeof(joiner) === 'function' ? (joiner as any)(isLast) : joiner);
+    arr.push(typeof (joiner) === 'function' ? (joiner as any)(isLast) : joiner);
     arr.push(elements[i]);
   }
 

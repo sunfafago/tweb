@@ -4,23 +4,23 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import {createMemo, createRoot} from 'solid-js';
+import { createMemo, createRoot } from 'solid-js';
 import anchorCallback from '../../../helpers/dom/anchorCallback';
-import {randomLong} from '../../../helpers/random';
-import {LangPackLanguage} from '../../../layer';
-import I18n, {i18n, join} from '../../../lib/langPack';
+import { randomLong } from '../../../helpers/random';
+import { LangPackLanguage } from '../../../layer';
+import I18n, { i18n, join } from '../../../lib/langPack';
 import rootScope from '../../../lib/rootScope';
 import usePremium from '../../../stores/premium';
-import {pickLanguage} from '../../chat/translation';
+import { pickLanguage } from '../../chat/translation';
 import CheckboxFieldTsx from '../../checkboxFieldTsx';
 import PopupPremium from '../../popups/premium';
 import RadioField from '../../radioField';
-import Row, {RadioFormFromRows} from '../../row';
+import Row, { RadioFormFromRows } from '../../row';
 import RowTsx from '../../rowTsx';
 import Section from '../../section';
 import SettingSection from '../../settingSection';
-import {SliderSuperTab} from '../../slider'
-import {useAppSettings} from '../../../stores/appSettings';
+import { SliderSuperTab } from '../../slider'
+import { useAppSettings } from '../../../stores/appSettings';
 
 export default class AppLanguageTab extends SliderSuperTab {
   public static getInitArgs() {
@@ -31,7 +31,17 @@ export default class AppLanguageTab extends SliderSuperTab {
       // languages2: rootScope.managers.apiManager.invokeApiCacheable('langpack.getLanguages', {
       //   lang_pack: 'macos'
       // })
-      languages2: Promise.resolve([] as LangPackLanguage[])
+      languages2: Promise.resolve([{
+        lang_code: "zh",
+        name: "Chinese (Simplified)",
+        native_name: "简体中文",
+        pFlags: { official: true },
+        plural_code: "zh",
+        strings_count: 2606,
+        translated_count: 2606,
+        translations_url: 'https://translations.telegram.org/zh-hans/',
+        _: 'langPackLanguage'
+      }] as LangPackLanguage[])
     };
   }
 
@@ -47,7 +57,7 @@ export default class AppLanguageTab extends SliderSuperTab {
       const isPremium = usePremium();
       const doNotTranslate = createMemo(() => {
         const arr = appSettings.translations.doNotTranslate;
-        if(!arr.length) {
+        if (!arr.length) {
           return [I18n.langCodeNormalized()];
         }
 
@@ -61,7 +71,7 @@ export default class AppLanguageTab extends SliderSuperTab {
           name="TranslateMessages"
           caption={isPremium() ? 'Translation.DoNotShow' : 'Language.TranslateMessages.Channel.Premium'}
           captionArgs={[anchorCallback(() => {
-            PopupPremium.show({feature: 'translations'});
+            PopupPremium.show({ feature: 'translations' });
           })]}
         >
           <RowTsx
@@ -89,9 +99,9 @@ export default class AppLanguageTab extends SliderSuperTab {
             }
             fakeDisabled={!isPremium()}
             clickable={(e) => {
-              if(!isPremium()) {
+              if (!isPremium()) {
                 e.preventDefault();
-                PopupPremium.show({feature: 'translations'});
+                PopupPremium.show({ feature: 'translations' });
               }
             }}
           />
@@ -102,7 +112,7 @@ export default class AppLanguageTab extends SliderSuperTab {
               i18n('Languages', [doNotTranslate().length])
             }
             titleRightSecondary
-            clickable={async() => {
+            clickable={async () => {
               const languages = await pickLanguage(true, doNotTranslate());
               setAppSettings('translations', 'doNotTranslate', languages);
             }}
@@ -125,8 +135,8 @@ export default class AppLanguageTab extends SliderSuperTab {
       const webLangCodes = languages1.map((language) => language.lang_code);
 
       const random = randomLong();
-      languages1.concat(languages2).forEach((language) => {
-        if(rendered.has(language.lang_code)) return;
+      languages2.concat(languages1).forEach((language) => {
+        if (rendered.has(language.lang_code)) return;
         rendered.add(language.lang_code);
 
         const row = new Row({
@@ -144,10 +154,11 @@ export default class AppLanguageTab extends SliderSuperTab {
       const form = RadioFormFromRows([...radioRows.values()], (value) => {
         I18n.getLangPack(value, webLangCodes.includes(value));
       });
+      debugger
 
       I18n.getCacheLangPack().then((langPack) => {
         const row = radioRows.get(langPack.lang_code);
-        if(!row) {
+        if (!row) {
           console.error('no row', row, langPack);
           return;
         }

@@ -792,7 +792,7 @@ class ApiUpdatesManager {
 
               this.processLocalUpdate(update);
             });
-          };
+          }; 
 
           const languages = filterUnique([langCode, 'en']);
           for(const language of languages) {

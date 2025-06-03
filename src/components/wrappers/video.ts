@@ -563,6 +563,7 @@ export default async function wrapVideo({doc, altDoc, container, message, boxWid
 
   let loadPhotoThumbFunc = noAutoDownload && photoRes?.preloader?.loadFunc;
   const load = async() => {
+    debugger
     if(preloader && noAutoDownload && !withoutPreloader) {
       preloader.construct();
       preloader.setManual();

@@ -4,9 +4,10 @@ __pycache__
 /dist
 **/.DS_Store
 stats.json
+/public/*
 certs
-public2
-public3
+/public_back/*
+/public/*
 .vscode
 session_name.session
 tasks.txt
