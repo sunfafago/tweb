@@ -138,10 +138,10 @@ namespace I18n {
         const date = new Date();
         date.setHours(0);
         const amText = dateTimeFormat.format(date);
-        amPmCache.am = amText.split(/\s/)[1];
+        amPmCache.am = 'AM'  //amText.split(/\s/)[1];
         date.setHours(12);
         const pmText = dateTimeFormat.format(date);
-        amPmCache.pm = pmText.split(/\s/)[1];
+        amPmCache.pm = 'PM' // pmText.split(/\s/)[1];
       } catch (err) {
         console.error('cannot get am/pm', err);
         amPmCache = { am: 'AM', pm: 'PM' };
@@ -651,6 +651,12 @@ namespace I18n {
         // }
 
         if (timeFormat === 'h12') {
+          console.log('amPmCache', amPmCache)
+          debugger
+          // Ensure amPmCache is properly initialized
+          if (amPmCache.am === 'AM' && amPmCache.pm === 'PM') {
+            updateAmPm();
+          }
           text += ' ' + (hours < 12 ? amPmCache.am : amPmCache.pm);
         }
       } else {
