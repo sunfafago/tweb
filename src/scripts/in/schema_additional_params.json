@@ -122,7 +122,8 @@
     {"name": "sponsoredMessage", "type": "SponsoredMessage.sponsoredMessage"},
     {"name": "promise", "type": "CancellablePromise<void>"},
     {"name": "uploadingFileName", "type": "string[]"},
-    {"name": "storageKey", "type": "MessagesStorageKey"}
+    {"name": "storageKey", "type": "MessagesStorageKey"},
+    {"name": "repayRequest", "type": "{id: number, messageCount: number}"}
   ]
 }, {
   "predicate": "messageService",
@@ -279,8 +280,7 @@
 }, {
   "predicate": "langPackDifference",
   "params": [
-    {"name": "local", "type": "boolean"},
-    {"name": "appVersion", "type": "string"},
+    {"name": "localVersion", "type": "number"},
     {"name": "countries", "type": "HelpCountriesList.helpCountriesList"}
   ]
 }, {

@@ -118,6 +118,14 @@ export interface MTAppConfig {
   stargifts_convert_period_max?:             number;
   stargifts_message_length_max?:             number;
   stargifts_pinned_to_top_limit?:            number;
+  web_app_allowed_protocols?:                string[];
+  todo_item_length_max?:                     number;
+  todo_items_max?:                           number;
+  todo_title_length_max?:                    number;
+  need_age_video_verification?:              boolean;
+  verify_age_min?:                           number;
+  verify_age_bot_username?:                  string;
+  verify_age_country?:                       string;
 }
 
 export interface EmojiesSendDiceSuccess {

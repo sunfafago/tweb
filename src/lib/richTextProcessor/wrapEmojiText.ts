@@ -4,7 +4,8 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import {MessageEntity} from '../../layer';
+import {createEffect} from 'solid-js';
+import {MessageEntity, TextWithEntities} from '../../layer';
 import parseEntities from './parseEntities';
 import wrapRichText from './wrapRichText';
 
@@ -13,4 +14,20 @@ export default function wrapEmojiText(text: string, isDraft = false, entities?: 
 
   entities ??= parseEntities(text).filter((e) => e._ === 'messageEntityEmoji');
   return wrapRichText(text, {entities, wrappingDraft: isDraft});
+}
+
+export function wrapEmojiTextWithEntities(obj: TextWithEntities, isDraft = false) {
+  return wrapEmojiText(obj.text, isDraft, obj.entities);
+}
+
+export function EmojiTextTsx(props: {
+  text: string,
+  isDraft?: boolean,
+  entities?: MessageEntity[]
+}) {
+  const span = document.createElement('span');
+  createEffect(() => {
+    span.replaceChildren(wrapEmojiText(props.text, props.isDraft, props.entities));
+  });
+  return span;
 }

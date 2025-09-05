@@ -19,7 +19,7 @@ import setWorkerProxy from './helpers/setWorkerProxy';
 import toggleAttributePolyfill from './helpers/dom/toggleAttributePolyfill';
 import rootScope from './lib/rootScope';
 import IS_TOUCH_SUPPORTED from './environment/touchSupport';
-import I18n, {i18n} from './lib/langPack';
+import I18n, {checkLangPackForUpdates, i18n} from './lib/langPack';
 import './helpers/peerIdPolyfill';
 import './lib/polyfill';
 import apiManagerProxy from './lib/mtproto/mtprotoworker';
@@ -53,6 +53,7 @@ import PasscodeLockScreenController from './components/passcodeLock/passcodeLock
 import type {LangPackDifference} from './layer';
 import commonStateStorage from './lib/commonStateStorage';
 import {MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, SIDEBAR_COLLAPSE_FACTOR} from './components/sidebarLeft/constants';
+import useHasFoldersSidebar from './stores/foldersSidebar';
 
 // import commonStateStorage from './lib/commonStateStorage';
 // import { STATE_INIT } from './config/state';
@@ -315,6 +316,11 @@ function setDocumentLangPackProperties(langPack: LangPackDifference.langPackDiff
   }
 }
 
+(window as any)['showIconLibrary'] = async() => {
+  const {showIconLibrary} = await import('./components/iconLibrary/trigger');
+  showIconLibrary();
+};
+
 /* false &&  */document.addEventListener('DOMContentLoaded', async() => {
   const perf = performance.now();
   randomlyChooseVersionFromSearch();
@@ -337,7 +343,7 @@ function setDocumentLangPackProperties(langPack: LangPackDifference.langPackDiff
     rootScope.settings = await commonStateStorage.get('settings');
     themeController.setThemeListener();
 
-    const langPack = await I18n.getCacheLangPack();
+    const langPack = await I18n.getCacheLangPackAndApply();
     setDocumentLangPackProperties(langPack);
 
     if(IS_BETA) import('./pages/pageIm'); // cache it
@@ -373,9 +379,21 @@ function setDocumentLangPackProperties(langPack: LangPackDifference.langPackDiff
   await sendAllStatesPromise;
   console.timeLog(TIME_LABEL, 'sent all states (1)');
 
-  const langPack = await I18n.getCacheLangPack();
+  const setUnreadMessagesText = () => {
+    const text = I18n.format('UnreadMessages', true);
+    document.documentElement.style.setProperty('--unread-messages-text', `"${text}"`);
+  };
+
+  const onLanguageApply = () => {
+    fillLocalizedDates();
+    setUnreadMessagesText();
+  };
+
+  const langPack = await I18n.getCacheLangPackAndApply();
   console.timeLog(TIME_LABEL, 'await I18n.getCacheLangPack()');
   I18n.setTimeFormat(rootScope.settings.timeFormat);
+  onLanguageApply();
+  rootScope.addEventListener('language_apply', onLanguageApply);
 
   // * (4)
   if(!sendAllStatesPromise) {
@@ -386,7 +404,8 @@ function setDocumentLangPackProperties(langPack: LangPackDifference.langPackDiff
 
   console.timeLog(TIME_LABEL, 'sent all states (2)');
 
-  document.body.classList.toggle('has-folders-sidebar', rootScope.settings.tabsInSidebar);
+  const {setHasFoldersSidebar} = useHasFoldersSidebar();
+  setHasFoldersSidebar(!!rootScope.settings.tabsInSidebar);
 
   rootScope.managers.rootScope.getPremium().then((isPremium) => {
     rootScope.premium = isPremium;
@@ -394,22 +413,16 @@ function setDocumentLangPackProperties(langPack: LangPackDifference.langPackDiff
 
   themeController.setThemeListener();
 
-  const setUnreadMessagesText = () => {
-    const text = I18n.format('UnreadMessages', true);
-    document.documentElement.style.setProperty('--unread-messages-text', `"${text}"`);
-  };
-
-  setUnreadMessagesText();
-  if(langPack.appVersion !== App.langPackVersion) {
-    I18n.getLangPack(langPack.lang_code).finally(setUnreadMessagesText);
+  // * fetch lang pack updates
+  if(langPack.localVersion !== App.langPackLocalVersion && IS_BETA) {
+    I18n.getLangPackAndApply(langPack.lang_code);
   } else {
-    fillLocalizedDates();
+    checkLangPackForUpdates();
   }
 
+  // * handle multi-tab language change (will occur extra time in the original tab though)
   rootScope.addEventListener('language_change', (langCode) => {
-    I18n.getLangPack(langCode);
-    fillLocalizedDates();
-    setUnreadMessagesText();
+    I18n.getLangPackAndApply(langCode);
   });
 
   /**
@@ -617,7 +630,6 @@ function setDocumentLangPackProperties(langPack: LangPackDifference.langPackDiff
       await sessionStorage.delete('should_animate_main');
       page.pageEl.classList.add('main-screen-enter');
 
-      console.log('[my-debug] mounting page');
       await page.mount();
       console.timeLog(TIME_LABEL, 'await page.mount()');
 

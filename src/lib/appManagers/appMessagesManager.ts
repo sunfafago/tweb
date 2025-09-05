@@ -18,7 +18,7 @@ import LazyLoadQueueBase from '../../components/lazyLoadQueueBase';
 import deferredPromise, {CancellablePromise} from '../../helpers/cancellablePromise';
 import tsNow from '../../helpers/tsNow';
 import {randomLong} from '../../helpers/random';
-import {Chat, ChatFull, Dialog as MTDialog, DialogPeer, DocumentAttribute, InputMedia, InputMessage, InputPeerNotifySettings, InputSingleMedia, Message, MessageAction, MessageEntity, MessageFwdHeader, MessageMedia, MessageReplies, MessageReplyHeader, MessagesDialogs, MessagesFilter, MessagesMessages, MethodDeclMap, NotifyPeer, PeerNotifySettings, PhotoSize, SendMessageAction, Update, Photo, Updates, ReplyMarkup, InputPeer, InputPhoto, InputDocument, InputGeoPoint, WebPage, GeoPoint, ReportReason, MessagesGetDialogs, InputChannel, InputDialogPeer, ReactionCount, MessagePeerReaction, MessagesSearchCounter, Peer, MessageReactions, Document, InputFile, Reaction, ForumTopic as MTForumTopic, MessagesForumTopics, MessagesGetReplies, MessagesGetHistory, MessagesAffectedHistory, UrlAuthResult, MessagesTranscribedAudio, ReadParticipantDate, WebDocument, MessagesSearch, MessagesSearchGlobal, InputReplyTo, InputUser, MessagesSendMessage, MessagesSendMedia, MessagesGetSavedHistory, MessagesSavedDialogs, SavedDialog as MTSavedDialog, User, MissingInvitee, TextWithEntities, ChannelsSearchPosts, FactCheck, MessageExtendedMedia, SponsoredMessage, MessagesSponsoredMessages} from '../../layer';
+import {Chat, ChatFull, Dialog as MTDialog, DialogPeer, DocumentAttribute, InputMedia, InputMessage, InputPeerNotifySettings, InputSingleMedia, Message, MessageAction, MessageEntity, MessageFwdHeader, MessageMedia, MessageReplies, MessageReplyHeader, MessagesDialogs, MessagesFilter, MessagesMessages, MethodDeclMap, NotifyPeer, PeerNotifySettings, PhotoSize, SendMessageAction, Update, Photo, Updates, ReplyMarkup, InputPeer, InputPhoto, InputDocument, InputGeoPoint, WebPage, GeoPoint, ReportReason, MessagesGetDialogs, InputChannel, InputDialogPeer, ReactionCount, MessagePeerReaction, MessagesSearchCounter, Peer, MessageReactions, Document, InputFile, Reaction, ForumTopic as MTForumTopic, MessagesForumTopics, MessagesGetReplies, MessagesGetHistory, MessagesAffectedHistory, UrlAuthResult, MessagesTranscribedAudio, ReadParticipantDate, WebDocument, MessagesSearch, MessagesSearchGlobal, InputReplyTo, InputUser, MessagesSendMessage, MessagesSendMedia, MessagesGetSavedHistory, MessagesSavedDialogs, SavedDialog as MTSavedDialog, User, MissingInvitee, TextWithEntities, ChannelsSearchPosts, FactCheck, MessageExtendedMedia, SponsoredMessage, MessagesSponsoredMessages, InputGroupCall, TodoItem, TodoCompletion} from '../../layer';
 import {ArgumentTypes, InvokeApiOptions, Modify} from '../../types';
 import {logger, LogTypes} from '../logger';
 import {ReferenceContext} from '../mtproto/referenceDatabase';
@@ -28,7 +28,7 @@ import {MyDocument} from './appDocsManager';
 import {MyPhoto} from './appPhotosManager';
 import DEBUG from '../../config/debug';
 import SlicedArray, {Slice, SliceEnd} from '../../helpers/slicedArray';
-import {FOLDER_ID_ALL, FOLDER_ID_ARCHIVE, GENERAL_TOPIC_ID, HIDDEN_PEER_ID, MUTE_UNTIL, NULL_PEER_ID, REAL_FOLDERS, REAL_FOLDER_ID, REPLIES_HIDDEN_CHANNEL_ID, REPLIES_PEER_ID, SERVICE_PEER_ID, TEST_NO_SAVED, THUMB_TYPE_FULL} from '../mtproto/mtproto_config';
+import {FOLDER_ID_ALL, FOLDER_ID_ARCHIVE, GENERAL_TOPIC_ID, HIDDEN_PEER_ID, MESSAGES_ALBUM_MAX_SIZE, MUTE_UNTIL, NULL_PEER_ID, REAL_FOLDERS, REAL_FOLDER_ID, REPLIES_HIDDEN_CHANNEL_ID, REPLIES_PEER_ID, SERVICE_PEER_ID, TEST_NO_SAVED, THUMB_TYPE_FULL} from '../mtproto/mtproto_config';
 import {getMiddleware} from '../../helpers/middleware';
 import assumeType from '../../helpers/assumeType';
 import copy from '../../helpers/object/copy';
@@ -81,6 +81,10 @@ import canMessageHaveFactCheck from './utils/messages/canMessageHaveFactCheck';
 import commonStateStorage from '../commonStateStorage';
 import PaidMessagesQueue from './utils/messages/paidMessagesQueue';
 import type {ConfirmedPaymentResult} from '../../components/chat/paidMessagesInterceptor';
+import RepayRequestHandler, {RepayRequest} from '../mtproto/repayRequestHandler';
+import canVideoBeAnimated from './utils/docs/canVideoBeAnimated';
+import getPhotoInput from './utils/photos/getPhotoInput';
+import {BatchProcessor} from '../../helpers/sortedList';
 
 // console.trace('include');
 // TODO: если удалить диалог находясь в папке, то он не удалится из папки и будет виден в настройках
@@ -107,6 +111,8 @@ export type SendFileDetails = {
   height: number,
   objectURL: string,
   thumb: {
+    isCover?: boolean;
+
     blob: Blob,
     url: string,
     size: MediaSize
@@ -259,6 +265,7 @@ export type RequestHistoryOptions = {
   isPublicHashtag?: boolean,
   isCacheableSearch?: boolean,
   hashtagType?: 'this' | 'my' | 'public',
+  chatType?: 'all' | 'users' | 'groups' | 'channels',
   recursion?: boolean,                  // ! FOR INNER USE ONLY
   historyType?: HistoryType,            // ! FOR INNER USE ONLY
   searchType?: 'cached' | 'uncached'    // ! FOR INNER USE ONLY
@@ -270,6 +277,17 @@ type GetUnreadMentionsOptions = {
   peerId: PeerId,
   threadId?: number,
   isReaction?: boolean
+};
+
+type UploadThumbAndCoverArgs = {
+  peer: InputPeer;
+  blob: Blob;
+  isCover: boolean;
+};
+
+type UploadVideoCoverArgs = {
+  peer: InputPeer;
+  file: InputFile;
 };
 
 type MessageContext = {searchStorages?: Set<HistoryStorage>};
@@ -371,12 +389,19 @@ export class AppMessagesManager extends AppManager {
   private historyMaxIdSubscribed: Map<HistoryStorageKey, number> = new Map();
 
   private factCheckBatcher: Batcher<PeerId, number, FactCheck>;
+  private checklistBatcher: Batcher<string, { taskId: number, oldItem?: TodoCompletion, action: 'complete' | 'uncomplete' }, void>;
 
   private waitingTranscriptions: Map<string, CancellablePromise<MessagesTranscribedAudio>>;
   private paidMessagesQueue = new PaidMessagesQueue;
 
+  private repayRequestHandler: RepayRequestHandler;
+
   protected after() {
     this.clear(true);
+
+    this.repayRequestHandler = new RepayRequestHandler({
+      rootScope: this.rootScope
+    });
 
     this.apiUpdatesManager.addMultipleEventsListeners({
       updateMessageID: this.onUpdateMessageId,
@@ -548,6 +573,12 @@ export class AppMessagesManager extends AppManager {
 
     this.factCheckBatcher = new Batcher({
       processBatch: this.processFactCheckBatch
+    });
+
+    this.checklistBatcher = new Batcher({
+      delay: 500,
+      debounce: true,
+      processBatch: this.processChecklistBatch
     });
 
     return this.appStateManager.getState().then((state) => {
@@ -777,8 +808,8 @@ export class AppMessagesManager extends AppManager {
 
     const webPageSend = this.generateOutgoingWebPage(message, options);
 
-    const toggleError = (error?: ApiError) => {
-      this.onMessagesSendError([message], error);
+    const toggleError = (error?: ApiError, repayRequest?: RepayRequest) => {
+      this.onMessagesSendError([message], error, repayRequest);
       this.rootScope.dispatchEvent('messages_pending');
     };
 
@@ -891,7 +922,18 @@ export class AppMessagesManager extends AppManager {
 
         message.promise.resolve();
       }, (error: ApiError) => {
-        toggleError(error);
+        const repayRequest = this.repayRequestHandler.tryRegisterRequest({
+          error,
+          messageCount: 1,
+          repayCallback: (override) => {
+            this.cancelPendingMessage(message.random_id);
+            this.sendText({...options, ...override})
+          },
+          paidStars,
+          wereStarsReserved: options.confirmedPaymentResult?.canUndo
+        });
+
+        toggleError(error, repayRequest);
         message.promise.reject(error);
         throw error;
       }).finally(() => {
@@ -1797,9 +1839,7 @@ export class AppMessagesManager extends AppManager {
       attributes.push(videoAttribute);
 
       // * must follow after video attribute
-      if(options.noSound &&
-        file.size > (10 * 1024) &&
-        file.size < (10 * 1024 * 1024)) {
+      if(canVideoBeAnimated(options.noSound, file.size)) {
         attributes.push({
           _: 'documentAttributeAnimated'
         });
@@ -1946,13 +1986,15 @@ export class AppMessagesManager extends AppManager {
       }
     }
 
-    const toggleError = (error?: ApiError) => {
-      this.onMessagesSendError([message], error);
+    const toggleError = (error?: ApiError, repayRequest?: RepayRequest) => {
+      this.onMessagesSendError([message], error, repayRequest);
       this.rootScope.dispatchEvent('messages_pending');
     };
 
-    let uploaded = false,
-      uploadPromise: ReturnType<ApiFileManager['upload']> = null;
+    let
+      uploaded = false,
+      uploadPromise: ReturnType<ApiFileManager['upload']> = null
+    ;
 
     const upload = () => {
       if(isDocument) {
@@ -1996,9 +2038,13 @@ export class AppMessagesManager extends AppManager {
             sentDeferred.notifyAll({done: 0, total: file.size});
           }
 
-          let thumbUploadPromise: typeof uploadPromise;
+          let thumbUploadPromise: ReturnType<typeof this.uploadThumbAndCover>;
           if(attachType === 'video' && options.objectURL && options.thumb?.blob) {
-            thumbUploadPromise = this.apiFileManager.upload({file: options.thumb.blob});
+            thumbUploadPromise = this.uploadThumbAndCover({
+              blob: options.thumb.blob,
+              isCover: !!options.thumb.isCover,
+              peer: this.appPeersManager.getInputPeerById(peerId)
+            });
           }
 
           uploadPromise && uploadPromise.then(async(inputFile) => {
@@ -2044,8 +2090,11 @@ export class AppMessagesManager extends AppManager {
 
             if(thumbUploadPromise) {
               try {
-                const inputFile = await thumbUploadPromise;
-                (inputMedia as InputMedia.inputMediaUploadedDocument).thumb = inputFile;
+                const thumbUploadResult = await thumbUploadPromise;
+                assumeType<InputMedia.inputMediaUploadedDocument>(inputMedia);
+
+                inputMedia.thumb = thumbUploadResult.file;
+                inputMedia.video_cover = thumbUploadResult.coverPhoto;
               } catch(err) {
                 this.log.error('sendFile thumb upload error:', err);
               }
@@ -2084,8 +2133,9 @@ export class AppMessagesManager extends AppManager {
     });
 
     if(!options.isGroupedItem) {
+      const paidStars = options.confirmedPaymentResult?.starsAmount || undefined;
+
       const invokeSend = (inputMedia: Awaited<typeof sentDeferred>) => {
-        const paidStars = options.confirmedPaymentResult?.starsAmount || undefined;
         return this.apiManager.invokeApi('messages.sendMedia', {
           background: options.background,
           peer: this.appPeersManager.getInputPeerById(peerId),
@@ -2135,7 +2185,18 @@ export class AppMessagesManager extends AppManager {
               return;
             }
 
-            toggleError(error);
+            const repayRequest = this.repayRequestHandler.tryRegisterRequest({
+              error,
+              messageCount: 1,
+              paidStars,
+              repayCallback: (override) => {
+                this.cancelPendingMessage(message.random_id);
+                this.sendFile({...options, ...override});
+              },
+              wereStarsReserved: options.confirmedPaymentResult?.canUndo
+            });
+
+            toggleError(error, repayRequest);
             throw error;
           });
         });
@@ -2179,6 +2240,37 @@ export class AppMessagesManager extends AppManager {
     ret.send = upload;
 
     return ret;
+  }
+
+  private async uploadThumbAndCover({blob, isCover, peer}: UploadThumbAndCoverArgs) {
+    const file = await this.apiFileManager.upload({file: blob});
+
+    if(!isCover) return {file};
+
+    try {
+      const coverPhoto = await this.uploadVideoCover({file, peer});
+      return {file, coverPhoto};
+    } catch(err) {
+      this.log.error('uploadVideoCover error:', err);
+    }
+
+    return {file};
+  }
+
+  private async uploadVideoCover({file, peer}: UploadVideoCoverArgs) {
+    const media: InputMedia.inputMediaUploadedPhoto = {
+      _: 'inputMediaUploadedPhoto',
+      file,
+      pFlags: {}
+    };
+
+    const messageMedia = await this.apiManager.invokeApi('messages.uploadMedia', {peer, media});
+
+    if(messageMedia._ !== 'messageMediaPhoto') throw new Error('Uploaded video cover is not a photo');
+
+    const photo = this.appPhotosManager.savePhoto(messageMedia.photo);
+
+    return getPhotoInput(photo);
   }
 
   public async sendGrouped(options: MessageSendingParams & {
@@ -2276,12 +2368,12 @@ export class AppMessagesManager extends AppManager {
       return;
     }
 
-    const toggleError = (message: Message.message, error?: ApiError) => {
+    const toggleError = (message: Message.message, error?: ApiError, repayRequest?: RepayRequest) => {
       if(message.error === error) {
         return;
       }
 
-      this.onMessagesSendError([message], error);
+      this.onMessagesSendError([message], error, repayRequest);
       this.rootScope.dispatchEvent('messages_pending');
     };
 
@@ -2321,7 +2413,18 @@ export class AppMessagesManager extends AppManager {
 
             deferred.resolve();
           }, (error: ApiError) => {
-            results.forEach(({message}) => toggleError(message, error));
+            const repayRequest = this.repayRequestHandler.tryRegisterRequest({
+              error,
+              paidStars,
+              messageCount: multiMedia.length,
+              repayCallback: (override) => {
+                results.forEach(({message}) => this.cancelPendingMessage(message.random_id));
+                this.sendGrouped({...options, ...override});
+              },
+              wereStarsReserved: options.confirmedPaymentResult?.canUndo
+            });
+
+            results.forEach(({message}) => toggleError(message, error, repayRequest));
             deferred.reject(error);
           });
         }
@@ -2557,6 +2660,14 @@ export class AppMessagesManager extends AppManager {
         break;
       }
 
+      case 'inputMediaTodo': {
+        media = {
+          _: 'messageMediaToDo',
+          todo: inputMedia.todo
+        };
+        break;
+      }
+
       case 'messageMediaPending': {
         media = (inputMedia as any).messageMedia;
         break;
@@ -2565,8 +2676,8 @@ export class AppMessagesManager extends AppManager {
 
     message.media = media;
 
-    const toggleError = (error?: ApiError) => {
-      this.onMessagesSendError([message], error);
+    const toggleError = (error?: ApiError, repayRequest?: RepayRequest) => {
+      this.onMessagesSendError([message], error, repayRequest);
       this.rootScope.dispatchEvent('messages_pending');
     };
 
@@ -2627,7 +2738,17 @@ export class AppMessagesManager extends AppManager {
         });
         promise.resolve();
       }, (error: ApiError) => {
-        toggleError(error);
+        const repayRequest = this.repayRequestHandler.tryRegisterRequest({
+          error,
+          paidStars,
+          messageCount: 1,
+          repayCallback: (override) => {
+            this.cancelPendingMessage(message.random_id);
+            this.sendOther({...options, ...override});
+          },
+          wereStarsReserved: options.confirmedPaymentResult?.canUndo
+        });
+        toggleError(error, repayRequest);
         promise.reject(error);
         throw error;
       }).finally(() => {
@@ -2876,6 +2997,10 @@ export class AppMessagesManager extends AppManager {
   private generateReplyHeader(peerId: PeerId, replyTo: InputReplyTo): MessageReplyHeader {
     if(!replyTo) {
       return;
+    }
+
+    if(replyTo._ === 'inputReplyToMonoForum') {
+      throw new Error('Monoforum is not supported');
     }
 
     if(replyTo._ === 'inputReplyToStory') {
@@ -3682,6 +3807,10 @@ export class AppMessagesManager extends AppManager {
         group.messages.push(message);
       }
 
+      if(originalMessage.restriction_reason) {
+        message.restriction_reason = originalMessage.restriction_reason;
+      }
+
       if(peerId === this.appPeersManager.peerId) {
         message.saved_peer_id = this.appPeersManager.getOutputPeer(fromPeerId);
       }
@@ -3742,7 +3871,20 @@ export class AppMessagesManager extends AppManager {
         wereStarsReserved: options.confirmedPaymentResult?.canUndo
       });
     }, (error: ApiError) => {
-      this.onMessagesSendError(newMessages, error);
+      const repayRequest = this.repayRequestHandler.tryRegisterRequest({
+        error,
+        messageCount: newMessages.length,
+        paidStars,
+        repayCallback: (override) => {
+          newMessages.forEach(message => {
+            this.cancelPendingMessage(message.random_id);
+          });
+          this.forwardMessagesInner({...options, mids, ...override});
+        },
+        wereStarsReserved: options.confirmedPaymentResult?.canUndo
+      });
+
+      this.onMessagesSendError(newMessages, error, repayRequest);
       throw error;
     }).finally(() => {
       if(this.pendingAfterMsgs[peerId] === sentRequestOptions) {
@@ -3814,7 +3956,7 @@ export class AppMessagesManager extends AppManager {
     // };
   }
 
-  private onMessagesSendError(messages: Message.message[], error?: ApiError) {
+  private onMessagesSendError(messages: Message.message[], error?: ApiError, repayRequest?: RepayRequest) {
     messages.forEach((message) => {
       if(message.error === error) {
         return;
@@ -3831,8 +3973,10 @@ export class AppMessagesManager extends AppManager {
       this.modifyMessage(message, (message) => {
         if(error) {
           message.error = error;
+          message.repayRequest = repayRequest;
         } else {
           delete message.error;
+          delete message.repayRequest;
         }
       }, undefined, true);
 
@@ -4845,7 +4989,7 @@ export class AppMessagesManager extends AppManager {
         case 'messageActionGroupCall': {
           // assumeType<MessageAction.messageActionGroupCall>(action);
 
-          this.appGroupCallsManager.saveGroupCall(action.call);
+          this.appGroupCallsManager.saveGroupCall(action.call as InputGroupCall.inputGroupCall);
 
           let type: string;
           if(action.duration === undefined) {
@@ -5363,7 +5507,8 @@ export class AppMessagesManager extends AppManager {
     const goodMedias = [
       'messageMediaPhoto',
       'messageMediaDocument',
-      'messageMediaWebPage'
+      'messageMediaWebPage',
+      'messageMediaToDo'
     ];
 
     if(kind === 'poll') {
@@ -5598,14 +5743,14 @@ export class AppMessagesManager extends AppManager {
     return searchStorage;
   }
 
-  public getSearchCounters(
+  public async getSearchCounters(
     peerId: PeerId,
     filters: MessagesFilter[],
     canCache = true,
     threadId?: number
   ): Promise<MessagesSearchCounter[]> {
     peerId = this.appPeersManager.getPeerMigratedTo(peerId) || peerId;
-    if(this.appPeersManager.isPeerRestricted(peerId)) {
+    if(await this.appPeersManager.isPeerRestricted(peerId)) {
       return Promise.resolve(filters.map((filter) => {
         return {
           _: 'messages.searchCounter',
@@ -6850,7 +6995,7 @@ export class AppMessagesManager extends AppManager {
     const peerId = this.appPeersManager.getPeerId(peer);
     const message: MyMessage = this.getMessageByPeer(peerId, mid);
 
-    if(message?._ !== 'message') {
+    if(!message) {
       this.fixDialogUnreadMentionsIfNoMessage({peerId, threadId, force: true});
       return;
     }
@@ -6966,9 +7111,9 @@ export class AppMessagesManager extends AppManager {
 
     let dispatchEditEvent = true;
     // no sense in dispatching message_edit since only reactions have changed
-    if(oldMessage?._ === 'message' && !deepEqual(oldMessage.reactions, (newMessage as Message.message).reactions)) {
-      const newReactions = (newMessage as Message.message).reactions;
-      (newMessage as Message.message).reactions = oldMessage.reactions;
+    if(oldMessage && !deepEqual(oldMessage.reactions, (newMessage as Message.message | Message.messageService).reactions)) {
+      const newReactions = (newMessage as Message.message | Message.messageService).reactions;
+      (newMessage as Message.message | Message.messageService).reactions = oldMessage.reactions;
       this.apiUpdatesManager.processLocalUpdate({
         _: 'updateMessageReactions',
         peer: this.appPeersManager.getOutputPeer(peerId),
@@ -7705,8 +7850,8 @@ export class AppMessagesManager extends AppManager {
     }
   }
 
-  public canSendToPeer(peerId: PeerId, threadId?: number, action: ChatRights = 'send_messages') {
-    if(this.appPeersManager.isPeerRestricted(peerId)) {
+  public async canSendToPeer(peerId: PeerId, threadId?: number, action: ChatRights = 'send_messages') {
+    if(await this.appPeersManager.isPeerRestricted(peerId)) {
       return false;
     }
 
@@ -7994,7 +8139,7 @@ export class AppMessagesManager extends AppManager {
   }> = {}) {
     const peerId = this.getMessagePeer(message);
 
-    if(this.appPeersManager.isPeerRestricted(peerId)) {
+    if(await this.appPeersManager.isPeerRestricted(peerId)) {
       return;
     }
 
@@ -8189,7 +8334,10 @@ export class AppMessagesManager extends AppManager {
 
     const {historyStorage, limit, addOffset, offsetId, offsetPeerId, needRealOffsetIdOffset} = options;
 
-    if(this.appPeersManager.isPeerRestricted(options.peerId)) {
+    const isPeerRestrictedPromise = this.appPeersManager.isPeerRestricted(options.peerId);
+    if(isPeerRestrictedPromise instanceof Promise) {
+      return isPeerRestrictedPromise.then(() => this.getHistory(options));
+    } else if(isPeerRestrictedPromise) {
       const first = historyStorage.history.first;
       first.setEnd(SliceEnd.Both);
 
@@ -8533,33 +8681,58 @@ export class AppMessagesManager extends AppManager {
       }
     }
 
-    // * load grouped missing messages
-    const firstMessage = messages[0] as Message.message;
-    const lastMessage = messages[messages.length - 1] as Message.message;
+    // * load grouped missing messages (only once per recursion)
+    if(!inputFilter && !recursion) {
+      const firstMessage = messages[0] as Message.message;
+      const lastMessage = messages[messages.length - 1] as Message.message;
 
-    if(!inputFilter && !isBottomEnd && firstMessage?.grouped_id) {
-      await this.getHistory({
-        ...options,
-        offsetId: firstMessage.mid,
-        limit: 20,
-        addOffset: -10
-      });
+      const fillMissingGroupedMessages = async(bottom: boolean) => {
+        if(!middleware()) {
+          return;
+        }
 
-      if(!middleware()) {
-        return;
+        const {
+          isEnd,
+          history,
+          messages = history.map((mid) => this.getMessageByPeer(peerId, mid))
+        } = await this.getHistory({
+          ...options,
+          offsetId: (bottom ? firstMessage : lastMessage).mid,
+          limit: (MESSAGES_ALBUM_MAX_SIZE + 1) * 2,
+          addOffset: -(MESSAGES_ALBUM_MAX_SIZE + 1)
+        });
+
+        if(!middleware()) {
+          return;
+        }
+
+        // * erase unfilled grouped messages if they're last elements in their history slices
+        if(!isEnd[bottom ? 'bottom' : 'top']) {
+          if(!bottom) messages.reverse();
+          const messagesSlice = messages.slice(0, MESSAGES_ALBUM_MAX_SIZE) as Message.message[];
+          const groupedIds = messagesSlice.map((message) => message.grouped_id);
+          const slice = messagesSlice[0] && historyStorage.history.findSlice(messagesSlice[0].mid);
+          if(
+            groupedIds[0] &&
+            groupedIds[0] !== groupedIds[MESSAGES_ALBUM_MAX_SIZE - 1] &&
+            slice?.index === (bottom ? 0 : slice.slice.length - 1)
+          ) {
+            messagesSlice.forEach((message) => {
+              if(message.grouped_id === groupedIds[0]) {
+                historyStorage.history.delete(message.mid);
+              }
+            });
+          }
+        }
+      };
+
+
+      if(!isBottomEnd && firstMessage?.grouped_id) {
+        await fillMissingGroupedMessages(true);
       }
-    }
 
-    if(!inputFilter && !isTopEnd && lastMessage?.grouped_id && lastMessage.grouped_id !== firstMessage?.grouped_id) {
-      await this.getHistory({
-        ...options,
-        offsetId: lastMessage.mid,
-        limit: 20,
-        addOffset: -10
-      });
-
-      if(!middleware()) {
-        return;
+      if(!isTopEnd && lastMessage?.grouped_id && lastMessage.grouped_id !== firstMessage?.grouped_id) {
+        await fillMissingGroupedMessages(false);
       }
     }
     // * grouped end
@@ -8670,8 +8843,8 @@ export class AppMessagesManager extends AppManager {
         return this.getHistory({
           peerId: message.peerId,
           offsetId: message.mid,
-          limit: 20,
-          addOffset: -10
+          limit: (MESSAGES_ALBUM_MAX_SIZE + 1) * 2,
+          addOffset: -(MESSAGES_ALBUM_MAX_SIZE + 1)
         });
       }));
       if(!middleware()) {
@@ -8698,6 +8871,7 @@ export class AppMessagesManager extends AppManager {
     minDate,
     maxDate,
     historyType = this.getHistoryType(peerId, threadId),
+    chatType,
     fromPeerId,
     savedReaction,
     isPublicHashtag
@@ -8762,7 +8936,10 @@ export class AppMessagesManager extends AppManager {
         max_date: maxDate,
         offset_rate: nextRate,
         offset_peer: this.appPeersManager.getInputPeerById(offsetPeerId),
-        folder_id: folderId
+        folder_id: folderId,
+        users_only: chatType === 'users' || undefined,
+        groups_only: chatType === 'groups' || undefined,
+        broadcasts_only: chatType === 'channels' || undefined
       };
 
       method = 'messages.searchGlobal';
@@ -9488,23 +9665,23 @@ export class AppMessagesManager extends AppManager {
   }
 
   public getSponsoredMessage(peerId: PeerId): Promise<MessagesSponsoredMessages> {
-    // let promise: Promise<MessagesSponsoredMessages>;
-    // if(TEST_SPONSORED) promise = Promise.resolve({
+    // return Promise.resolve({
     //   '_': 'messages.sponsoredMessages',
-    //   'messages': [
-    //     {
-    //       '_': 'sponsoredMessage',
-    //       'pFlags': {},
-    //       'flags': 9,
-    //       'random_id': new Uint8Array([80, 5, 249, 174, 44, 73, 173, 14, 246, 81, 187, 182, 223, 5, 4, 128]),
-    //       'from_id': {
-    //         '_': 'peerUser',
-    //         'user_id': 983000232
-    //       },
-    //       'start_param': 'GreatMinds',
-    //       'message': 'This is a long sponsored message. In fact, it has the maximum length allowed on the platform – 160 characters 😬😬. It\'s promoting a bot with a start parameter.' + chatId
-    //     }
-    //   ],
+    //   'posts_between': 5,
+    //   'messages': Array.from({length: 5}, () => ({
+    //     '_': 'sponsoredMessage',
+    //     'pFlags': {},
+    //     'flags': 9,
+    //     'random_id': new Uint8Array([80, 5, 249, 174, 44, 73, 173, 14, 246, 81, 187, 182, 223, 5, 4, 128]),
+    //     'from_id': {
+    //       '_': 'peerUser',
+    //       'user_id': 983000232
+    //     },
+    //     'message': 'This is a long sponsored message. In fact, it has the maximum length allowed on the platform – 160 characters 😬😬. It\'s promoting a bot with a start parameter.' + peerId,
+    //     'url': 'https://t.me/QuizBot?start=GreatMinds',
+    //     'title': 'QuizBot',
+    //     'button_text': 'Start'
+    //   })),
     //   'chats': [],
     //   'users': [
     //     {
@@ -9590,20 +9767,196 @@ export class AppMessagesManager extends AppManager {
   public cancelQueuedPaidMessages(peerId: PeerId) {
     this.paidMessagesQueue.cancelFor(peerId);
   }
+
+  public confirmRepayRequest(requestId: number, confirmedPaymentResult: ConfirmedPaymentResult) {
+    this.repayRequestHandler.confirmRepayRequest(requestId, confirmedPaymentResult);
+  }
+
+  public cancelRepayRequest(requestId: number) {
+    this.repayRequestHandler.cancelRepayRequest(requestId);
+  }
+
+  public async updateTodo(params: {
+    peerId: PeerId,
+    mid: number,
+    taskId: number,
+    action: 'complete' | 'uncomplete',
+  }) {
+    // generate message_edit update
+    const storage = this.getHistoryMessagesStorage(params.peerId);
+    const message = this.getMessageFromStorage(storage, params.mid) as Message.message;
+    if(!message) {
+      return;
+    }
+
+    let oldItem: TodoCompletion;
+    this.modifyMessage(message, (message) => {
+      const checklist = message.media as MessageMedia.messageMediaToDo;
+      if(!checklist.completions) checklist.completions = []
+      const now = Date.now() / 1000
+
+      if(params.action === 'complete') {
+        const existing = checklist.completions.findIndex((completion) => completion.id === params.taskId);
+        if(existing !== -1) {
+          checklist.completions.splice(existing, 1);
+        }
+
+        checklist.completions.push({
+          _: 'todoCompletion',
+          id: params.taskId,
+          completed_by: this.rootScope.myId,
+          date: now
+        })
+      } else {
+        const existing = checklist.completions.findIndex((completion) => completion.id === params.taskId);
+        if(existing !== -1) {
+          oldItem = checklist.completions[existing];
+          checklist.completions.splice(existing, 1);
+        }
+      }
+    }, storage)
+
+    this.rootScope.dispatchEvent('message_edit', {
+      storageKey: storage.key,
+      peerId: params.peerId,
+      mid: params.mid,
+      message
+    })
+
+    const key = `${params.peerId}:${params.mid}`;
+    this.checklistBatcher.addToBatch(key, {taskId: params.taskId, oldItem, action: params.action});
+  }
+
+  private processChecklistBatch = async(batch: AppMessagesManager['checklistBatcher']['batchMap']) => {
+    for(const [key, list] of batch) {
+      const [peerId, mid] = key.split(':').map(Number);
+
+      const completedIds = new Set<number>();
+      const incompletedIds = new Set<number>();
+      const incompletedItems = new Map<number, TodoCompletion>();
+
+      for(const [{taskId, oldItem, action}, promise] of list) {
+        promise.resolve();
+
+        if(action === 'complete') {
+          incompletedIds.delete(taskId);
+          incompletedItems.delete(taskId);
+          completedIds.add(taskId);
+        } else {
+          completedIds.delete(taskId);
+          incompletedIds.add(taskId);
+          if(oldItem) {
+            incompletedItems.set(taskId, oldItem);
+          }
+        }
+      }
+
+      if(!completedIds.size && !incompletedIds.size) {
+        continue;
+      }
+
+      try {
+        const updates = await this.apiManager.invokeApi('messages.toggleTodoCompleted', {
+          completed: Array.from(completedIds),
+          incompleted: Array.from(incompletedIds),
+          peer: this.appPeersManager.getInputPeerById(peerId),
+          msg_id: getServerMessageId(mid)
+        });
+
+        this.apiUpdatesManager.processUpdateMessage(updates);
+      } catch(e) {
+        console.error(e);
+
+        if((e as any).type !== 'MESSAGE_NOT_MODIFIED') {
+        // revert
+          const storage = this.getHistoryMessagesStorage(peerId);
+          const message = this.getMessageFromStorage(storage, mid) as Message.message;
+          if(!message) {
+            return;
+          }
+
+          this.modifyMessage(message, (message) => {
+            const checklist = message.media as MessageMedia.messageMediaToDo;
+            if(!checklist.completions) checklist.completions = []
+
+            for(const oldItem of incompletedItems.values()) {
+              checklist.completions.push(oldItem)
+            }
+
+            for(const taskId of completedIds) {
+              const idx = checklist.completions.findIndex((completion) => completion.id === taskId);
+              if(idx !== -1) {
+                checklist.completions.splice(idx, 1);
+              }
+            }
+          }, storage)
+
+          this.rootScope.dispatchEvent('message_edit', {
+            storageKey: storage.key,
+            peerId,
+            mid,
+            message
+          })
+        }
+      }
+    }
+
+    batch.clear()
+  }
+
+  public async appendTodo(params: {
+    peerId: PeerId,
+    mid: number,
+    tasks: TodoItem[]
+  }) {
+    // generate message_edit update
+    const storage = this.getHistoryMessagesStorage(params.peerId);
+    const message = this.getMessageFromStorage(storage, params.mid) as Message.message;
+    if(!message) {
+      return;
+    }
+
+    this.modifyMessage(message, (message) => {
+      const checklist = message.media as MessageMedia.messageMediaToDo;
+      checklist.todo.list.push(...params.tasks);
+    }, storage)
+
+    this.rootScope.dispatchEvent('message_edit', {
+      storageKey: storage.key,
+      peerId: params.peerId,
+      mid: params.mid,
+      message
+    })
+
+    await this.apiManager.invokeApiSingleProcess({
+      method: 'messages.appendTodoList',
+      params: {
+        peer: this.appPeersManager.getInputPeerById(params.peerId),
+        msg_id: getServerMessageId(params.mid),
+        list: params.tasks
+      },
+      processResult: (updates) => {
+        this.apiUpdatesManager.processUpdateMessage(updates);
+      }
+    })
+  }
 }
 
 class Batcher<Key, Id, Result> {
   private batchMap: Map<Key, Map<Id, CancellablePromise<Result>>>;
   private delay: number;
+  private debounce: boolean;
   private timeoutId: number;
   private _processBatch: (batch: Batcher<Key, Id, Result>['batchMap']) => Promise<any>;
 
   constructor(options: {
     delay?: number
+    debounce?: boolean
     processBatch: (batch: Batcher<Key, Id, Result>['batchMap']) => Promise<any>
   }) {
     this.batchMap = new Map();
     this.delay = options.delay ?? 0;
+    this.debounce = options.debounce ?? false;
     this._processBatch = options.processBatch;
   }
 
@@ -9617,6 +9970,11 @@ class Batcher<Key, Id, Result> {
   }
 
   private scheduleBatch() {
+    if(this.debounce && this.timeoutId) {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = undefined;
+    }
+
     if(!this.timeoutId) {
       this.timeoutId = ctx.setTimeout(() => {
         this.processBatch();

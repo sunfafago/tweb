@@ -25,7 +25,7 @@ import {MOUNT_CLASS_TO} from '../../config/debug';
 import appNavigationController from '../../components/appNavigationController';
 import AppPrivateSearchTab from '../../components/sidebarRight/tabs/search';
 import I18n, {i18n, join, LangPackKey} from '../langPack';
-import {ChatFull, ChatParticipants, Message, MessageAction, MessageMedia, SendMessageAction, User, Chat as MTChat, UrlAuthResult, WallPaper, Config, AttachMenuBot, Peer, InputChannel, HelpPeerColors, Reaction, Document, MessageEntity, PeerColor} from '../../layer';
+import {ChatFull, ChatParticipants, Message, MessageAction, MessageMedia, SendMessageAction, User, Chat as MTChat, UrlAuthResult, WallPaper, Config, AttachMenuBot, Peer, InputChannel, HelpPeerColors, Reaction, Document, MessageEntity, PeerColor, SponsoredMessage, InputGroupCall} from '../../layer';
 import PeerTitle from '../../components/peerTitle';
 import {PopupPeerCheckboxOptions} from '../../components/popups/peer';
 import blurActiveElement from '../../helpers/dom/blurActiveElement';
@@ -108,7 +108,6 @@ import throttle from '../../helpers/schedulers/throttle';
 import appDownloadManager from './appDownloadManager';
 import getServerMessageId from './utils/messageId/getServerMessageId';
 import {findUpAvatar} from '../../components/avatarNew';
-import focusInput from '../../helpers/dom/focusInput';
 import safePlay from '../../helpers/dom/safePlay';
 import {RequestWebViewOptions} from './appAttachMenuBotsManager';
 import PopupWebApp from '../../components/popups/webApp';
@@ -133,6 +132,8 @@ import {createProxiedManagersForAccount} from './getProxiedManagers';
 import ChatBackgroundStore from '../chatBackgroundStore';
 import useLockScreenShortcut from './utils/useLockScreenShortcut';
 import PaidMessagesInterceptor, {PAYMENT_REJECTED} from '../../components/chat/paidMessagesInterceptor';
+import IS_WEB_APP_BROWSER_SUPPORTED from '../../environment/webAppBrowserSupport';
+import ChatAudio from '../../components/chat/audio';
 
 export type ChatSavedPosition = {
   mids: number[],
@@ -192,6 +193,7 @@ export class AppImManager extends EventListenerBase<{
   private backgroundPromises: {[url: string]: MaybePromise<string>};
 
   private topbarCall: TopbarCall;
+  private chatAudio: ChatAudio;
 
   public lastBackgroundUrl: string;
 
@@ -607,6 +609,9 @@ export class AppImManager extends EventListenerBase<{
       this.topbarCall = new TopbarCall(managers);
     }
 
+    this.chatAudio = new ChatAudio(this, managers);
+    this.columnEl.append(this.chatAudio.container);
+
     if(IS_CALL_SUPPORTED) {
       callsController.addEventListener('instance', ({instance/* , hasCurrent */}) => {
         // if(hasCurrent) {
@@ -679,6 +684,9 @@ export class AppImManager extends EventListenerBase<{
     this.managers.appReactionsManager.getSavedReactionTags().then((tags) => {
       savedReactionTags.splice(0, savedReactionTags.length, ...tags);
     });
+
+    // * preload sensitive content settings
+    this.managers.appPrivacyManager.getSensitiveContentSettings();
 
     // new PasscodeLockScreenControler().lock();
 
@@ -840,12 +848,17 @@ export class AppImManager extends EventListenerBase<{
     return attachMenuBot;
   }
 
-  public async openWebApp(options: Partial<RequestWebViewOptions>) {
+  public async openWebApp(options: Partial<RequestWebViewOptions> & {
+    onClose?: () => void
+  }) {
     options.botId ??= options.attachMenuBot?.bot_id;
     options.themeParams ??= {
       _: 'dataJSON',
       data: JSON.stringify(themeController.getThemeParamsForWebView())
     };
+
+    const onClose = options.onClose;
+    delete options.onClose; // to avoid passing it to the worker
 
     if(
       !options.attachMenuBot/*  &&
@@ -892,9 +905,10 @@ export class AppImManager extends EventListenerBase<{
         webViewResultUrl,
         webViewOptions: options as RequestWebViewOptions,
         attachMenuBot: options.attachMenuBot,
-        cacheKey
+        cacheKey,
+        onClose
       };
-      if(IS_TOUCH_SUPPORTED) {
+      if(!IS_WEB_APP_BROWSER_SUPPORTED || options.forcePopup) {
         PopupElement.createPopup(PopupWebApp, webAppOptions);
       } else {
         openWebAppInAppBrowser(webAppOptions);
@@ -1208,8 +1222,8 @@ export class AppImManager extends EventListenerBase<{
             this.setPeer({peerId: dialog.peerId});
           }
         });
-      } else if(key === 'ArrowUp' && this.chat.type !== ChatType.Scheduled) {
-        if(!chat.input.editMsgId && chat.input.isInputEmpty()) {
+      } else if(key === 'ArrowUp' && this.chat?.type !== ChatType.Scheduled) {
+        if(!chat?.input?.editMsgId && chat?.input?.isInputEmpty()) {
           this.managers.appMessagesManager.getFirstMessageToEdit(chat.peerId, chat.threadId).then((message) => {
             if(message) {
               chat.input.initMessageEditing(message.mid);
@@ -1233,7 +1247,7 @@ export class AppImManager extends EventListenerBase<{
         !chat.input.recording &&
         chat.input.messageInput.isContentEditable
       ) {
-        focusInput(chat.input.messageInput, e);
+        chat.input.passEventToInput(e);
       }
     };
 
@@ -1360,15 +1374,20 @@ export class AppImManager extends EventListenerBase<{
 
   public onSponsoredBoxClick = (message: Message.message) => {
     const sponsoredMessage = message.sponsoredMessage;
-    const wrapped = wrapUrl(sponsoredMessage.url);
-    this.clickIfSponsoredMessage(message as Message.message);
+    if(!sponsoredMessage) return;
+    this.onSponsoredMessageClick(sponsoredMessage);
+  };
+
+  public onSponsoredMessageClick = (message: SponsoredMessage) => {
+    this.managers.appMessagesManager.clickSponsoredMessage(message.random_id);
+    const wrapped = wrapUrl(message.url);
 
     if(wrapped.onclick) {
-      this.chat.appImManager.openUrl(sponsoredMessage.url);
+      this.chat.appImManager.openUrl(message.url);
     } else {
       safeWindowOpen(wrapped.url);
     }
-  };
+  }
 
   public async open(options: Omit<Parameters<AppImManager['op']>[0], 'peer'> & {peerId: PeerId}) {
     return this.op({
@@ -1614,7 +1633,7 @@ export class AppImManager extends EventListenerBase<{
 
         call = await this.managers.appGroupCallsManager.createGroupCall(chatId);
       } else {
-        call = chatFull.call;
+        call = chatFull.call as InputGroupCall.inputGroupCall;
       }
 
       groupCallsController.joinGroupCall(chatId, call.id, true, false);

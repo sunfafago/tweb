@@ -35,7 +35,9 @@ export type RequestWebViewOptions = MessageSendingParams & {
   hasSettings?: boolean,
   main?: boolean,
   compact?: boolean,
-  masked?: boolean
+  fullscreen?: boolean,
+  masked?: boolean,
+  forcePopup?: boolean
 };
 
 export default class AppAttachMenuBotsManager extends AppManager {
@@ -173,7 +175,8 @@ export default class AppAttachMenuBotsManager extends AppManager {
       app,
       writeAllowed,
       main,
-      compact
+      compact,
+      fullscreen
     } = options;
 
     const platform = 'web';
@@ -182,6 +185,7 @@ export default class AppAttachMenuBotsManager extends AppManager {
       start_param: startParam,
       theme_params: themeParams,
       compact,
+      fullscreen,
       platform
     };
 

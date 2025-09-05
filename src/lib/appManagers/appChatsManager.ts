@@ -12,7 +12,7 @@
 import deepEqual from '../../helpers/object/deepEqual';
 import isObject from '../../helpers/object/isObject';
 import safeReplaceObject from '../../helpers/object/safeReplaceObject';
-import {ChannelParticipant, ChannelsCreateChannel, ChannelsSendAsPeers, Chat, ChatAdminRights, ChatBannedRights, ChatFull, ChatInvite, ChatParticipant, ChatPhoto, ChatReactions, EmojiStatus, InputChannel, InputChatPhoto, InputFile, InputPeer, MessagesChats, MessagesSponsoredMessages, Peer, SponsoredMessage, Update, Updates} from '../../layer';
+import {ChannelParticipant, ChannelsCreateChannel, ChannelsSendAsPeers, Chat, ChatAdminRights, ChatBannedRights, ChatFull, ChatInvite, ChatParticipant, ChatPhoto, ChatReactions, EmojiStatus, InputChannel, InputChatPhoto, InputFile, InputPeer, MessagesChats, MessagesSponsoredMessages, MissingInvitee, Peer, SponsoredMessage, SponsoredPeer, Update, Updates} from '../../layer';
 import {AppManager} from './manager';
 import hasRights from './utils/chats/hasRights';
 import getParticipantPeerId from './utils/chats/getParticipantPeerId';
@@ -31,6 +31,8 @@ export type ChatRights = keyof ChatBannedRights['pFlags'] | keyof ChatAdminRight
   'invite_links' | 'create_giveaway'/*  | 'view_statistics' */;
 
 const TEST_SPONSORED = false;
+
+export type MySponsoredPeer = Omit<SponsoredPeer, 'peer'> & {peer: PeerId};
 
 export class AppChatsManager extends AppManager {
   private storage: AppStoragesManager['storages']['chats'];
@@ -466,12 +468,19 @@ export class AppChatsManager extends AppManager {
     }).then(this.onChatUpdated.bind(this, id));
   }
 
-  public addToChat(id: ChatId, userId: UserId) {
-    if(this.isChannel(id)) return this.inviteToChannel(id, [userId]);
+  public addToChat(id: ChatId, userId: UserId | UserId[]) {
+    if(this.isChannel(id)) return this.inviteToChannel(id, [userId].flat());
     else return this.addChatUser(id, userId);
   }
 
-  public addChatUser(id: ChatId, userId: UserId, fwdLimit = 100) {
+  public addChatUser(id: ChatId, userId: UserId | UserId[], fwdLimit = 100): Promise<MissingInvitee[]> {
+    if(Array.isArray(userId)) {
+      return Promise.all(userId.map((u) => this.addChatUser(id, u, fwdLimit)))
+      .then((missingInvitees) => {
+        return missingInvitees.flat();
+      });
+    }
+
     return this.apiManager.invokeApi('messages.addChatUser', {
       chat_id: id,
       user_id: this.appUsersManager.getUserInput(userId),
@@ -479,6 +488,16 @@ export class AppChatsManager extends AppManager {
     }).then((messagesInvitedUsers) => {
       this.onChatUpdated(id, messagesInvitedUsers.updates);
       return messagesInvitedUsers.missing_invitees;
+    }, (err: ApiError) => {
+      if(err.type === 'USER_NOT_MUTUAL_CONTACT') { // * fix case when user has left the legacy group and we can't invite them back
+        return [{
+          _: 'missingInvitee',
+          pFlags: {},
+          user_id: userId
+        }] as MissingInvitee[];
+      }
+
+      throw err;
     });
   }
 
@@ -1008,6 +1027,22 @@ export class AppChatsManager extends AppManager {
     });
 
     return promise;
+  }
+
+  public getSponsoredPeers(q: string) {
+    return this.apiManager.invokeApiSingleProcess({
+      method: 'contacts.getSponsoredPeers',
+      params: {q},
+      processResult: (result) => {
+        if(result._ === 'contacts.sponsoredPeersEmpty') return []
+        this.appUsersManager.saveApiUsers(result.users);
+        this.appChatsManager.saveApiChats(result.chats);
+        return result.peers.map((peer) => ({
+          ...peer,
+          peer: getPeerId(peer.peer)
+        }));
+      }
+    })
   }
 
   private onUpdateChannelParticipant = (update: Update.updateChannelParticipant) => {

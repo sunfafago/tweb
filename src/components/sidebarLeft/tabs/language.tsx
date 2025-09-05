@@ -152,18 +152,28 @@ export default class AppLanguageTab extends SliderSuperTab {
       });
 
       const form = RadioFormFromRows([...radioRows.values()], (value) => {
-        I18n.getLangPack(value, webLangCodes.includes(value));
+        I18n.getLangPackAndApply(value, webLangCodes.includes(value)).then(() => {
+          // 语言切换后立即刷新UI
+          setTimeout(() => {
+            I18n.forceRefreshLanguageUI();
+          }, 50);
+        });
       });
       debugger
 
-      I18n.getCacheLangPack().then((langPack) => {
-        const row = radioRows.get(langPack.lang_code);
+      // 获取当前实际使用的语言代码
+      const currentLangCode = I18n.lastRequestedLangCode || I18n.lastAppliedLangCode;
+      I18n.getCacheLangPackAndApply().then((langPack) => {
+        // 优先使用当前请求的语言代码，如果没有则使用缓存的语言包
+        const targetLangCode = currentLangCode || langPack.lang_code;
+        const row = radioRows.get(targetLangCode);
         if (!row) {
-          console.error('no row', row, langPack);
+          console.error('no row for language:', targetLangCode, 'available languages:', [...radioRows.keys()]);
           return;
         }
 
         row.radioField.setValueSilently(true);
+        console.log('Selected language:', targetLangCode);
       });
 
       section.content.append(form);

@@ -19,9 +19,13 @@ import {AppManager} from './manager';
 import getPeerId from './utils/peers/getPeerId';
 import {DcId} from '../../types';
 import assumeType from '../../helpers/assumeType';
+import {parseVideoStreamInfo} from '../calls/videoStreamInfo';
 
 export type GroupCallId = GroupCall['id'];
-export type MyGroupCall = GroupCall | InputGroupCall;
+export type MyGroupCall = GroupCall | Exclude<
+  InputGroupCall,
+  InputGroupCall.inputGroupCallSlug | InputGroupCall.inputGroupCallInviteMessage
+>;
 
 export type GroupCallConnectionType = 'main' | 'presentation';
 
@@ -79,12 +83,11 @@ export class AppGroupCallsManager extends AppManager {
       },
 
       updateGroupCallParticipants: (update) => {
-        this.saveGroupCall(update.call);
+        const call = update.call as InputGroupCall.inputGroupCall;
+        this.saveGroupCall(call);
 
         // this.getGroupCallFull(update.call.id, true); // ! WARNING TEMP
-
-        const groupCallId = update.call.id;
-        this.saveApiParticipants(groupCallId, update.participants);
+        this.saveApiParticipants(call.id, update.participants);
       }
     });
 
@@ -402,7 +405,7 @@ export class AppGroupCallsManager extends AppManager {
     });
   }
 
-  public async _fetchRtmpState(call: InputGroupCall, retry = 0, dcId?: DcId): Promise<GroupCallRtmpState> {
+  public async _fetchRtmpState(call: InputGroupCall.inputGroupCall, retry = 0, dcId?: DcId): Promise<GroupCallRtmpState> {
     const full = await this.getGroupCallFull(call.id);
     if(full._ === 'groupCallDiscarded') {
       throw new Error('Group call discarded');
@@ -434,8 +437,9 @@ export class AppGroupCallsManager extends AppManager {
     }
   }
 
-  public fetchRtmpState(call: InputGroupCall, overwrite?: boolean) {
-    const cached = this.cachedStreamChannels.get(call.id);
+  public fetchRtmpState(call: InputGroupCall.inputGroupCall, overwrite?: boolean) {
+    const callId = call.id;
+    const cached = this.cachedStreamChannels.get(callId);
     if(cached && !overwrite) {
       return cached;
     }
@@ -443,12 +447,12 @@ export class AppGroupCallsManager extends AppManager {
     const promise = this._fetchRtmpState(call);
     promise.finally(() => {
       setTimeout(() => {
-        if(this.cachedStreamChannels.get(call.id) === promise) {
-          this.cachedStreamChannels.delete(call.id);
+        if(this.cachedStreamChannels.get(callId) === promise) {
+          this.cachedStreamChannels.delete(callId);
         }
       }, 1000);
     });
-    this.cachedStreamChannels.set(call.id, promise);
+    this.cachedStreamChannels.set(callId, promise);
     return promise;
   }
 
@@ -461,6 +465,13 @@ export class AppGroupCallsManager extends AppManager {
       limit: 512 * 1024,
       priority: 32,
       floodMaxTimeout: 0
+    }).then((result) => {
+      if(!result.bytes.length) {
+        return;
+      }
+
+      const info = parseVideoStreamInfo(result.bytes);
+      return info;
     });
   }
 

@@ -6,6 +6,7 @@
 
 import PopupElement from '.';
 import safeAssign from '../../helpers/object/safeAssign';
+import {fastRaf} from '../../helpers/schedulers';
 import {AttachMenuBot} from '../../layer';
 import ButtonMenuToggle from '../buttonMenuToggle';
 import WebApp from '../webApp';
@@ -16,13 +17,13 @@ export default class PopupWebApp extends PopupElement {
   constructor(options: {
     webViewResultUrl: WebApp['webViewResultUrl'],
     webViewOptions: WebApp['webViewOptions'],
-    attachMenuBot?: AttachMenuBot
+    attachMenuBot?: AttachMenuBot,
+    onClose?: () => void
   }) {
     super('popup-payment popup-payment-verification popup-web-app', {
       closable: true,
       overlayClosable: true,
       body: true,
-      footer: true,
       title: true,
       onBackClick: () => this.webApp.onBackClick(),
       isConfirmationNeededOnClose: () => this.webApp.isConfirmationNeededOnClose()
@@ -30,13 +31,16 @@ export default class PopupWebApp extends PopupElement {
 
     safeAssign(this, options);
 
+    if(options.onClose) {
+      this.addEventListener('close', options.onClose);
+    }
+
     this.webApp = new WebApp({
       ...options,
       header: this.header,
       title: this.title,
       body: this.body,
-      footer: this.footer,
-      forceHide: this.forceHide,
+      forceHide: this.forceHide.bind(this),
       onBackStatus: (visible) => this.btnCloseAnimatedIcon.classList.toggle('state-back', visible)
     });
 
@@ -49,6 +53,9 @@ export default class PopupWebApp extends PopupElement {
 
     this.webApp.init(() => {
       this.show();
+      fastRaf(() => {
+        this.container.style.setProperty('--browser-width', `${this.container.clientWidth}px`);
+      })
     });
   }
 

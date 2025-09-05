@@ -27,8 +27,9 @@ import parseEntities from '../lib/richTextProcessor/parseEntities';
 import wrapDraftText from '../lib/richTextProcessor/wrapDraftText';
 import {createCustomFiller, insertCustomFillers} from '../lib/richTextProcessor/wrapRichText';
 import type {MarkupTooltipTypes} from './chat/markupTooltip';
+import forEachReverse from '../helpers/array/forEachReverse';
 
-export async function insertRichTextAsHTML(input: HTMLElement, text: string, entities: MessageEntity[], wrappingForPeerId: PeerId) {
+export async function insertRichTextAsHTML(input: HTMLElement, text: string, entities: MessageEntity[], wrappingForPeerId?: PeerId) {
   const loadPromises: Promise<any>[] = [];
   const wrappingCustomEmoji = entities?.some((entity) => entity._ === 'messageEntityCustomEmoji');
   const renderer = wrappingCustomEmoji ? createCustomEmojiRendererForInput() : undefined;
@@ -187,6 +188,7 @@ let init = () => {
       html = html.replace(/<!--([\s\S]*?)-->/g, '');
       html = html.replace('<br class="Apple-interchange-newline">', '');
       html = html.replace(/\r/g, '');
+      html = html.replace(/<hr([\s\S]*?)</g, '<');
 
       const match = html.match(/<body>([\s\S]*)<\/body>/);
       if(match) {
@@ -204,26 +206,48 @@ let init = () => {
       // span.innerHTML = html;
       // span.append(...Array.from(s));
 
-      let curChild = span.firstChild;
-      while(curChild) { // * fix whitespace between elements like <p>asd</p>\n<p>zxc</p>
-        const nextSibling = curChild.nextSibling;
-        if(curChild.nodeType === curChild.TEXT_NODE) {
-          if(!curChild.nodeValue.trim()) {
-            curChild.remove();
-          }
-        }
+      /* function canRenderText(el: HTMLElement) {
+        const forbidden = new Set([
+          'html', 'head', 'meta', 'link', 'style', 'script', 'template', 'title', 'base',
+          'iframe', 'frame', 'frameset', 'object', 'param', 'source', 'track',
+          'ul', 'ol', 'menu', 'dl',
+          'table', 'thead', 'tbody', 'tfoot', 'tr', 'colgroup'
+        ]);
 
-        curChild = nextSibling;
+        return !forbidden.has(el.tagName.toLowerCase());
       }
+
+      // * fix whitespace between elements like <p>asd</p>\n<p>zxc</p>
+      function removeEmptyTextNodes(node: Node) {
+        let curChild = node.firstChild;
+        while(curChild) {
+          const nextSibling = curChild.nextSibling;
+          if(curChild.nodeType === curChild.TEXT_NODE) {
+            if(
+              !canRenderText(curChild.parentElement) ||
+              ((curChild.parentElement.tagName === 'BODY' || !curChild.previousSibling || !curChild.nextSibling) && !curChild.nodeValue.trim())
+            ) {
+              curChild.remove();
+            }
+          } else {
+            removeEmptyTextNodes(curChild);
+          }
+
+          curChild = nextSibling;
+        }
+      }
+
+      // ! commented because discovered that \n in <h1>asd</h1>\n<p>asd</p> should be preserved
+      removeEmptyTextNodes(doc.body); */
 
       const richValue = getRichValueWithCaret(span, true, false);
 
-      const canWrapCustomEmojis = !!peerId;
+      const canWrapCustomEmojis = !!input.dataset.canWrapCustomEmojis || !!peerId;
       if(!canWrapCustomEmojis) {
         richValue.entities = richValue.entities.filter((entity) => entity._ !== 'messageEntityCustomEmoji');
       }
 
-      /* if(false) */ { // * fix extra new lines appearing from <p> (can have them from some sources, like macOS Terminal)
+      /* { // * fix extra new lines appearing from <p> (can have them from some sources, like macOS Terminal)
         const lines = richValue.value.split('\n');
         let textLength = 0;
         for(let lineIndex = 0; lineIndex < lines.length; ++lineIndex) {
@@ -250,6 +274,39 @@ let init = () => {
 
         const correctedText = lines.join('\n');
         richValue.value = correctedText;
+      } */
+
+      // * fix new lines
+      {
+        // * first we clear all the new lines from rich value
+        const richValueSplitted = richValue.value.split('');
+        forEachReverse(richValueSplitted, (char, index, arr) => {
+          if(char === '\n') {
+            arr.splice(index, 1);
+            richValue.entities.forEach((entity) => {
+              if(entity.offset >= index) {
+                entity.offset -= 1;
+              }
+            });
+          }
+        });
+
+        // * then we add new lines to rich value
+        const plainTextLines = plainText.split('\n');
+        let plainTextLength = 0;
+        for(const line of plainTextLines) {
+          plainTextLength += line.length;
+          richValueSplitted.splice(plainTextLength, 0, '\n');
+          richValue.entities.forEach((entity) => {
+            if(entity.offset >= plainTextLength) {
+              entity.offset += 1;
+            }
+          });
+
+          plainTextLength += 1;
+        }
+
+        richValue.value = richValueSplitted.join('');
       }
 
       const richTextLength = richValue.value.replace(/\s/g, '').length;
@@ -323,6 +380,7 @@ export type InputFieldOptions = {
   allowStartingSpace?: boolean,
   onRawInput?: (value: string) => void,
   canHaveFormatting?: Array<MarkupTooltipTypes>
+  canWrapCustomEmojis?: boolean;
 };
 
 function createCustomEmojiRendererForInput(textColor?: string, animationGroup?: AnimationItemGroup) {
@@ -413,7 +471,7 @@ export default class InputField {
       options.showLengthOn = Math.min(40, Math.round(options.maxLength / 3));
     }
 
-    const {placeholder, maxLength, showLengthOn, name, plainText, canBeEdited = true, autocomplete, withBorder, allowStartingSpace, canHaveFormatting} = options;
+    const {placeholder, maxLength, showLengthOn, name, plainText, canBeEdited = true, autocomplete, withBorder, allowStartingSpace, canHaveFormatting, canWrapCustomEmojis} = options;
     const label = options.label || options.labelText;
     this.allowStartingSpace = allowStartingSpace;
 
@@ -557,7 +615,7 @@ export default class InputField {
       this.container.append(border);
     }
 
-    if(label) {
+    if(label != null) {
       this.label = document.createElement('label');
       this.setLabel();
       this.container.append(this.label);
@@ -613,6 +671,8 @@ export default class InputField {
       });
     }
 
+    if(canWrapCustomEmojis) input.dataset.canWrapCustomEmojis = '1';
+
     this.input = input;
     this.setEmpty(true);
   }
@@ -636,6 +696,7 @@ export default class InputField {
     } else {
       this.label.append(i18n(this.options.label, this.options.labelOptions));
     }
+    this.label.style.visibility = this.label.textContent ? 'visible' : 'hidden';
   }
 
   get value(): string {
@@ -709,6 +770,7 @@ export default class InputField {
     if(label) {
       this.label.textContent = '';
       this.label.append(i18n(label, this.options.labelOptions));
+      this.label.style.visibility = 'visible';
     } else {
       this.setLabel();
     }
