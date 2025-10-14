@@ -16,6 +16,7 @@ import type {TimeManager} from '../mtproto/timeManager';
 import type {RootScope} from '../rootScope';
 import type DialogsStorage from '../storages/dialogs';
 import type FiltersStorage from '../storages/filters';
+import type MonoforumDialogsStorage from '../storages/monoforumDialogs';
 import type PeersStorage from '../storages/peers';
 import type ThumbsStorage from '../storages/thumbs';
 import type {ApiUpdatesManager} from './apiUpdatesManager';
@@ -46,7 +47,7 @@ import type {AppWebPagesManager} from './appWebPagesManager';
 import type AppAttachMenuBotsManager from './appAttachMenuBotsManager';
 import type AppSeamlessLoginManager from './appSeamlessLoginManager';
 import type AppThemesManager from './appThemesManager';
-import type AppUsernamesManager from './appThemesManager';
+import type AppUsernamesManager from './appUsernamesManager';
 import type AppChatInvitesManager from './appChatInvitesManager';
 import type AppStoriesManager from './appStoriesManager';
 import type AppBotsManager from './appBotsManager';
@@ -117,6 +118,7 @@ export class AppManager {
   protected appTranslationsManager: AppTranslationsManager;
   protected appGifsManager: AppGifsManager;
   protected appGiftsManager: AppGiftsManager;
+  protected monoforumDialogsStorage: MonoforumDialogsStorage;
 
   public clear: (init?: boolean) => void;
 

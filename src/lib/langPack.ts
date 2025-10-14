@@ -21,8 +21,7 @@ import { setDirection } from '../helpers/dom/setInnerHTML';
 import setBlankToAnchor from './richTextProcessor/setBlankToAnchor';
 import { createSignal } from 'solid-js';
 import commonStateStorage from './commonStateStorage';
-import { logger } from '../lib/logger';
-const log = logger('CS', undefined, undefined);
+import Icon from '../components/icon';
 
 export const langPack: { [actionType: string]: LangPackKey } = {
   'messageActionChatCreate': 'ActionCreateGroup',
@@ -393,9 +392,17 @@ namespace I18n {
     }
   }
 
-  export function superFormatter(input: string, args?: FormatterArguments, indexHolder?: { i: number }): Exclude<FormatterArgument, FormatterArgument[]>[] {
-    if (!indexHolder) { // set starting index for arguments without order
-      indexHolder = { i: 0 };
+  const IconMap: Record<string, Icon> = {
+    '>': 'next',
+    '<': 'previous'
+  };
+
+  const iconsNoWhitespace = '><';
+  const iconsToReplace = Object.keys(IconMap).join('');
+
+  export function superFormatter(input: string, args?: FormatterArguments, indexHolder?: {i: number}): Exclude<FormatterArgument, FormatterArgument[]>[] {
+    if(!indexHolder) { // set starting index for arguments without order
+      indexHolder = {i: 0};
       const indexes = input.match(/(%|un)\d+/g);
       if (indexes?.length) {
         indexHolder.i = Math.max(...indexes.map((str) => +str.replace(/\D/g, '')));
@@ -403,10 +410,10 @@ namespace I18n {
     }
 
     const out: ReturnType<typeof superFormatter> = [];
-    const regExp = /(\*\*|__)(.+?)\1|(\n)|(\[.+?\]\(.*?\))|un\d|%\d\$.|%\S/g;
+    const regExp = new RegExp(`(\\*\\*|__)(.+?)\\1|(\\n)|(\\[.+?\\]\\(.*?\\))|(?:^|\\s)([${iconsToReplace}])(?:$|\\s)|un\\d|%\\d\\$.|%\\S`, 'g');
 
     let lastIndex = 0;
-    input.replace(regExp, (match, p1: any, p2: any, p3: any, p4: string, offset: number, string: string) => {
+    input.replace(regExp, (match, p1: any, p2: any, p3: any, p4: string, p5: string, offset: number, string: string) => {
       // console.table({match, p1, p2, offset, string});
 
       if (offset > lastIndex) {
@@ -467,7 +474,12 @@ namespace I18n {
         } else {
           out.push(...formatted);  // Fallback: just push the formatted content
         }
-      } else if (args) {
+      } else if(p5) {
+        const noWhitespace = iconsNoWhitespace.includes(p5);
+        if(!noWhitespace && !match.startsWith(p5)) out.push(match[0]);
+        out.push(Icon(IconMap[p5], 'inline-icon'));
+        if(!noWhitespace && match.startsWith(p5)) out.push(match[match.length - 1]);
+      } else if(args) {
         const index = match.replace(/\D/g, '');
         pushNextArgument(
           out,

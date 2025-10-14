@@ -23,7 +23,7 @@ const App = {
   versionFull: import.meta.env.VITE_VERSION_FULL,
   build: +import.meta.env.VITE_BUILD,
   langPackVersion: +import.meta.env.VITE_LANG_PACK_VERSION,
-  langPackLocalVersion: 23,
+  langPackLocalVersion: +(import.meta.env.VITE_LANG_PACK_LOCAL_VERSION || 1),
   langPack: 'webk',
   langPackCode: 'zh',
   domains: MAIN_DOMAINS,
