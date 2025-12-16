@@ -22,6 +22,9 @@ import setBlankToAnchor from './richTextProcessor/setBlankToAnchor';
 import { createSignal } from 'solid-js';
 import commonStateStorage from './commonStateStorage';
 import Icon from '../components/icon';
+import {logger} from './logger';
+
+const log = logger('LANG-PACK');
 
 export const langPack: { [actionType: string]: LangPackKey } = {
   'messageActionChatCreate': 'ActionCreateGroup',
