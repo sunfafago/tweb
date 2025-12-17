@@ -119,14 +119,16 @@ namespace I18n {
   export function getCacheLangPackAndApply() {
     log.info('getCacheLangPackAndApply', 123123123);
     return cacheLangPackPromise ||= getCacheLangPack(true).then(async (langPack) => {
+      // Always force load Chinese language pack to ensure it's applied correctly
       if (!langPack || langPack.lang_code !== 'zh') {
-        // Force load Chinese language pack
         langPack = await loadLocalZhLangPack();
-        langPack = await saveLangPack(langPack, false);
+      } else {
+        // Even if cached langPack is zh, reload to ensure it's complete
+        langPack = await loadLocalZhLangPack();
       }
-
+      
       setLangCode(langPack.lang_code);
-      applyLangPack(langPack);
+      langPack = await saveLangPack(langPack, true); // Apply the lang pack
       return langPack;
     }).finally(() => {
       cacheLangPackPromise = undefined;
@@ -262,7 +264,9 @@ namespace I18n {
   export function getLangPackAndApply(langCode: string, web?: boolean, ignoreCache?: boolean) {
     setLangCode(langCode);
     if (langCode === 'zh') {
-      return loadLocalZhLangPack();
+      return loadLocalZhLangPack().then((langPack) => {
+        return saveLangPack(langPack, true);
+      });
     } else {
       return loadLangPack(langCode, web, ignoreCache).then(([langPack1, langPack2, localLangPack1, localLangPack2, countries, _]) => {
         let strings: LangPackString[] = [];
