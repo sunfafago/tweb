@@ -1,5 +1,5 @@
 /// <reference types="vitest/config" />
-import {defineConfig} from 'vite';
+import {defineConfig} from 'vitest/config';
 import solidPlugin from 'vite-plugin-solid';
 // @ts-ignore no type declarations
 import handlebars from 'vite-plugin-handlebars';
@@ -53,7 +53,7 @@ const USE_SELF_SIGNED_CERTS = USE_SSL && false;
 const host = USE_SSL ? 'web.telegram.org' : 'localhost';
 const serverOptions: ServerOptions = {
   host,
-  port: USE_SSL ? 443 : 8080,
+  port: USE_SSL ? 443 : 8888,
   sourcemapIgnoreList(sourcePath, sourcemapPath) {
     return sourcePath.includes('node_modules') ||
       sourcePath.includes('logger') ||
@@ -143,7 +143,7 @@ export default defineConfig({
     environment: 'jsdom',
     // otherwise, solid would be loaded twice:
     // deps: {registerNodeLoader: true},
-    pool: 'forks',
+    // Vitest 4+：不再支持 pool: 'forks'，默认 worker 行为即可（见 VitestPool 类型）
     globals: true,
     setupFiles: ['./src/tests/setup.ts']
   },

@@ -12,7 +12,7 @@ This will install all the needed dependencies.
 
 #### Running web-server
 Just run `pnpm start` to start the web server and the livereload task.
-Open http://localhost:8080/ in your browser.
+Open http://localhost:8888/ in your browser.
 
 
 #### Running in production
@@ -24,7 +24,7 @@ Run `node build` to build the minimized production version of the app. Copy `pub
 #### Developing: 
 * Install dependencies `docker-compose up tweb.dependencies`.
 * Run develop container `docker-compose up tweb.develop `.
-* Open http://localhost:8080/ in your browser. 
+* Open http://localhost:8888/ in your browser. 
 
 #### Production:
 * Run `docker-compose up tweb.production -d` nginx image and container to serve the build
@@ -58,7 +58,7 @@ Source maps are included in production build for your convenience.
 * **noSharedWorker=1**: to disable Shared Worker, can be useful for debugging
 * **http=1**: to force the use of HTTPS transport when connecting to Telegram servers
 
-Should be applied like that: http://localhost:8080/?test=1
+Should be applied like that: http://localhost:8888/?test=1
 
 #### Taking local storage snapshots
 You can also take and load snapshots of the local storage and indexed DB using the `./snapshot-server` [mini-app](/snapshot-server/README.md). Check the `README.md` under this folder for more details.

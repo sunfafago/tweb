@@ -24,7 +24,7 @@ Author: Eduard Kuzmenko. License: GPL v3.
 
 ```bash
 pnpm install
-pnpm start          # Dev server on :8080
+pnpm start          # Dev server on :8888
 pnpm build          # Production build → dist/
 pnpm test           # Run tests (Vitest)
 pnpm lint           # ESLint on src/**/*.ts

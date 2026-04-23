@@ -13,17 +13,11 @@ import {AppManager} from '@appManagers/manager';
 export type PeerPhotoSize = 'photo_small' | 'photo_big';
 
 export class AppAvatarsManager extends AppManager {
-    private savedAvatarURLs: {
-      [peerId: PeerId]: {
-        [size in PeerPhotoSize]?: string | Promise<string>
-      }
-    } = {};
-
-    public savedAvatarBuffer: {
-      [peerId: PeerId]: {
-        [size in PeerPhotoSize]?: Uint8Array | Promise<Uint8Array>
-      }
-    } = {};
+  private savedAvatarURLs: {
+    [peerId: PeerId]: {
+      [size in PeerPhotoSize]?: string | Promise<string>
+    }
+  } = {};
 
   protected after() {
     this.rootScope.addEventListener('avatar_update', ({peerId, threadId}) => {
@@ -87,30 +81,6 @@ export class AppAvatarsManager extends AppManager {
       });
 
       return url;
-    });
-  }
-  public loadAvatarUnitBuffer(peerId: PeerId, photo: UserProfilePhoto.userProfilePhoto | ChatPhoto.chatPhoto, size: PeerPhotoSize) {
-    const saved = this.savedAvatarBuffer[peerId] ??= {};
-    if(saved[size]) {
-      return saved[size];
-    }
-    // console.warn('will invoke downloadSmallFile:', peerId);
-    const peerPhotoFileLocation: InputFileLocation.inputPeerPhotoFileLocation = {
-      _: 'inputPeerPhotoFileLocation',
-      pFlags: {},
-      peer: this.appPeersManager.getInputPeerById(peerId),
-      photo_id: photo.photo_id
-    };
-
-    const downloadOptions: DownloadOptions = {dcId: photo.dc_id, location: peerPhotoFileLocation};
-    if(size === 'photo_big') {
-      peerPhotoFileLocation.pFlags.big = true;
-      downloadOptions.limitPart = 512 * 1024;
-    }
-
-    const promise = this.apiFileManager.downloadUnitBuffer(downloadOptions);
-    return saved[size] = promise.then((buffer) => {
-      return buffer;
     });
   }
 }
