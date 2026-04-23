@@ -4,46 +4,64 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import type LazyLoadQueue from '../lazyLoadQueue';
-import {formatFullSentTimeRaw, formatTime} from '../../helpers/date';
-import {getFullDate} from '../../helpers/date/getFullDate';
-import setInnerHTML from '../../helpers/dom/setInnerHTML';
-import {Middleware} from '../../helpers/middleware';
-import formatNumber from '../../helpers/number/formatNumber';
-import {AvailableEffect, Message, MessageReplyHeader} from '../../layer';
-import getPeerId from '../../lib/appManagers/utils/peers/getPeerId';
-import {i18n, _i18n} from '../../lib/langPack';
-import apiManagerProxy from '../../lib/mtproto/mtprotoworker';
-import wrapEmojiText from '../../lib/richTextProcessor/wrapEmojiText';
-import rootScope from '../../lib/rootScope';
-import Icon from '../icon';
-import PeerTitle from '../peerTitle';
-import wrapReply from '../wrappers/reply';
-import Chat, {ChatType} from './chat';
-import RepliesElement from './replies';
-import ChatBubbles from './bubbles';
-import getFwdFromName from '../../lib/appManagers/utils/messages/getFwdFromName';
-import deferredPromise from '../../helpers/cancellablePromise';
-import wrapSticker from '../wrappers/sticker';
-import cancelEvent from '../../helpers/dom/cancelEvent';
-import getStickerEffectThumb from '../../lib/appManagers/utils/stickers/getStickerEffectThumb';
-import wrapStickerAnimation from '../wrappers/stickerAnimation';
-import Scrollable from '../scrollable';
-import appDownloadManager from '../../lib/appManagers/appDownloadManager';
-import indexOfAndSplice from '../../helpers/array/indexOfAndSplice';
-import {numberThousandSplitterForStars} from '../../helpers/number/numberThousandSplitter';
+import type LazyLoadQueue from '@components/lazyLoadQueue';
+import {formatFullSentTimeRaw, formatTime} from '@helpers/date';
+import {getFullDate} from '@helpers/date/getFullDate';
+import setInnerHTML from '@helpers/dom/setInnerHTML';
+import {Middleware} from '@helpers/middleware';
+import formatNumber from '@helpers/number/formatNumber';
+import {AvailableEffect, Message, MessageReplyHeader} from '@layer';
+import getPeerId from '@appManagers/utils/peers/getPeerId';
+import {i18n, _i18n, LangPackKey} from '@lib/langPack';
+import apiManagerProxy from '@lib/apiManagerProxy';
+import wrapEmojiText from '@lib/richTextProcessor/wrapEmojiText';
+import rootScope from '@lib/rootScope';
+import Icon from '@components/icon';
+import PeerTitle from '@components/peerTitle';
+import wrapReply from '@components/wrappers/reply';
+import Chat from '@components/chat/chat';
+import {ChatType} from './chatType';
+import RepliesElement from '@components/chat/replies';
+import ChatBubbles from '@components/chat/bubbles';
+import getFwdFromName from '@appManagers/utils/messages/getFwdFromName';
+import deferredPromise from '@helpers/cancellablePromise';
+import wrapSticker from '@components/wrappers/sticker';
+import cancelEvent from '@helpers/dom/cancelEvent';
+import getStickerEffectThumb from '@appManagers/utils/stickers/getStickerEffectThumb';
+import wrapStickerAnimation from '@components/wrappers/stickerAnimation';
+import Scrollable from '@components/scrollable';
+import appDownloadManager from '@lib/appDownloadManager';
+import indexOfAndSplice from '@helpers/array/indexOfAndSplice';
+import {numberThousandSplitterForStars} from '@helpers/number/numberThousandSplitter';
+import {makeTime} from '@components/chat/utils';
+import {formatNanoton} from '@helpers/paymentsWrapCurrencyAmount';
 
 const NBSP = '&nbsp;';
+
+const DAY = 86400;
+const SCHEDULE_REPEAT_MAP: {period: number, key: LangPackKey, args?: any[]}[] = [
+  {period: DAY, key: 'Schedule.Repeated.Daily'},
+  {period: 7 * DAY, key: 'Schedule.Repeated.Weekly'},
+  {period: 14 * DAY, key: 'Schedule.Repeated.Biweekly'},
+  {period: 30 * DAY, key: 'Schedule.Repeated.Monthly'},
+  {period: 91 * DAY, key: 'Schedule.Repeated.EveryMonth', args: [3]},
+  {period: 182 * DAY, key: 'Schedule.Repeated.EveryMonth', args: [6]},
+  {period: 365 * DAY, key: 'Schedule.Repeated.Yearly'}
+];
+
+const makeScheduleRepeatPeriod = (period: number) => {
+  const entry = SCHEDULE_REPEAT_MAP.find((e) => e.period >= period) ?? SCHEDULE_REPEAT_MAP[SCHEDULE_REPEAT_MAP.length - 1];
+  const span = document.createElement('span');
+  span.classList.add('time-repeat', 'time-part');
+  span.append(i18n(entry.key, entry.args));
+  return span;
+};
 
 const makeEdited = () => {
   const edited = document.createElement('i');
   edited.classList.add('time-edited', 'time-part');
   _i18n(edited, 'EditedMessage');
   return edited;
-};
-
-const makeTime = (date: Date, includeDate?: boolean) => {
-  return includeDate ? formatFullSentTimeRaw(date.getTime() / 1000 | 0, {combined: true}).dateEl : formatTime(date);
 };
 
 const makeEffect = (props: {
@@ -209,6 +227,17 @@ export namespace MessageRender {
     const fwdFrom = isMessage && message.fwd_from;
     const time: HTMLElement = /* isSponsored ? undefined :  */makeTime(date, includeDate);
     if(isMessage) {
+      const messageMedia = message.media;
+      if(messageMedia?._ === 'messageMediaDice' && messageMedia.game_outcome) {
+        const span = document.createElement('span');
+        span.classList.add('time-dice');
+        span.textContent = formatNanoton(messageMedia.game_outcome.stake_ton_amount);
+
+        const icon = Icon('ton', 'time-icon', 'time-part');
+
+        args.push(span, icon);
+      }
+
       if(message.views) {
         const postViewsSpan = document.createElement('span');
         postViewsSpan.classList.add('post-views');
@@ -265,6 +294,12 @@ export namespace MessageRender {
       args.push(sponsoredSpan = makeSponsored());
     } */
 
+    let repeatSpan: HTMLElement;
+    if(isMessage && message.schedule_repeat_period) {
+      repeatSpan = makeScheduleRepeatPeriod(message.schedule_repeat_period);
+      args.push(repeatSpan);
+    }
+
     if(time) {
       args.push(time);
     }
@@ -296,6 +331,9 @@ export namespace MessageRender {
     //   _reactionsElement.init(reactionsMessage, 'inline');
     //   _reactionsElement.render();
     // }
+    if(repeatSpan) {
+      clonedArgs[clonedArgs.indexOf(repeatSpan)] = makeScheduleRepeatPeriod((message as Message.message).schedule_repeat_period);
+    }
     if(effectSpan) {
       clonedArgs[clonedArgs.indexOf(effectSpan)] = makeEffect({
         docId: (message as Message.message).effect,
@@ -344,11 +382,12 @@ export namespace MessageRender {
     return isFooter;
   };
 
-  export const setReply = async({chat, bubble, bubbleContainer, message, appendCallback, middleware, lazyLoadQueue, needUpdate, isStandaloneMedia, isOut, fromUpdate}: {
+  export const setReply = async({chat, bubble, bubbleContainer, message, logId, appendCallback, middleware, lazyLoadQueue, needUpdate, isStandaloneMedia, isOut, fromUpdate}: {
     chat: Chat,
     bubble: HTMLElement,
     bubbleContainer?: HTMLElement,
     message: Message.message,
+    logId?: string | number,
     appendCallback?: (container: HTMLElement) => void,
     middleware: Middleware,
     lazyLoadQueue: LazyLoadQueue,
@@ -389,9 +428,9 @@ export namespace MessageRender {
 
     if(!fromUpdate) {
       if(isStoryReply) {
-        needUpdate.push(forUpdate = {replyToPeerId, replyStoryId: replyTo.story_id, mid: message.mid, peerId: message.peerId});
+        needUpdate.push(forUpdate = {replyToPeerId, replyStoryId: replyTo.story_id, mid: message.mid, peerId: message.peerId, logId});
       } else {
-        needUpdate.push(forUpdate = {replyToPeerId, replyMid: message.reply_to_mid, mid: message.mid, peerId: message.peerId});
+        needUpdate.push(forUpdate = {replyToPeerId, replyMid: message.reply_to_mid, mid: message.mid, peerId: message.peerId, logId});
       }
 
       middleware.onClean(() => {
@@ -425,6 +464,8 @@ export namespace MessageRender {
           plainText: false,
           fromName: getFwdFromName(replyTo.reply_from)
         }).element;
+      } else if(replyTo.reply_to_msg_deleted) {
+        originalPeerTitle = i18n('DeletedMessage');
       } else {
         // needUpdate.push(forUpdate = {replyToPeerId, replyMid: message.reply_to_mid, mid: message.mid, peerId: message.peerId});
         rootScope.managers.appMessagesManager.fetchMessageReplyTo(message);

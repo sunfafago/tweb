@@ -1,75 +1,72 @@
 import bigInt from 'big-integer';
 import PopupElement from '.';
-import {Chat, InputInvoice, Message, StarGift, StarGiftAttribute, StarGiftAttributeId, TextWithEntities, User} from '../../layer';
-import {MyPremiumGiftOption, MyStarGift} from '../../lib/appManagers/appGiftsManager';
-import {STARS_CURRENCY} from '../../lib/mtproto/mtproto_config';
-import {AvatarNewTsx} from '../avatarNew';
-import {i18n, LangPackKey} from '../../lib/langPack';
+import {Chat, InputInvoice, Message, StarGift, StarGiftAttribute, StarGiftAttributeId, TextWithEntities, User} from '@layer';
+import {MyPremiumGiftOption, MyStarGift} from '@appManagers/appGiftsManager';
+import {STARS_CURRENCY} from '@appManagers/constants';
+import {AvatarNewTsx} from '@components/avatarNew';
+import {i18n, LangPackKey} from '@lib/langPack';
 import {Accessor, createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Setter, Show} from 'solid-js';
-import paymentsWrapCurrencyAmount from '../../helpers/paymentsWrapCurrencyAmount';
-import PopupStars, {StarsBalance, StarsStar} from './stars';
-import LottieAnimation from '../lottieAnimation';
-import lottieLoader from '../../lib/rlottie/lottieLoader';
-import classNames from '../../helpers/string/classNames';
-import sortLongsArray from '../../helpers/long/sortLongsArray';
-import {StarGiftsGrid} from '../stargifts/stargiftsGrid';
-import {fastRaf} from '../../helpers/schedulers';
-import PopupStarGiftInfo from './starGiftInfo';
-import {FakeBubbles} from '../chat/bubbles/fakeBubbles';
-import {ServiceBubble} from '../chat/bubbles/service';
-import {StarGiftBubble} from '../chat/bubbles/starGift';
-import {InputFieldTsx} from '../inputFieldTsx';
-import rootScope from '../../lib/rootScope';
-import Row from '../rowTsx';
-import CheckboxFieldTsx from '../checkboxFieldTsx';
-import Button from '../buttonTsx';
-import getRichValueWithCaret from '../../helpers/dom/getRichValueWithCaret';
-import {PremiumGiftBubble} from '../chat/bubbles/premiumGift';
-import {formatMonthsDuration} from '../../helpers/date';
-import wrapRichText from '../../lib/richTextProcessor/wrapRichText';
+import paymentsWrapCurrencyAmount from '@helpers/paymentsWrapCurrencyAmount';
+import PopupStars, {StarsBalance, StarsStar} from '@components/popups/stars';
+import LottieAnimation from '@components/lottieAnimation';
+import lottieLoader from '@lib/rlottie/lottieLoader';
+import classNames from '@helpers/string/classNames';
+import {StarGiftsGrid} from '@components/stargifts/stargiftsGrid';
+import {fastRaf} from '@helpers/schedulers';
+import PopupStarGiftInfo from '@components/popups/starGiftInfo';
+import {FakeBubbles} from '@components/chat/bubbles/fakeBubbles';
+import {ServiceBubble} from '@components/chat/bubbles/service';
+import {StarGiftBubble} from '@components/chat/bubbles/starGift';
+import {InputFieldTsx} from '@components/inputFieldTsx';
+import rootScope from '@lib/rootScope';
+import Row from '@components/rowTsx';
+import CheckboxFieldTsx from '@components/checkboxFieldTsx';
+import Button from '@components/buttonTsx';
+import getRichValueWithCaret from '@helpers/dom/getRichValueWithCaret';
+import {PremiumGiftBubble} from '@components/chat/bubbles/premiumGift';
+import {formatMonthsDuration} from '@helpers/date';
+import wrapRichText from '@lib/richTextProcessor/wrapRichText';
 import {render} from 'solid-js/web';
-import {ButtonIconTsx} from '../buttonIconTsx';
-import numberThousandSplitter, {numberThousandSplitterForStars} from '../../helpers/number/numberThousandSplitter';
-import PopupPayment from './payment';
-import useStars from '../../stores/stars';
-import {TransitionSliderTsx} from '../transitionTsx';
-import maybe2x from '../../helpers/maybe2x';
-import {I18nTsx} from '../../helpers/solid/i18n';
-import {StarGiftBadge} from '../stargifts/stargiftBadge';
-import Scrollable from '../scrollable2';
-import {approxEquals} from '../../helpers/number/approxEquals';
-import {useAppState} from '../../stores/appState';
-import PopupStarGiftUpgrade from './starGiftUpgrade';
-import anchorCallback from '../../helpers/dom/anchorCallback';
-import {PeerTitleTsx} from '../peerTitleTsx';
+import {ButtonIconTsx} from '@components/buttonIconTsx';
+import numberThousandSplitter, {numberThousandSplitterForStars} from '@helpers/number/numberThousandSplitter';
+import PopupPayment from '@components/popups/payment';
+import {TransitionSliderTsx} from '@components/transitionTsx';
+import maybe2x from '@helpers/maybe2x';
+import {I18nTsx} from '@helpers/solid/i18n';
+import {StarGiftBadge} from '@components/stargifts/stargiftBadge';
+import Scrollable from '@components/scrollable2';
+import {approxEquals} from '@helpers/number/approxEquals';
+import {useAppState} from '@stores/appState';
+import anchorCallback from '@helpers/dom/anchorCallback';
+import {PeerTitleTsx} from '@components/peerTitleTsx';
 
-import styles from './sendGift.module.scss';
-import ButtonMenuToggle from '../buttonMenuToggle';
-import {IconTsx} from '../iconTsx';
-import {ButtonMenuSelect, ButtonMenuSelectText} from '../buttonMenuSelect';
-import {rgbIntToHex} from '../../helpers/color';
-import {PreloaderTsx} from '../putPreloader';
-import {FloatingStarsBalance} from './floatingStarsBalance';
-import {positionMenuTrigger} from '../../helpers/positionMenu';
-import {Transition} from '../../vendor/solid-transition-group';
-import appNavigationController, {NavigationItem} from '../appNavigationController';
-import {subscribeOn} from '../../helpers/solid/subscribeOn';
-import {inputStarGiftEquals} from '../../lib/appManagers/utils/gifts/inputStarGiftEquals';
-import {updateStarGift} from '../../lib/appManagers/utils/gifts/updateStarGift';
-import {ChipTab, ChipTabs} from '../chipTabs';
-import safeAssign from '../../helpers/object/safeAssign';
-import PopupPremium from './premium';
-import tsNow from '../../helpers/tsNow';
-import confirmationPopup from '../confirmationPopup';
-import {toastNew} from '../toast';
+import ButtonMenuToggle from '@components/buttonMenuToggle';
+import {IconTsx} from '@components/iconTsx';
+import {ButtonMenuSelect, ButtonMenuSelectText} from '@components/buttonMenuSelect';
+import {rgbIntToHex} from '@helpers/color';
+import {PreloaderTsx} from '@components/putPreloader';
+import {FloatingStarsBalance} from '@components/popups/floatingStarsBalance';
+import {positionMenuTrigger} from '@helpers/positionMenu';
+import {Transition} from '@vendor/solid-transition-group';
+import appNavigationController, {NavigationItem} from '@components/appNavigationController';
+import {subscribeOn} from '@helpers/solid/subscribeOn';
+import {inputStarGiftEquals} from '@appManagers/utils/gifts/inputStarGiftEquals';
+import {updateStarGift} from '@appManagers/utils/gifts/updateStarGift';
+import {ChipTab, ChipTabs} from '@components/chipTabs';
+import safeAssign from '@helpers/object/safeAssign';
+import PopupPremium from '@components/popups/premium';
+import tsNow from '@helpers/tsNow';
+import confirmationPopup from '@components/confirmationPopup';
+import {toastNew} from '@components/toast';
+import createStarGiftUpgradePopup from '@components/popups/starGiftUpgrade';
+import {createProfileGiftsStore, StarGiftsProfileActions, StarGiftsProfileStore} from '@components/stargifts/profileStore';
+import transferStarGift from '@components/popups/transferStarGift';
+import {unwrap} from 'solid-js/store';
+
+import styles from '@components/popups/sendGift.module.scss';
+import Animated from '@helpers/solid/animations';
 
 type GiftOption = MyStarGift | MyPremiumGiftOption;
-
-const STATIC_CATEGORIES: Record<string, LangPackKey> = {
-  All: 'StarGiftCategoryAll',
-  Limited: 'StarGiftCategoryLimited',
-  InStock: 'StarGiftCategoryInStock'
-};
 
 function GiftOptionsPage(props: {
   peer: User.user | Chat.channel
@@ -78,20 +75,20 @@ function GiftOptionsPage(props: {
   giftOptions: MyStarGift[]
   onGiftChosen: (item: GiftOption) => void
   onClose: () => void
+
+  profileStore: StarGiftsProfileStore
+  profileStoreActions: StarGiftsProfileActions
 }) {
   const [isPinned, setIsPinned] = createSignal(false);
-  const availableCategoriesSet = new Set<string>();
-  for(const option of props.giftOptions) {
-    availableCategoriesSet.add(String((option.raw as StarGift.starGift).stars));
-  }
-  const availableCategories = sortLongsArray([...availableCategoriesSet.values()]);
+  const isToSelf = props.peerId === rootScope.myId;
 
-  const [category, setCategory] = createSignal<string>('All');
+  type CategoryName = 'All' | 'Owned' | 'Collectibles';
+  const [category, setCategory] = createSignal<CategoryName>('All');
 
   let categoriesContainer!: HTMLDivElement;
   let container!: HTMLDivElement;
 
-  const giftPremiumSection = props.peer._ === 'user' && (
+  const giftPremiumSection = props.peer._ === 'user' && !isToSelf && (
     <>
       <div class={styles.mainTitle}>
         {i18n('GiftPremium')}
@@ -151,33 +148,35 @@ function GiftOptionsPage(props: {
 
   const handleCategoryChanged = (it: string) => {
     const wasPinned = isPinned()
-    setCategory(it);
+    setCategory(it as CategoryName);
 
     fastRaf(() => {
       container.scrollTo({top: categoriesContainer.offsetTop - 56, behavior: wasPinned ? 'instant' : 'smooth'});
     });
   }
 
-  const wrapCategory = (it: string) => (
-    <ChipTab value={it}>
-      {it in STATIC_CATEGORIES ? i18n(STATIC_CATEGORIES[it]) : (
-          <>
-            <StarsStar />
-            {it}
-          </>
-        )}
-    </ChipTab>
-  );
-
   const filteredGiftOptions = createMemo(() => {
     const category$ = category();
     if(category$ === 'All') return props.giftOptions;
-    if(category$ === 'Limited') return props.giftOptions.filter((it) => (it.raw as StarGift.starGift).availability_total);
-    if(category$ === 'InStock') return props.giftOptions.filter((it) => (it.raw as StarGift.starGift).availability_remains === undefined || (it.raw as StarGift.starGift).availability_remains > 0);
-    return props.giftOptions.filter((it) => (it.raw as StarGift.starGift).stars.toString() === category$);
+    if(category$ === 'Collectibles') {
+      return props.giftOptions.filter((it) =>
+        ((it.raw as StarGift.starGift).availability_remains > 0 && (it.raw as StarGift.starGift).upgrade_stars !== undefined) ||
+        it.isResale
+      );
+    }
+    return unwrap(props.profileStore.items);
   });
 
   const handleGiftClick = async(item: MyStarGift) => {
+    if(category() === 'Owned') {
+      transferStarGift(item, props.peerId).then((result) => {
+        if(result) {
+          props.onClose();
+        }
+      });
+      return
+    }
+
     const gift = item.raw as StarGift.starGift;
     if(gift.availability_remains === 0 && !gift.resell_min_stars) {
       PopupElement.createPopup(PopupStarGiftInfo, {gift: item});
@@ -211,7 +210,6 @@ function GiftOptionsPage(props: {
     props.onGiftChosen(item);
   };
 
-
   onMount(() => {
     fastRaf(() => {
       container.style.setProperty('--height', `${container.offsetHeight}px`);
@@ -227,6 +225,11 @@ function GiftOptionsPage(props: {
         const containerRect = container.getBoundingClientRect();
         const rect = categoriesContainer.getBoundingClientRect();
         setIsPinned(approxEquals(rect.top - containerRect.top, 56, 0.1));
+      }}
+      onScrolledBottom={() => {
+        if(category() === 'Owned') {
+          props.profileStoreActions.loadNext();
+        }
       }}
     >
       <div class={styles.mainContainer}>
@@ -248,12 +251,12 @@ function GiftOptionsPage(props: {
         {giftPremiumSection}
 
         <div class={styles.mainTitle}>
-          {i18n('StarGiftSendGift')}
+          {isToSelf ? i18n('StarGiftSendGiftSelf') : i18n('StarGiftSendGift')}
         </div>
         <div class={styles.mainSubtitle}>
           <I18nTsx
-            key="SendStarGiftSubtitle"
-            args={<PeerTitleTsx peerId={props.peerId} onlyFirstName={props.peer._ === 'user'} />}
+            key={isToSelf ? 'SendStarGiftSubtitleSelf' : 'SendStarGiftSubtitle'}
+            args={isToSelf ? undefined : [<PeerTitleTsx peerId={props.peerId} onlyFirstName={props.peer._ === 'user'} />]}
           />
         </div>
 
@@ -263,19 +266,28 @@ function GiftOptionsPage(props: {
           view={isPinned() ? 'secondary' : 'surface'}
           class={classNames(styles.categoriesContainer, isPinned() && styles.categoriesContainerPinned)}
           ref={categoriesContainer}
+          center
         >
-          {wrapCategory('All')}
-          {wrapCategory('Limited')}
-          {wrapCategory('InStock')}
-          <For each={availableCategories}>
-            {wrapCategory}
-          </For>
+          <ChipTab value="All">
+            {i18n('StarGiftCategoryAll')}
+          </ChipTab>
+          <Show when={!isToSelf && props.profileStore.items.length > 0}>
+            <ChipTab value="Owned">
+              {i18n('StarGiftCategoryOwned')}
+            </ChipTab>
+          </Show>
+          <ChipTab value="Collectibles">
+            {i18n('StarGiftCategoryCollectibles')}
+          </ChipTab>
         </ChipTabs>
 
         <div class={styles.giftsGridContainer}>
+          <Show when={category() === 'Owned' && props.profileStore.loading}>
+            <PreloaderTsx />
+          </Show>
           <StarGiftsGrid
             items={filteredGiftOptions()}
-            view="list"
+            view={category() === 'Owned' ? 'transfer' : 'list'}
             scrollParent={container}
             onClick={handleGiftClick}
           />
@@ -658,7 +670,7 @@ function ResaleOptionsPage(props: {
 
       <div class={styles.secondPageBody}>
         <Scrollable ref={container} onScrolledBottom={loadMore}>
-          <Transition name="fade">
+          <Animated type="cross-fade">
             <Show
               when={!loading() && items().length > 0}
               fallback={loading() ? <PreloaderTsx /> : (
@@ -668,6 +680,7 @@ function ResaleOptionsPage(props: {
               )}
             >
               <StarGiftsGrid
+                class={styles.resaleGrid}
                 items={items()}
                 view="resale"
                 scrollParent={container}
@@ -695,7 +708,7 @@ function ResaleOptionsPage(props: {
                 }}
               />
             </Show>
-          </Transition>
+          </Animated>
         </Scrollable>
       </div>
     </div>
@@ -753,7 +766,7 @@ function ChosenGiftPage(props: {
       _: 'messageActionGiftPremium',
       currency: payWithStars() ? STARS_CURRENCY : props.chosenGift.currency,
       amount: payWithStars() ? props.chosenGift.priceStars : props.chosenGift.price,
-      months: props.chosenGift.months
+      days: props.chosenGift.months * 30
     }
   }));
 
@@ -957,7 +970,10 @@ function ChosenGiftPage(props: {
                   args={[
                     wrapRichText(props.peerName),
                     (() => {
-                      const a = anchorCallback(() => PopupStarGiftUpgrade.create(props.chosenGift as MyStarGift, props.peerId));
+                      const a = anchorCallback(() => createStarGiftUpgradePopup({
+                        gift: props.chosenGift as MyStarGift,
+                        descriptionForPeerId: props.peerId
+                      }));
                       a.append(i18n('StarGiftMakeUniqueLink'));
                       return a;
                     })()
@@ -1037,10 +1053,19 @@ export default class PopupSendGift extends PopupElement {
   }
 
   private async construct() {
+    const [profileStore, profileStoreActions] = createProfileGiftsStore({
+      peerId: rootScope.myId,
+      initialFilters: {
+        unlimited: false,
+        limited: false,
+        upgradable: false
+      }
+    })
     const [premiumOptions, giftOptions, peer] = await Promise.all([
       this.peerId.isUser() ? this.managers.appGiftsManager.getPremiumGiftOptions() : [] as MyPremiumGiftOption[],
       this.managers.appGiftsManager.getStarGiftOptions(),
-      this.managers.appPeersManager.getPeer(this.peerId)
+      this.managers.appPeersManager.getPeer(this.peerId),
+      !this.resaleParams && this.peerId !== rootScope.myId && profileStoreActions.loadNext()
     ]);
 
     const [chosenGift, setChosenGift] = createSignal<GiftOption>();
@@ -1094,6 +1119,8 @@ export default class PopupSendGift extends PopupElement {
               setCurrentPage((option as MyStarGift).isResale ? 2 : 1);
             }}
             onClose={() => this.hide()}
+            profileStore={profileStore}
+            profileStoreActions={profileStoreActions}
           />
           <Show when={chosenGift() !== undefined && !(chosenGift() as MyStarGift).isResale}>
             <ChosenGiftPage

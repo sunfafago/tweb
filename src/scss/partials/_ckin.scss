@@ -4,6 +4,8 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
+@use "../shared" as *;
+
 .ckin {
   &__player {
     user-select: none;
@@ -158,6 +160,12 @@
     .default__gradient-bottom, 
     .default__controls {
       transform: translateZ(0);
+    }
+  }
+
+  &:not(.show-time) {
+    .media-progress-line__current-time-info {
+      display: none !important;
     }
   }
 
@@ -339,6 +347,7 @@ video::-webkit-media-controls-enclosure {
   }
 
   &__filled {
+    pointer-events: none;
     // padding-right: 1px; // * need because there is border-radius
     max-width: 100%;
 

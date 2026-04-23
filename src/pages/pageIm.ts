@@ -4,10 +4,10 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import blurActiveElement from '../helpers/dom/blurActiveElement';
-import loadFonts from '../helpers/dom/loadFonts';
-import rootScope from '../lib/rootScope';
-import Page from './page';
+import blurActiveElement from '@helpers/dom/blurActiveElement';
+import loadFonts from '@helpers/dom/loadFonts';
+import rootScope from '@lib/rootScope';
+import Page from '@/pages/page';
 
 const onFirstMount = () => {
   rootScope.managers.appStateManager.pushToState('authState', {_: 'authStateSignedIn'});
@@ -19,10 +19,12 @@ const onFirstMount = () => {
   blurActiveElement();
 
   return Promise.all([
-    import('../lib/appManagers/appDialogsManager'),
+    import('../lib/appDialogsManager'),
+    import('../vendor/recorder.min.js'),
     loadFonts()/* .then(() => new Promise((resolve) => window.requestAnimationFrame(resolve))) */,
     'requestVideoFrameCallback' in HTMLVideoElement.prototype ? Promise.resolve() : import('../helpers/dom/requestVideoFrameCallbackPolyfill')
-  ]).then(([appDialogsManager]) => {
+  ]).then(([appDialogsManager, recorder]) => {
+    (window as any).Recorder = recorder.default;
     appDialogsManager.default.start();
     document.body.classList.remove('has-auth-pages');
     setTimeout(() => {

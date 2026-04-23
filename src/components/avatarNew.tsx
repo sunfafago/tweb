@@ -4,11 +4,11 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import type LazyLoadQueue from './lazyLoadQueue';
-import type {PeerPhotoSize} from '../lib/appManagers/appAvatarsManager';
-import type {StoriesSegment, StoriesSegments} from '../lib/appManagers/appStoriesManager';
-import {getMiddleware, type Middleware} from '../helpers/middleware';
-import deferredPromise from '../helpers/cancellablePromise';
+import type LazyLoadQueue from '@components/lazyLoadQueue';
+import type {PeerPhotoSize} from '@appManagers/appAvatarsManager';
+import type {StoriesSegment, StoriesSegments} from '@appManagers/appStoriesManager';
+import {getMiddleware, type Middleware} from '@helpers/middleware';
+import deferredPromise from '@helpers/cancellablePromise';
 import {
   createSignal,
   createEffect,
@@ -19,35 +19,39 @@ import {
   Show,
   Accessor,
   on,
-  splitProps, onMount
+  createComputed
 } from 'solid-js';
-import rootScope from '../lib/rootScope';
-import {NULL_PEER_ID, REPLIES_PEER_ID, HIDDEN_PEER_ID} from '../lib/mtproto/mtproto_config';
-import {Chat, ChatPhoto, PhotoSize, User, UserProfilePhoto} from '../layer';
-import {getPeerAvatarColorByPeer} from '../lib/appManagers/utils/peers/getPeerColorById';
-import getPeerPhoto from '../lib/appManagers/utils/peers/getPeerPhoto';
-import wrapAbbreviation from '../lib/richTextProcessor/wrapAbbreviation';
-import getPeerInitials from './wrappers/getPeerInitials';
-import liteMode from '../helpers/liteMode';
-import renderImageFromUrl, {renderImageFromUrlPromise} from '../helpers/dom/renderImageFromUrl';
-import getPreviewURLFromBytes from '../helpers/bytes/getPreviewURLFromBytes';
-import classNames from '../helpers/string/classNames';
-import {wrapTopicIcon} from './wrappers/messageActionTextNewUnsafe';
-import {Modify} from '../types';
-import documentFragmentToNodes from '../helpers/dom/documentFragmentToNodes';
-import DashedCircle, {DashedCircleSection} from '../helpers/canvas/dashedCircle';
-import findUpClassName from '../helpers/dom/findUpClassName';
-import {AckedResult} from '../lib/mtproto/superMessagePort';
-import apiManagerProxy from '../lib/mtproto/mtprotoworker';
-import callbackify from '../helpers/callbackify';
-import Icon from './icon';
-import wrapPhoto from './wrappers/photo';
-import customProperties from '../helpers/dom/customProperties';
-import useIsNightTheme from '../hooks/useIsNightTheme';
-import currencyStarIcon from './currencyStarIcon';
-import {ActiveAccountNumber} from '../lib/accounts/types';
-import {getCurrentAccount} from '../lib/accounts/getCurrentAccount';
-import {appSettings} from '../stores/appSettings';
+import rootScope from '@lib/rootScope';
+import {NULL_PEER_ID, REPLIES_PEER_ID, HIDDEN_PEER_ID} from '@appManagers/constants';
+import {Chat, ChatPhoto, PhotoSize, User, UserProfilePhoto} from '@layer';
+import {getPeerAvatarColorByPeer} from '@appManagers/utils/peers/getPeerColorById';
+import getPeerPhoto from '@appManagers/utils/peers/getPeerPhoto';
+import wrapAbbreviation from '@lib/richTextProcessor/wrapAbbreviation';
+import getPeerInitials from '@components/wrappers/getPeerInitials';
+import liteMode from '@helpers/liteMode';
+import renderImageFromUrl, {renderImageFromUrlPromise} from '@helpers/dom/renderImageFromUrl';
+import getPreviewURLFromBytes from '@helpers/bytes/getPreviewURLFromBytes';
+import classNames from '@helpers/string/classNames';
+import {wrapTopicIcon} from '@components/wrappers/messageActionTextNewUnsafe';
+import {Modify} from '@types';
+import documentFragmentToNodes from '@helpers/dom/documentFragmentToNodes';
+import DashedCircle, {DashedCircleSection} from '@helpers/canvas/dashedCircle';
+import findUpClassName from '@helpers/dom/findUpClassName';
+import {AckedResult} from '@lib/superMessagePort';
+import apiManagerProxy from '@lib/apiManagerProxy';
+import callbackify from '@helpers/callbackify';
+import Icon from '@components/icon';
+import wrapPhoto from '@components/wrappers/photo';
+import customProperties from '@helpers/dom/customProperties';
+import useIsNightTheme from '@hooks/useIsNightTheme';
+import currencyStarIcon from '@components/currencyStarIcon';
+import type {ActiveAccountNumber} from '@lib/accounts/types';
+import {getCurrentAccount} from '@lib/accounts/getCurrentAccount';
+import {appSettings} from '@stores/appSettings';
+import {createAutoDeleteIcon} from '@components/chat/utils';
+import {resolveElements} from '@solid-primitives/refs';
+import toArray from '@helpers/array/toArray';
+import computeLockColor from '@helpers/computeLockColor';
 
 const FADE_IN_DURATION = 200;
 const TEST_SWAPPING = 0;
@@ -86,9 +90,9 @@ const onAvatarStoriesUpdate = ({peerId}: {peerId: PeerId}) => {
 
 rootScope.addEventListener('avatar_update', onAvatarUpdate);
 rootScope.addEventListener('peer_title_edit', async(data) => {
-  if(!(await rootScope.managers.appAvatarsManager.isAvatarCached(data.peerId))) {
-    onAvatarUpdate(data);
-  }
+  if(!data.threadId && (await rootScope.managers.appAvatarsManager.isAvatarCached(data.peerId))) return;
+
+  onAvatarUpdate(data);
 });
 
 rootScope.addEventListener('peer_stories', ({peerId}) => {
@@ -97,6 +101,7 @@ rootScope.addEventListener('peer_stories', ({peerId}) => {
 rootScope.addEventListener('stories_read', onAvatarStoriesUpdate);
 rootScope.addEventListener('story_deleted', onAvatarStoriesUpdate);
 rootScope.addEventListener('story_new', onAvatarStoriesUpdate);
+
 
 const getStoriesSegments = async(peerId: PeerId, storyId?: number): Promise<AckedResult<StoriesSegments>> => {
   if(storyId) {
@@ -199,6 +204,7 @@ export function StoriesSegments(props: {
   colors: Partial<{
     read: string
   }>,
+  simple?: boolean,
   isStoryFolded?: Accessor<boolean>,
 }) {
   const [storiesSegments, setStoriesSegments] = createSignal<StoriesSegments>();
@@ -224,7 +230,7 @@ export function StoriesSegments(props: {
     }
 
     let simple: JSX.Element;
-    if(props.isStoryFolded !== undefined) {
+    if(props.isStoryFolded !== undefined || props.simple) {
       const status = createMemo(() => {
         const segments = storiesSegments();
         const firstCloseSegment = segments.find((segment) => segment.type === 'close');
@@ -240,6 +246,7 @@ export function StoriesSegments(props: {
 
         </div>
       );
+      if(props.simple) return simple;
     }
 
     const segmentToSection = (segment: StoriesSegment, unreadAsClose?: boolean): DashedCircleSection => {
@@ -334,6 +341,8 @@ export const AvatarNew = (props: {
   isStoryFolded?: Accessor<boolean>,
   processImageOnLoad?: (image: HTMLImageElement) => void,
   meAsNotes?: boolean,
+  asAllChats?: boolean,
+  autoDeletePeriod?: number,
   onStoriesStatus?: (has: boolean) => void,
   class?: string
 }) => {
@@ -351,6 +360,35 @@ export const AvatarNew = (props: {
     size: props.size as number,
     colors: props.storyColors,
     isStoryFolded: props.isStoryFolded
+  });
+
+  const [autoDeletePeriod, setAutoDeletePeriod] = createSignal<number>();
+
+  createComputed(() => setAutoDeletePeriod(props.autoDeletePeriod ?? 0));
+
+  const autoDeletePeriodBackground = createMemo(() => {
+    if(!autoDeletePeriod()) return;
+
+    const mediaElement = toArray(resolveElements(media, (el) => el instanceof HTMLImageElement)())[0];
+    if(!mediaElement) return;
+
+    const smallSize = 20;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = smallSize;
+    canvas.height = smallSize;
+
+    const imgW = mediaElement.naturalWidth;
+    const imgH = mediaElement.naturalHeight;
+
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(
+      mediaElement,
+      imgW * 0.75, imgH * 0.75, imgW * 0.25, imgH * 0.25,
+      0, 0, smallSize, smallSize
+    );
+
+    return computeLockColor(canvas);
   });
 
   const readyPromise = deferredPromise<void>();
@@ -548,6 +586,13 @@ export const AvatarNew = (props: {
     let {peerId} = props;
     if(title !== undefined) {
       peerId = NULL_PEER_ID;
+    }
+
+    if(props.asAllChats) {
+      set({
+        icon: 'round_chats_filled'
+      });
+      return;
     }
 
     if(peerId === myId && isDialog) {
@@ -801,6 +846,7 @@ export const AvatarNew = (props: {
       'is-forum': isForum(),
       'is-topic': isTopic(),
       'is-monoforum': isMonoforum(),
+      'is-relative': !!autoDeletePeriod(),
       'avatar-relative': !!thumb() || isSubscribed()
     };
   };
@@ -816,7 +862,7 @@ export const AvatarNew = (props: {
     const dimensions = storyDimensions();
     return {
       'padding': dimensions ? (dimensions.size - dimensions.willBeSize) / 2 + 'px' : undefined,
-      '--size': isTopic() && props.wrapOptions.customEmojiSize.width ? props.wrapOptions.customEmojiSize.width + 'px' : undefined
+      '--size': isTopic() && props.wrapOptions?.customEmojiSize?.width ? props.wrapOptions.customEmojiSize.width + 'px' : undefined
     };
   };
 
@@ -826,6 +872,26 @@ export const AvatarNew = (props: {
       {thumb()}
       {[media(), abbreviature()].find(Boolean)}
       {isSubscribed() && currencyStarIcon({class: 'avatar-star', stroke: true})}
+      {autoDeletePeriod() && (
+        <div
+          class="avatar-auto-delete-timer"
+        >
+          <Show when={autoDeletePeriodBackground() || color()}>
+            <div
+              class="avatar-auto-delete-timer__background"
+              classList={{
+                'avatar-auto-delete-timer__background--color': !!color()
+              }}
+              style={{
+                background: autoDeletePeriodBackground() ? `url(${autoDeletePeriodBackground()})` : undefined
+              }}
+            />
+          </Show>
+          <div class="avatar-auto-delete-timer__icon">
+            {createAutoDeleteIcon(autoDeletePeriod())}
+          </div>
+        </div>
+      )}
     </>
   );
 
@@ -854,6 +920,7 @@ export const AvatarNew = (props: {
       classList={classList()}
       data-color={color()}
       data-peer-id={props.peerId}
+      data-thread-id={props.threadId}
       data-story-id={props.storyId}
       style={style()}
       {...(props.props || {})}
@@ -872,6 +939,7 @@ export const AvatarNew = (props: {
     setIcon,
     setStoriesSegments,
     setIsSubscribed,
+    setAutoDeletePeriod,
     updateStoriesSegments,
     set,
     color

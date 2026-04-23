@@ -4,15 +4,15 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import {horizontalMenu} from './horizontalMenu';
-import TransitionSlider from './transition';
-import appNavigationController, {NavigationItem} from './appNavigationController';
-import SliderSuperTab, {SliderSuperTabConstructable} from './sliderTab';
-import indexOfAndSplice from '../helpers/array/indexOfAndSplice';
-import safeAssign from '../helpers/object/safeAssign';
-import {AppManagers} from '../lib/appManagers/managers';
-import {getMiddleware, MiddlewareHelper} from '../helpers/middleware';
-import {MaybePromise} from '../types';
+import {horizontalMenu} from '@components/horizontalMenu';
+import TransitionSlider from '@components/transition';
+import appNavigationController, {NavigationItem} from '@components/appNavigationController';
+import SliderSuperTab, {SliderSuperTabConstructable} from '@components/sliderTab';
+import indexOfAndSplice from '@helpers/array/indexOfAndSplice';
+import safeAssign from '@helpers/object/safeAssign';
+import {AppManagers} from '@lib/managers';
+import {getMiddleware, MiddlewareHelper} from '@helpers/middleware';
+import {MaybePromise} from '@types';
 
 const TRANSITION_TIME = 250;
 
@@ -236,6 +236,13 @@ export default class SidebarSlider {
     destroyable = true,
     doNotAppend?: boolean
   ) {
+    if(
+      (ctor as any).noSame &&
+      this.historyTabIds[this.historyTabIds.length - 1] instanceof ctor
+    ) {
+      return this.historyTabIds[this.historyTabIds.length - 1] as T;
+    }
+
     const tab = new ctor(doNotAppend ? undefined : this, destroyable);
     tab.managers = this.managers;
     return tab;

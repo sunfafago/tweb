@@ -4,10 +4,10 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import {MOUNT_CLASS_TO} from '../config/debug';
-import I18n, {i18n} from '../lib/langPack';
-import {days, months} from './date/common';
-import capitalizeFirstLetter from './string/capitalizeFirstLetter';
+import {MOUNT_CLASS_TO} from '@config/debug';
+import I18n, {i18n} from '@lib/langPack';
+import {days, months} from '@helpers/date/common';
+import capitalizeFirstLetter from '@helpers/string/capitalizeFirstLetter';
 
 export const monthsLocalized = months.slice();
 export const daysLocalized = days.slice();
@@ -53,7 +53,15 @@ export const getWeekNumber = (date: Date) => {
   return Math.ceil((((d.getTime() - yearStart.getTime()) / ONE_DAY) + 1) / 7);
 };
 
-export function formatDate(date: Date, today?: Date, withTime?: boolean) {
+
+type FormatDateOptions = {
+  today?: Date;
+  withTime?: boolean;
+  shortMonth?: boolean;
+  overrideIntlOptions?: Intl.DateTimeFormatOptions;
+};
+
+export function formatDate(date: Date, {today, withTime, shortMonth, overrideIntlOptions}: FormatDateOptions = {}) {
   if(!today) {
     today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -61,7 +69,7 @@ export function formatDate(date: Date, today?: Date, withTime?: boolean) {
 
   const options: Intl.DateTimeFormatOptions = {
     day: 'numeric',
-    month: 'long'
+    month: shortMonth ? 'short' : 'long'
   };
 
   if(withTime) {
@@ -71,6 +79,10 @@ export function formatDate(date: Date, today?: Date, withTime?: boolean) {
 
   if(date.getFullYear() !== today.getFullYear()) {
     options.year = 'numeric';
+  }
+
+  if(overrideIntlOptions) {
+    Object.assign(options, overrideIntlOptions);
   }
 
   return new I18n.IntlDateElement({
@@ -140,7 +152,7 @@ export function formatFullSentTimeRaw(timestamp: number, options: {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
-        ...(options.combined ? formatTimeOptions: {})
+        ...(options.combined ? formatTimeOptions : {})
       }
     }).element;
     // dateStr = months[time.getMonth()].slice(0, 3) + ' ' + time.getDate() + ', ' + time.getFullYear();
@@ -150,7 +162,7 @@ export function formatFullSentTimeRaw(timestamp: number, options: {
       options: {
         month: 'short',
         day: 'numeric',
-        ...(options.combined ? formatTimeOptions: {})
+        ...(options.combined ? formatTimeOptions : {})
       }
     }).element;
     // dateStr = months[time.getMonth()].slice(0, 3) + ' ' + time.getDate();
@@ -179,6 +191,11 @@ export function formatTime(date: Date) {
 
 MOUNT_CLASS_TO && (MOUNT_CLASS_TO.formatDateAccordingToTodayNew = formatDateAccordingToTodayNew);
 
+export function formatDaysDuration(days: number, bold?: boolean) {
+  if(days >= 30) return formatMonthsDuration(Math.round(days / 30), bold);
+  return i18n(bold ? 'BoldDays' : 'Days', [days]);
+}
+
 export function formatMonthsDuration(months: number, bold?: boolean) {
   const isYears = months >= 12 && !(months % 12);
   return i18n(
@@ -196,7 +213,17 @@ const monthYearOrDayPattern = new RegExp(`(${anyLetterRegExp}{3,}) ([0-9]{0,4})`
 const yearOrDayAndMonthPattern = new RegExp(`([0-9]{0,4}) (${anyLetterRegExp}{2,})`, 'iu');
 const shortDate = new RegExp('^([0-9]{1,4})(\\.| |/|\\-)([0-9]{1,4})$', 'i');
 const longDate = new RegExp('^([0-9]{1,2})(\\.| |/|\\-)([0-9]{1,2})(\\.| |/|\\-)([0-9]{1,4})$', 'i');
-const numberOfDaysEachMonth = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+export const numberOfDaysEachMonth = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+export const numberOfDaysEachMonthNonLeapYear = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+export function getDaysPerMonthForYear(year: number) {
+  if(isLeapYear(year)) {
+    return numberOfDaysEachMonth;
+  }
+
+  return numberOfDaysEachMonthNonLeapYear;
+}
+
 export type DateData = {
   title: string,
   minDate: number,

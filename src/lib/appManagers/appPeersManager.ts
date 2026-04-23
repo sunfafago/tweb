@@ -9,22 +9,22 @@
  * https://github.com/zhukov/webogram/blob/master/LICENSE
  */
 
-import type {Chat, DialogPeer, InputDialogPeer, InputNotifyPeer, InputPeer, Peer, RestrictionReason, User} from '../../layer';
-import type {LangPackKey} from '../langPack';
-import isObject from '../../helpers/object/isObject';
-import {AppManager} from './manager';
-import getPeerId from './utils/peers/getPeerId';
-import isUser from './utils/peers/isUser';
-import isAnyChat from './utils/peers/isAnyChat';
-import {NULL_PEER_ID} from '../mtproto/mtproto_config';
-import getPeerActiveUsernames from './utils/peers/getPeerActiveUsernames';
-import isPeerRestricted from './utils/peers/isPeerRestricted';
-import getPeerPhoto from './utils/peers/getPeerPhoto';
-import getServerMessageId from './utils/messageId/getServerMessageId';
-import MTProtoMessagePort from '../mtproto/mtprotoMessagePort';
-import callbackify from '../../helpers/callbackify';
+import type {Chat, DialogPeer, InputDialogPeer, InputNotifyPeer, InputPeer, Peer, RestrictionReason, User} from '@layer';
+import type {LangPackKey} from '@lib/langPack';
+import isObject from '@helpers/object/isObject';
+import {AppManager} from '@appManagers/manager';
+import getPeerId from '@appManagers/utils/peers/getPeerId';
+import isUser from '@appManagers/utils/peers/isUser';
+import isAnyChat from '@appManagers/utils/peers/isAnyChat';
+import {NULL_PEER_ID} from '@appManagers/constants';
+import getPeerActiveUsernames from '@appManagers/utils/peers/getPeerActiveUsernames';
+import isPeerRestricted from '@appManagers/utils/peers/isPeerRestricted';
+import getPeerPhoto from '@appManagers/utils/peers/getPeerPhoto';
+import getServerMessageId from '@appManagers/utils/messageId/getServerMessageId';
+import MTProtoMessagePort from '@lib/mainWorker/mainMessagePort';
+import callbackify from '@helpers/callbackify';
 
-export type PeerType = 'channel' | 'chat' | 'megagroup' | 'group' | 'saved' | 'savedDialog' | 'monoforum' | 'monoforum_thread';
+export type PeerType = 'channel' | 'chat' | 'megagroup' | 'group' | 'saved' | 'savedDialog' | 'monoforum' | 'monoforum_thread' | 'botforum_thread';
 export class AppPeersManager extends AppManager {
   public get peerId() {
     return this.appUsersManager.userId.toPeerId();
@@ -165,8 +165,8 @@ export class AppPeersManager extends AppManager {
   }
 
   public isPeerRestricted(peerId: PeerId) {
-    return callbackify(this.appPrivacyManager.getSensitiveContentSettings(), (settings) => {
-      return isPeerRestricted(this.getPeer(peerId), settings.sensitiveCanChange);
+    return callbackify(this.appPrivacyManager.getContentSettings(), (settings) => {
+      return isPeerRestricted(this.getPeer(peerId), !!settings.pFlags.sensitive_can_change);
     });
   }
 
@@ -182,6 +182,14 @@ export class AppPeersManager extends AppManager {
     return !peerId.isUser() && this.appChatsManager.isMonoforum(peerId.toChatId());
   }
 
+  public isBotforum(peerId?: PeerId): boolean {
+    return peerId?.isUser() && this.appUsersManager.isBotforum(peerId.toChatId());
+  }
+
+  public canManageBotforumTopics(peerId?: PeerId): boolean {
+    return peerId?.isUser() && this.appUsersManager.canManageBotforumTopics(peerId.toChatId());
+  }
+
   public canManageDirectMessages(peerId?: PeerId) {
     return peerId && !peerId.isUser() && this.appChatsManager.canManageDirectMessages(peerId.toChatId());
   }
@@ -189,8 +197,8 @@ export class AppPeersManager extends AppManager {
   /**
    * The amount of stars necessary to be paid for every message if the target peer had enabled it
    */
-  public async getStarsAmount(peerId: PeerId): Promise<number | undefined> {
-    if(peerId.isUser()) return this.appUsersManager.getStarsAmount(peerId.toUserId());
+  public getStarsAmount(peerId: PeerId, onlyCached?: boolean): MaybePromise<number | undefined> {
+    if(peerId.isUser()) return this.appUsersManager.getStarsAmount(peerId.toUserId(), undefined, onlyCached);
 
     return this.appChatsManager.getStarsAmount(peerId.toChatId());
   }
@@ -307,6 +315,8 @@ export class AppPeersManager extends AppManager {
       return 'savedDialog';
     } else if(this.isMonoforum(peerId)) {
       return threadId ? 'monoforum_thread' : 'monoforum';
+    } else if(this.isBotforum(peerId) && threadId) {
+      return 'botforum_thread';
     } else if(this.isMegagroup(peerId)) {
       return 'megagroup';
     } else if(this.isChannel(peerId)) {
@@ -336,8 +346,10 @@ export class AppPeersManager extends AppManager {
   }
 
   public noForwards(peerId: PeerId) {
-    if(peerId.isUser()) return false;
-    else {
+    if(peerId.isUser()) {
+      const userFull = this.appProfileManager.getCachedFullUser(peerId.toUserId());
+      return !!(userFull?.pFlags?.noforwards_my_enabled || userFull?.pFlags?.noforwards_peer_enabled);
+    } else {
       const chat = this.appChatsManager.getChat(peerId.toChatId());
       return !!(chat as Chat.chat).pFlags?.noforwards;
     }

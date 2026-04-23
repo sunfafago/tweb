@@ -1,16 +1,17 @@
-import {Component, createRenderEffect, mergeProps, onCleanup} from 'solid-js';
+import {Component, createRenderEffect, mergeProps, onCleanup, onMount} from 'solid-js';
 
-import type {LottieAssetName, LottieLoader} from '../lib/rlottie/lottieLoader';
-import RLottiePlayer, {RLottieOptions} from '../lib/rlottie/rlottiePlayer';
+import type {LottieAssetName, LottieLoader} from '@lib/rlottie/lottieLoader';
+import RLottiePlayer, {RLottieOptions} from '@lib/rlottie/rlottiePlayer';
 
 const LottieAnimation: Component<{
-  lottieLoader: LottieLoader;
-  class?: string;
-  name: LottieAssetName;
-  size?: number;
-  restartOnClick?: boolean;
-  rlottieOptions?: Partial<RLottieOptions>
-  onPromise?: (promise: Promise<RLottiePlayer>) => void;
+  lottieLoader: LottieLoader,
+  class?: string,
+  name: LottieAssetName,
+  size?: number,
+  needRaf?: boolean,
+  restartOnClick?: boolean,
+  rlottieOptions?: Partial<RLottieOptions>,
+  onPromise?: (promise: Promise<RLottiePlayer>) => void
 }> = (inProps) => {
   const props = mergeProps({size: 100}, inProps);
 
@@ -33,7 +34,13 @@ const LottieAnimation: Component<{
     />
   ) as HTMLDivElement;
 
-  createRenderEffect(() => {
+  let cleanup = false
+  function loadAnimation() {
+    if(props.needRaf && !div.isConnected && !cleanup) {
+      requestAnimationFrame(loadAnimation);
+      return
+    }
+
     animationPromise = props.lottieLoader.loadAnimationAsAsset(
       {
         container: div,
@@ -41,19 +48,22 @@ const LottieAnimation: Component<{
         autoplay: true,
         width: props.size,
         height: props.size,
+        group: 'none',
         ...props.rlottieOptions
       },
       props.name
     );
+    props.onPromise?.(animationPromise);
+  }
 
-    onCleanup(() => {
-      animationPromise?.then((animation) => {
-        animation.remove();
-      });
+  createRenderEffect(loadAnimation);
+
+  onCleanup(() => {
+    cleanup = true;
+    animationPromise?.then((animation) => {
+      animation.remove();
     });
   });
-
-  props.onPromise?.(animationPromise);
 
   return div;
 }

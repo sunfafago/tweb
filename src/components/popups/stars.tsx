@@ -7,46 +7,46 @@
 /* @refresh reload */
 
 import PopupElement from '.';
-import maybe2x from '../../helpers/maybe2x';
-import {InputInvoice, MessageMedia, PaymentsPaymentForm, Photo, Document, StarsTopupOption, StarsTransaction, StarsTransactionPeer, MessageExtendedMedia, ChatInvite, StarsSubscription, StarsGiftOption, InputStorePaymentPurpose, WebDocument} from '../../layer';
-import I18n, {i18n, LangPackKey} from '../../lib/langPack';
-import Section from '../section';
+import maybe2x from '@helpers/maybe2x';
+import {InputInvoice, MessageMedia, PaymentsPaymentForm, Photo, Document, StarsTopupOption, StarsTransaction, StarsTransactionPeer, MessageExtendedMedia, ChatInvite, StarsSubscription, StarsGiftOption, InputStorePaymentPurpose, WebDocument} from '@layer';
+import I18n, {i18n, LangPackKey} from '@lib/langPack';
+import Section from '@components/section';
 import {createMemo, createRoot, createSignal, For, JSX, Show, untrack} from 'solid-js';
-import paymentsWrapCurrencyAmount, {formatNanoton} from '../../helpers/paymentsWrapCurrencyAmount';
-import classNames from '../../helpers/string/classNames';
-import PopupPayment from './payment';
-import useStars, {prefetchStars} from '../../stores/stars';
-import safeAssign from '../../helpers/object/safeAssign';
-import wrapPeerTitle from '../wrappers/peerTitle';
-import {renderImageFromUrlPromise} from '../../helpers/dom/renderImageFromUrl';
-import {Tabs} from '../sidebarRight/tabs/boosts';
-import {createLoadableList} from '../sidebarRight/tabs/statistics';
-import Row from '../rowTsx';
-import {formatFullSentTime} from '../../helpers/date';
-import {avatarNew} from '../avatarNew';
-import wrapEmojiText from '../../lib/richTextProcessor/wrapEmojiText';
-import getPeerId from '../../lib/appManagers/utils/peers/getPeerId';
-import Icon from '../icon';
-import {Middleware} from '../../helpers/middleware';
-import generatePhotoForExtendedMediaPreview from '../../lib/appManagers/utils/photos/generatePhotoForExtendedMediaPreview';
-import wrapMediaSpoiler from '../wrappers/mediaSpoiler';
-import wrapPhoto from '../wrappers/photo';
-import currencyStarIcon from '../currencyStarIcon';
-import {wrapChatInviteAvatar, wrapChatInviteTitle} from './joinChatInvite';
-import tsNow from '../../helpers/tsNow';
-import Button from '../buttonTsx';
-import PopupPickUser from './pickUser';
-import anchorCallback from '../../helpers/dom/anchorCallback';
-import rootScope from '../../lib/rootScope';
-import appImManager from '../../lib/appManagers/appImManager';
-import {MTAppConfig} from '../../lib/mtproto/appConfig';
-import {toastNew} from '../toast';
-import toggleDisability from '../../helpers/dom/toggleDisability';
-import {createMoreButton} from '../sidebarRight/tabs/statistics';
-import formatStarsAmount from '../../lib/appManagers/utils/payments/formatStarsAmount';
-import wrapLocalSticker from '../wrappers/localSticker';
+import paymentsWrapCurrencyAmount, {formatNanoton} from '@helpers/paymentsWrapCurrencyAmount';
+import classNames from '@helpers/string/classNames';
+import PopupPayment from '@components/popups/payment';
+import useStars, {prefetchStars} from '@stores/stars';
+import safeAssign from '@helpers/object/safeAssign';
+import wrapPeerTitle from '@components/wrappers/peerTitle';
+import {renderImageFromUrlPromise} from '@helpers/dom/renderImageFromUrl';
+import {Tabs} from '@components/sidebarRight/tabs/boosts';
+import {createLoadableList} from '@components/sidebarRight/tabs/statistics';
+import Row from '@components/rowTsx';
+import {formatFullSentTime} from '@helpers/date';
+import {avatarNew} from '@components/avatarNew';
+import wrapEmojiText from '@lib/richTextProcessor/wrapEmojiText';
+import getPeerId from '@appManagers/utils/peers/getPeerId';
+import Icon from '@components/icon';
+import {Middleware} from '@helpers/middleware';
+import generatePhotoForExtendedMediaPreview from '@appManagers/utils/photos/generatePhotoForExtendedMediaPreview';
+import wrapMediaSpoiler from '@components/wrappers/mediaSpoiler';
+import wrapPhoto from '@components/wrappers/photo';
+import currencyStarIcon from '@components/currencyStarIcon';
+import {wrapChatInviteAvatar, wrapChatInviteTitle} from '@components/popups/joinChatInvite';
+import tsNow from '@helpers/tsNow';
+import Button from '@components/buttonTsx';
+import PopupPickUser from '@components/popups/pickUser';
+import anchorCallback from '@helpers/dom/anchorCallback';
+import rootScope from '@lib/rootScope';
+import appImManager from '@lib/appImManager';
+import {toastNew} from '@components/toast';
+import toggleDisability from '@helpers/dom/toggleDisability';
+import {MoreButton} from '@components/sidebarRight/tabs/statistics';
+import formatStarsAmount from '@appManagers/utils/payments/formatStarsAmount';
+import wrapLocalSticker from '@components/wrappers/localSticker';
 import bigInt from 'big-integer';
-import safeWindowOpen from '../../helpers/dom/safeWindowOpen';
+import safeWindowOpen from '@helpers/dom/safeWindowOpen';
+import {IconTsx} from '@components/iconTsx';
 
 export function StarsStrokeStar(props: {stroke?: boolean, style?: JSX.HTMLAttributes<HTMLDivElement>['style']}) {
   return (
@@ -136,11 +136,18 @@ export function StarsAmount(props: {stars: Long}) {
   );
 }
 
-export function StarsChange(props: {stars: Long, isRefund?: boolean, noSign?: boolean, reverse?: boolean, inline?: boolean}) {
+export function StarsChange(props: {
+  stars: Long,
+  isRefund?: boolean,
+  noSign?: boolean,
+  reverse?: boolean,
+  inline?: boolean,
+  ton?: boolean
+}) {
   return (
     <div class={classNames('popup-stars-pay-amount', +props.stars > 0 ? 'green' : 'danger', props.reverse && 'reverse', props.inline && 'inline')}>
       {`${+props.stars > 0 && !props.noSign ? '+' : ''}${props.stars}`}
-      <StarsStar />
+      {props.ton ? <IconTsx icon="ton" /> : <StarsStar />}
       {props.isRefund && <span class="popup-stars-pay-amount-status">{i18n('StarsRefunded')}</span>}
     </div>
   );
@@ -348,6 +355,7 @@ export default class PopupStars extends PopupElement {
   private appConfig: MTAppConfig;
   private toppedUp: boolean;
   private ton: boolean;
+  private spendPurposePeerId: PeerId;
 
   constructor(options: {
     paymentForm?: PaymentsPaymentForm.paymentsPaymentFormStars,
@@ -357,7 +365,8 @@ export default class PopupStars extends PopupElement {
     purpose?: PopupStars['purpose'],
     giftPeerId?: PeerId,
     peerId?: PeerId,
-    ton?: boolean
+    ton?: boolean,
+    spendPurposePeerId?: PeerId
   } = {}) {
     super('popup-stars', {
       closable: true,
@@ -422,8 +431,8 @@ export default class PopupStars extends PopupElement {
           <Row.Title><b>{_title}</b></Row.Title>
           <Row.Midtitle>{midtitle}</Row.Midtitle>
           <Row.Subtitle>{subtitleStatus ? [subtitle, ' — ', subtitleStatus] : subtitle}</Row.Subtitle>
-          <Row.RightContent><StarsChange stars={formatStarsAmount(transaction.amount)} /></Row.RightContent>
-          <Row.Media mediaSize="abitbigger">{media}</Row.Media>
+          <Row.RightContent><StarsChange stars={formatStarsAmount(transaction.amount)} ton={transaction.amount._ === 'starsTonAmount'} /></Row.RightContent>
+          <Row.Media size="abitbigger">{media}</Row.Media>
         </Row>
       );
 
@@ -472,7 +481,7 @@ export default class PopupStars extends PopupElement {
               [formatFullSentTime(subscription.until_date, undefined, true)]
             )}</Row.Subtitle>
           <Row.RightContent>{isCancelled && (<span class="popup-stars-cancelled danger">{i18n('Stars.Subscriptions.Cancelled')}</span>)}</Row.RightContent>
-          <Row.Media mediaSize="abitbigger">{avatar.node}</Row.Media>
+          <Row.Media size="abitbigger">{avatar.node}</Row.Media>
         </Row>
       );
 
@@ -616,7 +625,10 @@ export default class PopupStars extends PopupElement {
                     _: 'inputStorePaymentStarsTopup',
                     amount: option.amount,
                     currency: option.currency,
-                    stars: option.stars
+                    stars: option.stars,
+                    spend_purpose_peer: this.spendPurposePeerId && this.spendPurposePeerId !== rootScope.myId ?
+                      await this.managers.appPeersManager.getInputPeerById(this.spendPurposePeerId) :
+                      undefined
                   };
 
                   const inputInvoice: InputInvoice = {
@@ -671,7 +683,7 @@ export default class PopupStars extends PopupElement {
         }
 
         loading = true;
-        const starsStatus = await this.managers.appPaymentsManager.getStarsTransactions(offset, inbound);
+        const starsStatus = await this.managers.appPaymentsManager.getStarsTransactions(offset, inbound, this.ton);
         if(!middleware()) return;
 
         const promises = (starsStatus.history || []).map(this.renderTransaction);
@@ -741,15 +753,12 @@ export default class PopupStars extends PopupElement {
     const subscriptionsSection = (
       <Section class="popup-stars-subscriptions-section" name="Stars.Subscriptions">
         <div>{subscriptionsLoader().rendered}</div>
-        {subscriptionsLoader().loadMore && createMoreButton(
-          subscriptionsLoader().count - subscriptionsLoader().rendered.length,
-          (button) => {
-            const toggle = toggleDisability(button, true);
-            const promise = subscriptionsLoader().loadMore();
-            promise.finally(() => toggle());
-          },
-          this.listenerSetter
-        )}
+        <Show when={!!subscriptionsLoader().loadMore}>
+          <MoreButton
+            count={subscriptionsLoader().count - subscriptionsLoader().rendered.length}
+            callback={() => subscriptionsLoader().loadMore()}
+          />
+        </Show>
       </Section>
     );
 
@@ -773,7 +782,7 @@ export default class PopupStars extends PopupElement {
 
     const restSection = (
       <>
-        {this.appConfig.stars_gifts_enabled && (
+        {this.appConfig.stars_gifts_enabled && !this.ton && (
           <Section>
             <Button
               class="btn-primary btn-transparent primary"
@@ -802,7 +811,7 @@ export default class PopupStars extends PopupElement {
     return (
       <>
         {firstSection}
-        {!starsNeeded() && !this.giftPeerId && restSection}
+        {starsNeeded() === bigInt.zero && !this.giftPeerId && restSection}
       </>
     );
   }

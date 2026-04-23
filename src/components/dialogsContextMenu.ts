@@ -4,33 +4,32 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import type {Dialog} from '../lib/appManagers/appMessagesManager';
-import type {ForumTopic} from '../layer';
-import type {AnyDialog} from '../lib/storages/dialogs';
-import appDialogsManager, {DIALOG_LIST_ELEMENT_TAG} from '../lib/appManagers/appDialogsManager';
-import rootScope from '../lib/rootScope';
-import {ButtonMenuItemOptionsVerifiable} from './buttonMenu';
-import PopupDeleteDialog from './popups/deleteDialog';
-import {i18n, LangPackKey, _i18n} from '../lib/langPack';
-import findUpTag from '../helpers/dom/findUpTag';
-import {toastNew} from './toast';
-import PopupMute from './popups/mute';
-import {AppManagers} from '../lib/appManagers/managers';
-import {CAN_HIDE_TOPIC, FOLDER_ID_ARCHIVE, GENERAL_TOPIC_ID, REAL_FOLDERS} from '../lib/mtproto/mtproto_config';
-import showLimitPopup from './popups/limit';
-import createContextMenu from '../helpers/dom/createContextMenu';
-import PopupElement from './popups';
-import cancelEvent from '../helpers/dom/cancelEvent';
-import IS_SHARED_WORKER_SUPPORTED from '../environment/sharedWorkerSupport';
-import wrapEmojiText from '../lib/richTextProcessor/wrapEmojiText';
-import appImManager from '../lib/appManagers/appImManager';
-import assumeType from '../helpers/assumeType';
-import {isDialog, isForumTopic, isMonoforumDialog, isSavedDialog} from '../lib/appManagers/utils/dialogs/isDialog';
-import createSubmenuTrigger from './createSubmenuTrigger';
-import type AddToFolderDropdownMenu from './addToFolderDropdownMenu';
-import memoizeAsyncWithTTL from '../helpers/memoizeAsyncWithTTL';
-import {MonoforumDialog} from '../lib/storages/monoforumDialogs';
-import {openRemoveFeePopup} from './chat/removeFee';
+import type {Dialog} from '@appManagers/appMessagesManager';
+import type {ForumTopic} from '@layer';
+import type {AnyDialog} from '@lib/storages/dialogs';
+import appDialogsManager, {DIALOG_LIST_ELEMENT_TAG} from '@lib/appDialogsManager';
+import rootScope from '@lib/rootScope';
+import {ButtonMenuItemOptionsVerifiable} from '@components/buttonMenu';
+import PopupDeleteDialog from '@components/popups/deleteDialog';
+import {i18n, LangPackKey, _i18n} from '@lib/langPack';
+import findUpTag from '@helpers/dom/findUpTag';
+import {toastNew} from '@components/toast';
+import PopupMute from '@components/popups/mute';
+import {AppManagers} from '@lib/managers';
+import {CAN_HIDE_TOPIC, FOLDER_ID_ARCHIVE, GENERAL_TOPIC_ID, REAL_FOLDER_ID, REAL_FOLDERS} from '@appManagers/constants';
+import showLimitPopup from '@components/popups/limit';
+import createContextMenu from '@helpers/dom/createContextMenu';
+import PopupElement from '@components/popups';
+import cancelEvent from '@helpers/dom/cancelEvent';
+import IS_SHARED_WORKER_SUPPORTED from '@environment/sharedWorkerSupport';
+import appImManager from '@lib/appImManager';
+import {isDialog, isForumTopic, isMonoforumDialog, isSavedDialog} from '@appManagers/utils/dialogs/isDialog';
+import createSubmenuTrigger, {CreateSubmenuArgs} from '@components/createSubmenuTrigger';
+import type AddToFolderDropdownMenu from '@components/addToFolderDropdownMenu';
+import memoizeAsyncWithTTL from '@helpers/memoizeAsyncWithTTL';
+import {MonoforumDialog} from '@lib/storages/monoforumDialogs';
+import {openRemoveFeePopup} from '@components/chat/removeFee';
+import apiManagerProxy from '@lib/apiManagerProxy';
 
 
 export default class DialogsContextMenu {
@@ -54,13 +53,17 @@ export default class DialogsContextMenu {
     createContextMenu({
       listenTo: element,
       buttons: this.getButtons(),
-      appendTo: document.getElementById('page-chats'),
       onOpen: async(e, li) => {
         this.li = li;
         li.classList.add('menu-open');
         this.peerId = li.dataset.peerId.toPeerId();
         this.threadId = +li.dataset.threadId || undefined;
         this.monoforumParentPeerId = +li.dataset.monoforumParentPeerId || undefined;
+
+        if(li.dataset.isAllChats) {
+          throw 'All chats dialog';
+        }
+
         this.dialog = this.monoforumParentPeerId ?
           await this.managers.monoforumDialogsStorage.getDialogByParent(this.monoforumParentPeerId, this.peerId):
           await this.managers.dialogsStorage.getAnyDialog(this.peerId, this.threadId);
@@ -80,7 +83,14 @@ export default class DialogsContextMenu {
       onClose: () => {
         this.buttons?.forEach(button => button?.onClose?.());
         this.li.classList.remove('menu-open');
-        this.li = this.peerId = this.dialog = this.filterId = this.threadId = this.canManageTopics = undefined;
+
+        this.li =
+        this.peerId =
+        this.dialog =
+        this.filterId =
+        this.threadId =
+        this.monoforumParentPeerId =
+        this.canManageTopics = undefined;
       },
       findElement: (e) => {
         return findUpTag(e.target, DIALOG_LIST_ELEMENT_TAG);
@@ -129,13 +139,16 @@ export default class DialogsContextMenu {
       onClick: this.onUnreadClick,
       verify: () => this.managers.appMessagesManager.isDialogUnread(this.dialog)
     }, createSubmenuTrigger({
-      icon: 'folder',
-      text: 'AddToFolder',
-      onClose: () => {
-        this.addToFolderMenu?.controls.closeTooltip?.();
+      options: {
+        icon: 'folder',
+        text: 'AddToFolder',
+        onClose: () => {
+          this.addToFolderMenu?.controls.closeTooltip?.();
+        },
+        verify: () => isDialog(this.dialog) && this.hasFilters()
       },
-      verify: () => isDialog(this.dialog) && this.hasFilters()
-    }, this.createAddToFolderSubmenu), {
+      createSubmenu: this.createAddToFolderSubmenu
+    }), {
       icon: 'pin',
       text: 'ChatList.Context.Pin',
       onClick: this.onPinClick,
@@ -211,7 +224,7 @@ export default class DialogsContextMenu {
       text: 'CloseTopic',
       onClick: this.onToggleTopicClick,
       verify: () => {
-        return this.canManageTopics && !(this.dialog as ForumTopic.forumTopic).pFlags.closed;
+        return !apiManagerProxy.isBotforum(this.peerId) && this.canManageTopics && !(this.dialog as ForumTopic.forumTopic).pFlags.closed;
       }
     }, {
       icon: 'lockoff',
@@ -241,15 +254,19 @@ export default class DialogsContextMenu {
     return this.buttons = this.buttons.filter(Boolean);
   }
 
-  private createAddToFolderSubmenu = async() => {
+  private createAddToFolderSubmenu = async({middleware}: CreateSubmenuArgs) => {
     if(!isDialog(this.dialog)) return;
 
     const {default: AddToFolderDropdownMenu, fetchDialogFilters} = await import('./addToFolderDropdownMenu');
 
+    const filters = await fetchDialogFilters();
+
+    if(!middleware()) return;
+
     const menu = new AddToFolderDropdownMenu;
     menu.feedProps({
       dialog: this.dialog,
-      filters: await fetchDialogFilters(),
+      filters,
       currentFilter: () => appDialogsManager.filterId,
       onNewDialog: (dialog) => {
         this.dialog = dialog;
@@ -292,21 +309,21 @@ export default class DialogsContextMenu {
   private onArchiveClick = async() => {
     const dialog = await this.managers.appMessagesManager.getDialogOnly(this.peerId);
     if(dialog) {
-      this.managers.appMessagesManager.editPeerFolders([dialog.peerId], +!dialog.folder_id);
+      this.managers.appMessagesManager.editPeerFolders([dialog.peerId], +!dialog.folder_id as REAL_FOLDER_ID);
     }
   };
 
   private onHideTopicClick = () => {
-    this.managers.appChatsManager.editForumTopic({
-      chatId: this.peerId.toChatId(),
+    this.managers.appMessagesManager.editForumTopic({
+      peerId: this.peerId,
       topicId: this.threadId,
       hidden: true
     });
   };
 
   private onToggleTopicClick = () => {
-    this.managers.appChatsManager.editForumTopic({
-      chatId: this.peerId.toChatId(),
+    this.managers.appMessagesManager.editForumTopic({
+      peerId: this.peerId,
       topicId: this.threadId,
       closed: !(this.dialog as ForumTopic.forumTopic).pFlags.closed
     });

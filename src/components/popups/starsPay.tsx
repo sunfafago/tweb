@@ -5,44 +5,44 @@
  */
 
 import PopupElement from '.';
-import {copyTextToClipboard} from '../../helpers/clipboard';
-import {formatFullSentTime} from '../../helpers/date';
-import {attachClickEvent} from '../../helpers/dom/clickEvent';
-import {renderImageFromUrlPromise} from '../../helpers/dom/renderImageFromUrl';
-import toggleDisability from '../../helpers/dom/toggleDisability';
-import maybe2x from '../../helpers/maybe2x';
-import safeAssign from '../../helpers/object/safeAssign';
-import {InputInvoice, MessageMedia, PaymentsPaymentForm, PaymentsPaymentReceipt, StarsTransaction, Message, MessageExtendedMedia, Photo, Document, ChatInvite, StarsSubscription, Chat, MessageAction, Boost, WebDocument} from '../../layer';
-import appImManager from '../../lib/appManagers/appImManager';
-import getPeerId from '../../lib/appManagers/utils/peers/getPeerId';
-import I18n, {i18n} from '../../lib/langPack';
-import wrapEmojiText from '../../lib/richTextProcessor/wrapEmojiText';
-import wrapRichText from '../../lib/richTextProcessor/wrapRichText';
-import {replaceButtonIcon} from '../button';
-import {putPreloader} from '../putPreloader';
-import Table, {TablePeer} from '../table';
-import {toastNew} from '../toast';
-import PopupPayment, {PopupPaymentResult} from './payment';
-import PopupStars, {getExamplesAnchor, getStarsTransactionTitleAndMedia, StarsAmount, StarsBalance, StarsChange} from './stars';
+import {copyTextToClipboard} from '@helpers/clipboard';
+import {formatFullSentTime} from '@helpers/date';
+import {attachClickEvent} from '@helpers/dom/clickEvent';
+import {renderImageFromUrlPromise} from '@helpers/dom/renderImageFromUrl';
+import toggleDisability from '@helpers/dom/toggleDisability';
+import maybe2x from '@helpers/maybe2x';
+import safeAssign from '@helpers/object/safeAssign';
+import {InputInvoice, MessageMedia, PaymentsPaymentForm, PaymentsPaymentReceipt, StarsTransaction, Message, MessageExtendedMedia, Photo, Document, ChatInvite, StarsSubscription, Chat, MessageAction, Boost, WebDocument} from '@layer';
+import appImManager from '@lib/appImManager';
+import getPeerId from '@appManagers/utils/peers/getPeerId';
+import I18n, {i18n} from '@lib/langPack';
+import wrapEmojiText from '@lib/richTextProcessor/wrapEmojiText';
+import wrapRichText from '@lib/richTextProcessor/wrapRichText';
+import {replaceButtonIcon} from '@components/button';
+import {putPreloader} from '@components/putPreloader';
+import Table, {TablePeer} from '@components/table';
+import {toastNew} from '@components/toast';
+import PopupPayment, {PopupPaymentResult} from '@components/popups/payment';
+import PopupStars, {getExamplesAnchor, getStarsTransactionTitleAndMedia, StarsAmount, StarsBalance, StarsChange} from '@components/popups/stars';
 import {JSX} from 'solid-js';
-import partition from '../../helpers/array/partition';
-import getServerMessageId from '../../lib/appManagers/utils/messageId/getServerMessageId';
-import wrapTelegramUrlToAnchor from '../../lib/richTextProcessor/wrapTelegramUrlToAnchor';
-import cancelEvent from '../../helpers/dom/cancelEvent';
-import AppMediaViewer from '../appMediaViewer';
-import {NULL_PEER_ID, TON_CURRENCY} from '../../lib/mtproto/mtproto_config';
-import tsNow from '../../helpers/tsNow';
-import classNames from '../../helpers/string/classNames';
-import {useChat} from '../../stores/peers';
-import wrapLocalSticker from '../wrappers/localSticker';
-import liteMode from '../../helpers/liteMode';
-import PeerTitle from '../peerTitle';
-import rootScope from '../../lib/rootScope';
-import {IconTsx} from '../iconTsx';
-import formatStarsAmount from '../../lib/appManagers/utils/payments/formatStarsAmount';
-import apiManagerProxy from '../../lib/mtproto/mtprotoworker';
-import DEBUG from '../../config/debug';
-import makeError from '../../helpers/makeError';
+import partition from '@helpers/array/partition';
+import getServerMessageId from '@appManagers/utils/messageId/getServerMessageId';
+import wrapTelegramUrlToAnchor from '@lib/richTextProcessor/wrapTelegramUrlToAnchor';
+import cancelEvent from '@helpers/dom/cancelEvent';
+import AppMediaViewer from '@components/appMediaViewer';
+import {NULL_PEER_ID, TON_CURRENCY} from '@appManagers/constants';
+import tsNow from '@helpers/tsNow';
+import classNames from '@helpers/string/classNames';
+import {useChat} from '@stores/peers';
+import wrapLocalSticker from '@components/wrappers/localSticker';
+import liteMode from '@helpers/liteMode';
+import PeerTitle from '@components/peerTitle';
+import rootScope from '@lib/rootScope';
+import {IconTsx} from '@components/iconTsx';
+import formatStarsAmount from '@appManagers/utils/payments/formatStarsAmount';
+import apiManagerProxy from '@lib/apiManagerProxy';
+import DEBUG from '@config/debug';
+import makeError from '@helpers/makeError';
 import bigInt from 'big-integer';
 
 const TEST_FIRST_TIME = DEBUG && false;
@@ -142,7 +142,8 @@ export default class PopupStarsPay extends PopupElement<{
               this.result = 'cancelled';
               this.hide();
             },
-            purpose: this.purpose
+            purpose: this.purpose,
+            spendPurposePeerId: this.peerId
           });
         } else if((err as ApiError).type === 'FORM_EXPIRED') {
           await this.reloadForm();
@@ -312,6 +313,9 @@ export default class PopupStarsPay extends PopupElement<{
     } else if(this.form._ === 'payments.paymentFormStarGift') {
       title = i18n('StarsConfirmPurchaseTitle');
       subtitle = i18n(this.inputInvoice._ === 'inputInvoiceStarGiftTransfer' ? 'StarGiftConfirmTransferText' : 'StarGiftConfirmPurchaseText', [amount]);
+    } else if(this.inputInvoice?._ === 'inputInvoiceStarGiftDropOriginalDetails') {
+      title = i18n('StarGiftDropOriginalDetailsTitle');
+      subtitle = i18n('StarGiftDropOriginalDetailsText');
     } else if(this.transaction && !this.form.title) {
       title = i18n(this.transaction.subscription_period ? 'Stars.Subscription.Title' : 'Stars.TopUp');
     } else if(this.chatInvite) {
@@ -369,6 +373,7 @@ export default class PopupStarsPay extends PopupElement<{
     });
 
     const tablePeer = (this.isReceipt || this.subscription) && makeTablePeer(this.peerId);
+    const isTon = this.transaction?.amount._ === 'starsTonAmount';
 
     const transactionIdSpan = transactionId && (<span onClick={onTransactionClick}>{wrapRichText(transactionId, {entities: [{_: 'messageEntityCode', length: transactionId.length, offset: 0}]})}</span>);
 
@@ -391,9 +396,14 @@ export default class PopupStarsPay extends PopupElement<{
       ];
     } else if(this.transaction && this.transaction.pFlags.gift) {
       tableContent = [
-        [this.isOutGift ? 'BoostingTo' : 'BoostingFrom', tablePeer],
-        ['StarsTransactionDate',  formatFullSentTime((this.form as PaymentsPaymentReceipt.paymentsPaymentReceiptStars).date, undefined, true)]
+        [this.isOutGift ? 'BoostingTo' : 'BoostingFrom', tablePeer]
       ];
+      if(transactionIdSpan) {
+        tableContent.push(['StarsTransactionID', transactionIdSpan]);
+      }
+      tableContent.push(
+        ['StarsTransactionDate',  formatFullSentTime((this.form as PaymentsPaymentReceipt.paymentsPaymentReceiptStars).date, undefined, true)]
+      )
     } else if(this.isReceipt) {
       const realAmount = this.transaction?.paid_messages &&
         !this.transaction.pFlags.refund &&
@@ -407,7 +417,7 @@ export default class PopupStarsPay extends PopupElement<{
           this.transaction?.subscription_period ? 'Stars.Subscription' : 'BoostingTo',
           tablePeer
         ] : ['Stars.Via', _title],
-        realAmount && ['PaidMessages.FullPrice', <StarsChange reverse noSign inline stars={realAmount} />],
+        realAmount && ['PaidMessages.FullPrice', <StarsChange reverse noSign inline stars={realAmount} ton={isTon} />],
         this.transaction && (this.transaction.extended_media || this.transaction.pFlags.reaction) && messageAnchor && [this.transaction.pFlags.reaction ? 'Message' : 'StarsTransactionMedia', messageAnchor],
         ['StarsTransactionID', transactionIdSpan],
         ['StarsTransactionDate', formatFullSentTime((this.form as PaymentsPaymentReceipt.paymentsPaymentReceiptStars).date, undefined, true)]
@@ -462,7 +472,14 @@ export default class PopupStarsPay extends PopupElement<{
           >{avatar}</div>
         </div>
         <div class="popup-stars-title">{title}</div>
-        {tableContent && !this.subscription && !noStarsChange && <StarsChange stars={!this.transaction ? -+amount : amount} isRefund={!!this.transaction?.pFlags?.refund} noSign={this.isOutGift} />}
+        {tableContent && !this.subscription && !noStarsChange && (
+          <StarsChange
+            stars={!this.transaction ? -+amount : amount}
+            isRefund={!!this.transaction?.pFlags?.refund}
+            noSign={this.isOutGift}
+            ton={isTon}
+          />
+        )}
         {subtitle && <div class={classNames('popup-stars-subtitle', tableContent && !this.subscription && !this.boost && 'mt')}>{subtitle}</div>}
         {tableContent && (
           <>

@@ -1,5 +1,7 @@
-import {defineConfig} from 'vitest/config';
+/// <reference types="vitest/config" />
+import {defineConfig} from 'vite';
 import solidPlugin from 'vite-plugin-solid';
+// @ts-ignore no type declarations
 import handlebars from 'vite-plugin-handlebars';
 import basicSsl from '@vitejs/plugin-basic-ssl';
 import {visualizer} from 'rollup-plugin-visualizer';
@@ -13,9 +15,15 @@ import {watchLangFile} from './watch-lang.js';
 import path from 'path';
 
 const rootDir = resolve(__dirname);
+const certsDir = path.join(rootDir, 'certs');
 const ENV_LOCAL_FILE_PATH = path.join(rootDir, '.env.local');
+const LANG_PACK_LOCAL_FILE_PATH = path.join(rootDir, 'src', 'langPackLocalVersion.ts');
 
 const isDEV = process.env.NODE_ENV === 'development';
+if(!existsSync(LANG_PACK_LOCAL_FILE_PATH)) {
+  copyFileSync(path.join(rootDir, 'src', 'langPackLocalVersion.example.ts'), LANG_PACK_LOCAL_FILE_PATH);
+}
+
 if(isDEV) {
   if(!existsSync(ENV_LOCAL_FILE_PATH)) {
     copyFileSync(path.join(rootDir, '.env.local.example'), ENV_LOCAL_FILE_PATH);
@@ -33,12 +41,28 @@ const handlebarsPlugin = handlebars({
   }
 });
 
+const USE_SSL = false;
+const USE_SIGNED_CERTS = USE_SSL && true;
+const USE_SELF_SIGNED_CERTS = USE_SSL && false;
+
+// * mkdir certs; cd certs
+// * mkcert web.telegram.org
+// * chmod 644 web.telegram.org-key.pem
+// * nano /etc/hosts
+// * 127.0.0.1 web.telegram.org
+const host = USE_SSL ? 'web.telegram.org' : 'localhost';
 const serverOptions: ServerOptions = {
-  // host: '192.168.95.17',
-  port: 8888,
+  host,
+  port: USE_SSL ? 443 : 8080,
   sourcemapIgnoreList(sourcePath, sourcemapPath) {
-    return sourcePath.includes('node_modules') || sourcePath.includes('logger');
-  }
+    return sourcePath.includes('node_modules') ||
+      sourcePath.includes('logger') ||
+      sourcePath.includes('eventListenerBase');
+  },
+  https: USE_SIGNED_CERTS ? {
+    key: path.join(certsDir, host + '-key.pem'),
+    cert: path.join(certsDir, host + '.pem')
+  } : undefined
 };
 
 const SOLID_SRC_PATH = 'src/solid/packages/solid';
@@ -47,16 +71,29 @@ const USE_SOLID_SRC = false;
 const SOLID_PATH = USE_SOLID_SRC ? SOLID_SRC_PATH : SOLID_BUILT_PATH;
 const USE_OWN_SOLID = existsSync(resolve(rootDir, SOLID_PATH));
 
-const USE_SSL = false;
-const USE_SSL_CERTS = false;
 const NO_MINIFY = false;
-const SSL_CONFIG: any = USE_SSL_CERTS && USE_SSL && {
-  name: '192.168.95.17',
-  certDir: './certs/'
-};
+const BASIC_SSL_CONFIG: Parameters<typeof basicSsl>[0] = USE_SELF_SIGNED_CERTS ? {
+  name: host,
+  certDir: certsDir
+} : undefined;
 
 const ADDITIONAL_ALIASES = {
-  'solid-transition-group': resolve(rootDir, 'src/vendor/solid-transition-group')
+  'solid-transition-group': resolve(rootDir, 'src/vendor/solid-transition-group'),
+  '@components': resolve(rootDir, 'src/components'),
+  '@helpers': resolve(rootDir, 'src/helpers'),
+  '@hooks': resolve(rootDir, 'src/hooks'),
+  '@stores': resolve(rootDir, 'src/stores'),
+  '@lib': resolve(rootDir, 'src/lib'),
+  '@appManagers': resolve(rootDir, 'src/lib/appManagers'),
+  '@richTextProcessor': resolve(rootDir, 'src/lib/richTextProcessor'),
+  '@environment': resolve(rootDir, 'src/environment'),
+  '@customEmoji': resolve(rootDir, 'src/lib/customEmoji'),
+  '@rlottie': resolve(rootDir, 'src/lib/rlottie'),
+  '@config': resolve(rootDir, 'src/config'),
+  '@vendor': resolve(rootDir, 'src/vendor'),
+  '@layer': resolve(rootDir, 'src/layer'),
+  '@types': resolve(rootDir, 'src/types'),
+  '@': resolve(rootDir, 'src')
 };
 
 if(USE_OWN_SOLID) {
@@ -81,7 +118,7 @@ export default defineConfig({
     }),
     solidPlugin(),
     handlebarsPlugin as any,
-    USE_SSL ? (basicSsl as any)(SSL_CONFIG) : undefined,
+    USE_SELF_SIGNED_CERTS ? basicSsl(BASIC_SSL_CONFIG) : undefined,
     visualizer({
       gzipSize: true,
       template: 'treemap'
@@ -104,13 +141,9 @@ export default defineConfig({
     //   exclude: ['**/*.d.ts', 'src/server/*.ts', 'store/src/**/server.ts']
     // },
     environment: 'jsdom',
-    testTransformMode: {web: ['.[jt]sx?$']},
     // otherwise, solid would be loaded twice:
     // deps: {registerNodeLoader: true},
-    // if you have few tests, try commenting one
-    // or both out to improve performance:
-    threads: false,
-    isolate: false,
+    pool: 'forks',
     globals: true,
     setupFiles: ['./src/tests/setup.ts']
   },

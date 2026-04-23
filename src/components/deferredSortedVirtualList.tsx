@@ -12,10 +12,10 @@ import {
   on
 } from 'solid-js';
 
-import LoadingDialogSkeleton, {LoadingDialogSkeletonSize} from './loadingDialogSkeleton';
-import VerticalVirtualList, {VerticalVirtualListItemProps} from './verticalVirtualList';
+import LoadingDialogSkeleton, {LoadingDialogSkeletonSize} from '@components/loadingDialogSkeleton';
+import VerticalVirtualList, {VerticalVirtualListItemProps} from '@components/verticalVirtualList';
 
-import styles from './deferredSortedVirtualList.module.scss';
+import styles from '@components/deferredSortedVirtualList.module.scss';
 
 
 type CreateDeferredSortedVirtualListArgs<T> = {
@@ -54,23 +54,26 @@ export const createDeferredSortedVirtualList = <T, >(args: CreateDeferredSortedV
   } = args;
 
   const [items, setItems] = createSignal<DeferredSortedVirtualListItem<T>[]>([]);
+  const [pinnedItems, setPinnedItems] = createSignal<DeferredSortedVirtualListItem<T>[]>([]);
   const [totalCount, setTotalCount] = createSignal(0);
   const [wasAtLeastOnceFetched, setWasAtLeastOnceFetched] = createSignal(false);
   const [revealIdx, setRevealIdx] = createSignal(Infinity);
+  const [blockedAnimationCount, setBlockedAnimationCount] = createSignal(0);
+  const blockedAnimationCallbacks = new Set();
 
   const [visibleItems, setVisibleItems] = createSignal(new Set<number>(), {equals: false});
 
   // const scrollableSize = useElementSize(() => scrollable);
 
   const sortedItems = createMemo(() => items().slice().sort((a, b) => sortWith(a.index, b.index)));
-  const itemsMap = createMemo(() => new Map(items().map(item => [item.id, item.value])));
+  const itemsMap = createMemo(() => new Map([...pinnedItems(), ...items()].map(item => [item.id, item.value])));
 
   const fullItems = createMemo(() => {
     // if(!wasAtLeastOnceFetched()) return new Array((scrollableSize.height + itemSize - 1) / itemSize | 0).fill(null);
 
-    const realItems = sortedItems();
+    const realItems = [...pinnedItems(), ...sortedItems()];
 
-    return new Array(Math.max(totalCount(), realItems.length))
+    return new Array(Math.max(totalCount() + pinnedItems().length, realItems.length))
     .fill(null)
     .map((_, idx) => realItems[idx] || null);
   });
@@ -99,8 +102,38 @@ export const createDeferredSortedVirtualList = <T, >(args: CreateDeferredSortedV
     ]);
   };
 
+  const addPinnedItems = (newItems: DeferredSortedVirtualListItem<T>[]) => {
+    if(!newItems.length) return;
+    const ids = new Set(newItems.map(item => item.id));
+    setPinnedItems(prev => [
+      ...prev.filter(item => !ids.has(item.id)),
+      ...newItems
+    ]);
+  };
+
+  /**
+   * Doesn't replace if already pinned
+   */
+  const ensurePinnedItems = (newItems: DeferredSortedVirtualListItem<T>[]) => {
+    if(!newItems.length) return;
+
+    setPinnedItems(prev => {
+      const ids = new Set(prev.map(item => item.id));
+      return [
+        ...prev,
+        ...newItems.filter(item => !ids.has(item.id))
+      ];
+    });
+  };
+
+  const removePinnedItem = (id: any) => {
+    setPinnedItems(prev => prev.filter(item => id !== item.id));
+  };
+
   const removeItem = (id: any) => {
+    const hadItem = itemsMap().has(id);
     setItems(prev => prev.filter(item => id !== item.id));
+    return hadItem;
   };
 
   const updateItem = (id: any, index: number) => {
@@ -122,9 +155,12 @@ export const createDeferredSortedVirtualList = <T, >(args: CreateDeferredSortedV
   const clear = () => {
     batch(() => {
       setItems([]);
+      setPinnedItems([]);
       setTotalCount(0);
       setWasAtLeastOnceFetched(false);
       setRevealIdx(Infinity);
+      blockedAnimationCallbacks.clear();
+      setBlockedAnimationCount(0);
     });
     // onListLengthChange?.();
   };
@@ -188,7 +224,7 @@ export const createDeferredSortedVirtualList = <T, >(args: CreateDeferredSortedV
   function checkShrink(visibleItems: Set<number>, itemsLength: number) {
     const maxVisible = Math.max(0, ...Array.from(visibleItems.values()));
 
-    const toKeep = maxVisible + EXTRA_ITEMS_TO_KEEP;
+    const toKeep = maxVisible - pinnedItems().length + EXTRA_ITEMS_TO_KEEP;
 
     if(itemsLength > toKeep) {
       batch(() => {
@@ -198,6 +234,20 @@ export const createDeferredSortedVirtualList = <T, >(args: CreateDeferredSortedV
       });
       onListShrinked();
     }
+  }
+
+  function blockAnimation() {
+    setBlockedAnimationCount(prev => prev + 1);
+
+    const ref = {};
+    blockedAnimationCallbacks.add(ref);
+
+    return () => {
+      if(blockedAnimationCallbacks.has(ref)) {
+        blockedAnimationCallbacks.delete(ref);
+        setBlockedAnimationCount(prev => Math.max(0, prev - 1));
+      }
+    };
   }
 
   let shrinkTimeout: number;
@@ -215,6 +265,7 @@ export const createDeferredSortedVirtualList = <T, >(args: CreateDeferredSortedV
     itemHeight={itemSize}
     list={fullItems()}
     forceHostHeight={!wasAtLeastOnceFetched()}
+    animate={blockedAnimationCount() === 0}
     ListItem={(props: VerticalVirtualListItemProps<DeferredSortedVirtualListItem<T> | null>) => {
       const isRevealed = createMemo(() => props.idx < revealIdx());
       const canShow = createMemo(() => props.item && isRevealed());
@@ -234,7 +285,7 @@ export const createDeferredSortedVirtualList = <T, >(args: CreateDeferredSortedV
       createEffect(() => {
         if(canShow()) return;
 
-        requestItemForIdx(props.idx, items().length);
+        requestItemForIdx(props.idx - pinnedItems().length, items().length);
       });
 
       createComputed(() => {
@@ -286,9 +337,14 @@ export const createDeferredSortedVirtualList = <T, >(args: CreateDeferredSortedV
     sortedItems,
     itemsLength,
     addItems,
+    addPinnedItems,
+    ensurePinnedItems,
+    removePinnedItem,
     updateItem,
     removeItem,
     setWasAtLeastOnceFetched,
+
+    blockAnimation,
 
     clear,
     has,

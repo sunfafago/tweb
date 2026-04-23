@@ -1,20 +1,19 @@
-import {Database} from '../config/databases';
-import DEBUG from '../config/debug';
-import toArray from '../helpers/array/toArray';
-import convertToUint8Array from '../helpers/bytes/convertToUint8Array';
-import {IS_WORKER} from '../helpers/context';
-import formatBytesPure from '../helpers/formatBytesPure';
-import asyncThrottle from '../helpers/schedulers/asyncThrottle';
+import {Database} from '@config/databases';
+import DEBUG from '@config/debug';
+import toArray from '@helpers/array/toArray';
+import convertToUint8Array from '@helpers/bytes/convertToUint8Array';
+import {IS_WORKER} from '@helpers/context';
+import formatBytesPure from '@helpers/formatBytesPure';
+import asyncThrottle from '@helpers/schedulers/asyncThrottle';
 
-import cryptoMessagePort from './crypto/cryptoMessagePort';
-import IDBStorage from './files/idb';
-import {logger, Logger} from './logger';
-import MTProtoMessagePort from './mtproto/mtprotoMessagePort';
-import EncryptionKeyStore from './passcode/keyStore';
+import cryptoMessagePort from '@lib/crypto/cryptoMessagePort';
+import IDBStorage from '@lib/files/idb';
+import {logger, Logger} from '@lib/logger';
+import MTProtoMessagePort from '@lib/mainWorker/mainMessagePort';
+import EncryptionKeyStore from '@lib/passcode/keyStore';
 
 
-export interface StorageLayer
-{
+export interface StorageLayer {
   save: (entryName: string | string[], value: any | any[]) => Promise<unknown>;
   get: <T>(entryNames: string[]) => Promise<T[]>;
   getAllEntries: () => Promise<IDBStorage.Entries>;
@@ -152,18 +151,15 @@ export default class EncryptedStorageLayer<T extends Database<any>> implements S
   );
 
   private async loadFromIDB() {
-    try
-    {
+    try {
       const storageData = await this.storage.get(EncryptedStorageLayer.STORAGE_KEY);
 
-      if(storageData === null) throw null;
+      if(storageData === null || storageData === undefined) throw null;
       if(!(storageData instanceof Uint8Array)) throw new Error('Stored data in encrypted store is not a Uint8Array'); // Should not happen but anyway))
 
       const decrypted = await EncryptedStorageLayer.decrypt(storageData);
       this.data = decrypted;
-    }
-    catch(error)
-    {
+    } catch(error) {
       if(error) this.log(error);
       this.data = {};
     }

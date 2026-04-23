@@ -5,9 +5,9 @@
  */
 
 import {BigInteger} from 'big-integer';
-import {bigIntFromBytes, bigIntToBytes} from '../../../helpers/bigInt/bigIntConversion';
-import addPadding from '../../../helpers/bytes/addPadding';
-import subtle from '../subtle';
+import {bigIntFromBytes, bigIntToBytes} from '@helpers/bigInt/bigIntConversion';
+import addPadding from '@helpers/bytes/addPadding';
+import subtle from '@lib/crypto/subtle';
 
 const COUNTER_LENGTH = 16;
 
@@ -54,7 +54,7 @@ export default class CTR {
       length: 128
     },
     this.cryptoKey,
-    data
+    data as BufferSource
     );
 
     return arrayBuffer;

@@ -5,14 +5,14 @@
  */
 
 import PopupElement, {addCancelButton, PopupButton, PopupOptions} from '.';
-import {i18n, LangPackKey} from '../../lib/langPack';
-import CheckboxField, {CheckboxFieldOptions} from '../checkboxField';
-import setInnerHTML from '../../helpers/dom/setInnerHTML';
-import wrapEmojiText from '../../lib/richTextProcessor/wrapEmojiText';
-import {avatarNew} from '../avatarNew';
-import toggleDisability from '../../helpers/dom/toggleDisability';
-import rootScope from '../../lib/rootScope';
-import InputField from '../inputField';
+import {i18n, LangPackKey} from '@lib/langPack';
+import CheckboxField, {CheckboxFieldOptions} from '@components/checkboxField';
+import setInnerHTML from '@helpers/dom/setInnerHTML';
+import wrapEmojiText from '@lib/richTextProcessor/wrapEmojiText';
+import {avatarNew} from '@components/avatarNew';
+import toggleDisability from '@helpers/dom/toggleDisability';
+import rootScope from '@lib/rootScope';
+import InputField from '@components/inputField';
 
 export type PopupPeerButton = Omit<PopupButton, 'callback'> & Partial<{callback: PopupPeerButtonCallback, onlyWithCheckbox: PopupPeerCheckboxOptions}>;
 export type PopupPeerButtonCallbackCheckboxes = Set<LangPackKey>;
@@ -36,6 +36,7 @@ export type PopupPeerOptions = Omit<PopupOptions, 'buttons' | 'title'> & Partial
 }>;
 export default class PopupPeer extends PopupElement {
   protected description: HTMLParagraphElement;
+  private inputField?: InputField;
 
   constructor(private className: string, options: PopupPeerOptions = {}) {
     super('popup-peer' + (className ? ' ' + className : ''), {
@@ -79,6 +80,7 @@ export default class PopupPeer extends PopupElement {
     }
 
     if(options.inputField) {
+      this.inputField = options.inputField;
       fragment.append(options.inputField.container);
       const button = options.buttons.find((button) => !button.isCancel);
       toggleDisability([button.element], !options.inputField.isValid());
@@ -127,5 +129,10 @@ export default class PopupPeer extends PopupElement {
     }
 
     this.header.after(fragment);
+  }
+
+  public show(animate?: boolean): void {
+    super.show(animate);
+    this.inputField?.input.focus();
   }
 }

@@ -4,25 +4,26 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import type lang from '../lang';
-import type langSign from '../langSign';
-import type { State } from '../config/state';
-import { MOUNT_CLASS_TO } from '../config/debug';
-import { HelpCountry, LangPackDifference, LangPackString } from '../layer';
-import App from '../config/app';
-import rootScope from './rootScope';
-import { IS_MOBILE } from '../environment/userAgent';
-import deepEqual from '../helpers/object/deepEqual';
-import safeAssign from '../helpers/object/safeAssign';
-import capitalizeFirstLetter from '../helpers/string/capitalizeFirstLetter';
-import matchUrlProtocol from './richTextProcessor/matchUrlProtocol';
-import wrapUrl from './richTextProcessor/wrapUrl';
-import { setDirection } from '../helpers/dom/setInnerHTML';
-import setBlankToAnchor from './richTextProcessor/setBlankToAnchor';
-import { createSignal } from 'solid-js';
-import commonStateStorage from './commonStateStorage';
-import Icon from '../components/icon';
-import {logger} from './logger';
+import type lang from '@/lang';
+import type langSign from '@/langSign';
+import type {State} from '@config/state';
+import {MOUNT_CLASS_TO} from '@config/debug';
+import {HelpCountry, LangPackDifference, LangPackString} from '@layer';
+import App from '@config/app';
+import rootScope from '@lib/rootScope';
+import {IS_MOBILE} from '@environment/userAgent';
+import deepEqual from '@helpers/object/deepEqual';
+import safeAssign from '@helpers/object/safeAssign';
+import capitalizeFirstLetter from '@helpers/string/capitalizeFirstLetter';
+import matchUrlProtocol from '@lib/richTextProcessor/matchUrlProtocol';
+import wrapUrl from '@lib/richTextProcessor/wrapUrl';
+import {setDirection} from '@helpers/dom/setInnerHTML';
+import setBlankToAnchor from '@lib/richTextProcessor/setBlankToAnchor';
+import {createSignal} from 'solid-js';
+import commonStateStorage from '@lib/commonStateStorage';
+import Icon from '@components/icon';
+import currencyStarIcon from '@components/currencyStarIcon';
+import {logger} from '@lib/logger';
 
 const log = logger('LANG-PACK');
 
@@ -88,11 +89,17 @@ namespace I18n {
   let pluralRules: Intl.PluralRules;
 
   let cacheLangPackPromise: Promise<LangPackDifference>;
-  export let lastRequestedLangCode: string;
-  export let lastRequestedNormalizedLangCode: string;
-  export let lastAppliedLangCode: string;
-  export let timeFormat: State['settings']['timeFormat'];
-  export let isRTL = false;
+  let lastRequestedLangCode: string;
+  let lastRequestedNormalizedLangCode: string;
+  let lastAppliedLangCode: string;
+  let timeFormat: State['settings']['timeFormat'];
+  let isRTL = false;
+
+  export function getLastRequestedLangCode() { return lastRequestedLangCode; }
+  export function getLastRequestedNormalizedLangCode() { return lastRequestedNormalizedLangCode; }
+  export function getLastAppliedLangCode() { return lastAppliedLangCode; }
+  export function getTimeFormat() { return timeFormat; }
+  export function getIsRTL() { return isRTL; }
 
   export const [langCodeNormalized, setLangCodeNormalized] = createSignal<TranslatableLanguageISO>();
 
@@ -117,7 +124,6 @@ namespace I18n {
   }
 
   export function getCacheLangPackAndApply() {
-    log.info('getCacheLangPackAndApply', 123123123);
     return cacheLangPackPromise ||= getCacheLangPack(true).then(async (langPack) => {
       // Always force load Chinese language pack to ensure it's applied correctly
       if (!langPack || langPack.lang_code !== 'zh') {
@@ -148,7 +154,8 @@ namespace I18n {
         amPmCache.pm = 'PM' // pmText.split(/\s/)[1];
       } catch (err) {
         console.error('cannot get am/pm', err);
-        amPmCache = { am: 'AM', pm: 'PM' };
+        amPmCache.am = 'AM';
+        amPmCache.pm = 'PM';
       }
     }
   }
@@ -399,13 +406,14 @@ namespace I18n {
     }
   }
 
-  const IconMap: Record<string, Icon> = {
+  const IconMap: Record<string, Icon | (() => HTMLElement)> = {
     '>': 'next',
     '<': 'previous'
+    // '⭐️': currencyStarIcon as () => HTMLElement
   };
 
   const iconsNoWhitespace = '><';
-  const iconsToReplace = Object.keys(IconMap).join('');
+  const iconsKeys = Object.keys(IconMap);
 
   export function superFormatter(input: string, args?: FormatterArguments, indexHolder?: {i: number}): Exclude<FormatterArgument, FormatterArgument[]>[] {
     if(!indexHolder) { // set starting index for arguments without order
@@ -417,7 +425,7 @@ namespace I18n {
     }
 
     const out: ReturnType<typeof superFormatter> = [];
-    const regExp = new RegExp(`(\\*\\*|__)(.+?)\\1|(\\n)|(\\[.+?\\]\\(.*?\\))|(?:^|\\s)([${iconsToReplace}])(?:$|\\s)|un\\d|%\\d\\$.|%\\S`, 'g');
+    const regExp = new RegExp(`(\\*\\*|__)(.+?)\\1|(\\n)|(\\[.+?\\]\\(.*?\\))|(?:^|\\s)(${iconsKeys.join('|')})(?:$|\\s)|un\\d|%\\d\\$.|%\\S`, 'g');
 
     let lastIndex = 0;
     input.replace(regExp, (match, p1: any, p2: any, p3: any, p4: string, p5: string, offset: number, string: string) => {
@@ -484,7 +492,15 @@ namespace I18n {
       } else if(p5) {
         const noWhitespace = iconsNoWhitespace.includes(p5);
         if(!noWhitespace && !match.startsWith(p5)) out.push(match[0]);
-        out.push(Icon(IconMap[p5], 'inline-icon'));
+        const className = 'inline-icon';
+        const i = IconMap[p5];
+        if(typeof(i) === 'function') {
+          const element = i();
+          element.classList.add(className);
+          out.push(element);
+        } else {
+          out.push(Icon(i, className));
+        }
         if(!noWhitespace && match.startsWith(p5)) out.push(match[match.length - 1]);
       } else if(args) {
         const index = match.replace(/\D/g, '');
@@ -507,9 +523,11 @@ namespace I18n {
     return out;
   }
 
-  export function format(key: LangPackKey, plain: true, args?: FormatterArguments): string;
-  export function format(key: LangPackKey, plain?: false, args?: FormatterArguments): ReturnType<typeof superFormatter>;
-  export function format(key: LangPackKey, plain = false, args?: FormatterArguments): ReturnType<typeof superFormatter> | string {
+  export function format<T extends boolean>(
+    key: LangPackKey,
+    plain?: T,
+    args?: FormatterArguments
+  ): T extends true ? string : ReturnType<typeof superFormatter> {
     const str = strings.get(key);
     let input: string;
     if (str) {
@@ -531,10 +549,10 @@ namespace I18n {
     }
 
     const result = superFormatter(input, args);
-    if (plain) { // * let's try a hack now... (don't want to replace []() entity)
-      return result.map((item) => item instanceof Node ? item.textContent : item).join('');
+    if(plain) { // * let's try a hack now... (don't want to replace []() entity)
+      return result.map((item) => item instanceof HTMLBRElement ? '\n' : (item instanceof Node ? item.textContent : item)).join('') as any;
     } else {
-      return result;
+      return result as any;
     }
 
     /* if(plain) {
@@ -669,7 +687,7 @@ namespace I18n {
     return dateTimeFormat;
   }
 
-  export let amPmCache = { am: 'AM', pm: 'PM' };
+  export const amPmCache = {am: 'AM', pm: 'PM'};
   export type IntlDateElementOptions = IntlElementBaseOptions & {
     date?: Date,
     options: Intl.DateTimeFormatOptions
@@ -698,13 +716,7 @@ namespace I18n {
         //   text += ':' + ('0' + this.date.getSeconds()).slice(-2);
         // }
 
-        if (timeFormat === 'h12') {
-          console.log('amPmCache', amPmCache)
-          debugger
-          // Ensure amPmCache is properly initialized
-          if (amPmCache.am === 'AM' && amPmCache.pm === 'PM') {
-            updateAmPm();
-          }
+        if(timeFormat === 'h12') {
           text += ' ' + (hours < 12 ? amPmCache.am : amPmCache.pm);
         }
       } else {
@@ -742,7 +754,7 @@ export { i18n_ };
 const _i18n = I18n._i18n;
 export { _i18n };
 
-export function joinElementsWith<T extends Node | string | Array<Node | string>>(
+export function joinElementsWith<T>(
   elements: T[],
   joiner: T | string | ((isLast: boolean) => T)
 ): T[] {
@@ -773,13 +785,13 @@ export async function handleUpdateLangPack(update: { difference: LangPackDiffere
   const { difference } = update;
 
   // Check if this update is for the current language
-  if (difference.lang_code !== I18n.lastRequestedLangCode) {
+  if(difference.lang_code !== I18n.getLastRequestedLangCode()) {
     return;
   }
 
   // Get current langPack from storage
   const storedLangPack = await I18n.getCacheLangPack();
-  if (storedLangPack?.lang_code !== difference.lang_code || storedLangPack.lang_code !== I18n.lastRequestedLangCode) {
+  if(storedLangPack?.lang_code !== difference.lang_code || storedLangPack.lang_code !== I18n.getLastRequestedLangCode()) {
     return;
   }
 
@@ -829,7 +841,7 @@ export function handleUpdateLangPackTooLong(update: { lang_code: string }) {
   const { lang_code } = update;
 
   // Check if this update is for the current language
-  if (lang_code !== I18n.lastRequestedLangCode) {
+  if(lang_code !== I18n.getLastRequestedLangCode()) {
     return;
   }
 
@@ -838,7 +850,7 @@ export function handleUpdateLangPackTooLong(update: { lang_code: string }) {
 }
 
 export function handleStateCleared() {
-  handleUpdateLangPackTooLong({ lang_code: I18n.lastRequestedLangCode });
+  handleUpdateLangPackTooLong({lang_code: I18n.getLastRequestedLangCode()});
 }
 
 export async function checkLangPackForUpdates() {

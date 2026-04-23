@@ -1,22 +1,22 @@
-import type {OpusDecodedAudio} from '../../vendor/opus';
-import type {GroupCallRtmpState} from '../appManagers/appGroupCallsManager';
-import type {VideoStreamInfo} from '../calls/videoStreamInfo';
-import {InputGroupCall} from '../../layer';
-import {DcId} from '../../types';
-import {RTMP_UNIFIED_CHANNEL_ID, RTMP_UNIFIED_QUALITY} from '../calls/constants';
-import {Fmp4InitChunkInfo, generateFmp4Init, generateFmp4Segment} from '../rtmp/fmp4';
-import ISOBoxer from '../rtmp/isoboxer';
-import {serviceMessagePort, log, invokeVoidAll} from './index.service';
+import type {OpusDecodedAudio} from '@vendor/opus';
+import type {GroupCallRtmpState} from '@appManagers/appGroupCallsManager';
+import type {VideoStreamInfo} from '@lib/calls/videoStreamInfo';
+import {InputGroupCall} from '@layer';
+import {DcId} from '@types';
+import {RTMP_UNIFIED_CHANNEL_ID, RTMP_UNIFIED_QUALITY} from '@lib/calls/constants';
+import {Fmp4InitChunkInfo, generateFmp4Init, generateFmp4Segment} from '@lib/rtmp/fmp4';
+import ISOBoxer from '@lib/rtmp/isoboxer';
+import {serviceMessagePort, log, invokeVoidAll} from '@lib/serviceWorker/index.service';
 import bigInt from 'big-integer';
-import {IS_SAFARI} from '../../environment/userAgent';
-import {OpusDecoder} from '../../vendor/opus';
-import deferredPromise from '../../helpers/cancellablePromise';
-import {logger} from '../logger';
-import assumeType from '../../helpers/assumeType';
-import clamp from '../../helpers/number/clamp';
-import pause from '../../helpers/schedulers/pause';
-import {ActiveAccountNumber} from '../accounts/types';
-import {getCurrentAccountFromURL} from '../accounts/getCurrentAccountFromURL';
+import {IS_SAFARI} from '@environment/userAgent';
+import {OpusDecoder} from '@vendor/opus';
+import deferredPromise from '@helpers/cancellablePromise';
+import {logger} from '@lib/logger';
+import assumeType from '@helpers/assumeType';
+import clamp from '@helpers/number/clamp';
+import pause from '@helpers/schedulers/pause';
+import {ActiveAccountNumber} from '@lib/accounts/types';
+import {getCurrentAccountFromURL} from '@lib/accounts/getCurrentAccountFromURL';
 
 const ctx = self as any as ServiceWorkerGlobalScope;
 
@@ -838,7 +838,7 @@ async function getRtmpFetchResponse(event: FetchEvent, params: string, search: s
         return new Response('', {status: 404});
       }
 
-      return new Response(init, {
+      return new Response(init as BodyInit, {
         headers: {
           'Content-Type': MP4_MIME
         }
@@ -855,7 +855,7 @@ async function getRtmpFetchResponse(event: FetchEvent, params: string, search: s
         return new Response('', {status: 404});
       }
 
-      return new Response(r, {
+      return new Response(r as BodyInit, {
         headers: {
           'Content-Type': MP4_MIME
         }

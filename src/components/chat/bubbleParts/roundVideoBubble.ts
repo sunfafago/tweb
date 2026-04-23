@@ -1,17 +1,18 @@
-import createElementFromMarkup from '../../../helpers/createElementFromMarkup';
-import anchorCallback from '../../../helpers/dom/anchorCallback';
-import {doubleRaf} from '../../../helpers/schedulers';
-import pause from '../../../helpers/schedulers/pause';
-import {Message} from '../../../layer';
-import {i18n} from '../../../lib/langPack';
-import rootScope from '../../../lib/rootScope';
+import {animateValue, simpleEasing} from '@helpers/animateValue';
+import createElementFromMarkup from '@helpers/createElementFromMarkup';
+import anchorCallback from '@helpers/dom/anchorCallback';
+import {lerp} from '@helpers/lerp';
+import {doubleRaf} from '@helpers/schedulers';
+import pause from '@helpers/schedulers/pause';
+import {Message} from '@layer';
+import {i18n} from '@lib/langPack';
+import rootScope from '@lib/rootScope';
+import appMediaPlaybackController, {MediaSearchContext} from '@components/appMediaPlaybackController';
+import Icon from '@components/icon';
+import PopupPremium from '@components/popups/premium';
+import {hideToast, toastNew} from '@components/toast';
+import wrapDocument from '@components/wrappers/document';
 
-import appMediaPlaybackController, {MediaSearchContext} from '../../appMediaPlaybackController';
-import Icon from '../../icon';
-import {animateValue, lerp, simpleEasing} from '../../mediaEditor/utils';
-import PopupPremium from '../../popups/premium';
-import {hideToast, toastNew} from '../../toast';
-import wrapDocument from '../../wrappers/document';
 
 type WrapRoundVideoBubbleOptions = {
   bubble: HTMLElement;
@@ -201,7 +202,7 @@ export function wrapRoundVideoBubble({
   async function showAudio() {
     if(!rootScope.getPremium()) {
       toastNew({
-        langPackKey: 'RoundVideoTranscription.PremiumAlert',
+        langPackKey: 'AudioAndVideoTranscription.PremiumAlert',
         langPackArguments: [anchorCallback(() => {
           hideToast();
           PopupPremium.show({feature: 'voice_to_text'});
@@ -396,6 +397,7 @@ export function wrapRoundVideoBubble({
 
     const audioElement = await wrapDocument({
       message: message as any,
+      middleware: bubble.middlewareHelper.get(),
       customAudioToTextButton: closeButton,
       shouldWrapAsVoice: true,
       globalMedia,

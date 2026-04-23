@@ -9,85 +9,93 @@
  * https://github.com/zhukov/webogram/blob/master/LICENSE
  */
 
-import type {ApiFileManager} from '../mtproto/apiFileManager';
-import type {MediaSize} from '../../helpers/mediaSize';
-import type {Progress} from './appDownloadManager';
-import type {VIDEO_MIME_TYPE} from '../../environment/videoMimeTypesSupport';
-import type {Mirrors} from '../mtproto/mtprotoworker';
-import LazyLoadQueueBase from '../../components/lazyLoadQueueBase';
-import deferredPromise, {CancellablePromise} from '../../helpers/cancellablePromise';
-import tsNow from '../../helpers/tsNow';
-import {randomLong} from '../../helpers/random';
-import {Chat, ChatFull, Dialog as MTDialog, DialogPeer, DocumentAttribute, InputMedia, InputMessage, InputPeerNotifySettings, InputSingleMedia, Message, MessageAction, MessageEntity, MessageFwdHeader, MessageMedia, MessageReplies, MessageReplyHeader, MessagesDialogs, MessagesFilter, MessagesMessages, MethodDeclMap, NotifyPeer, PeerNotifySettings, PhotoSize, SendMessageAction, Update, Photo, Updates, ReplyMarkup, InputPeer, InputPhoto, InputDocument, InputGeoPoint, WebPage, GeoPoint, ReportReason, MessagesGetDialogs, InputChannel, InputDialogPeer, ReactionCount, MessagePeerReaction, MessagesSearchCounter, Peer, MessageReactions, Document, InputFile, Reaction, ForumTopic as MTForumTopic, MessagesForumTopics, MessagesGetReplies, MessagesGetHistory, MessagesAffectedHistory, UrlAuthResult, MessagesTranscribedAudio, ReadParticipantDate, WebDocument, MessagesSearch, MessagesSearchGlobal, InputReplyTo, InputUser, MessagesSendMessage, MessagesSendMedia, MessagesGetSavedHistory, MessagesSavedDialogs, SavedDialog as MTSavedDialog, User, MissingInvitee, TextWithEntities, ChannelsSearchPosts, FactCheck, MessageExtendedMedia, SponsoredMessage, MessagesSponsoredMessages, InputGroupCall, TodoItem, TodoCompletion} from '../../layer';
-import {ArgumentTypes, InvokeApiOptions, Modify} from '../../types';
-import {logger, LogTypes} from '../logger';
-import {ReferenceContext} from '../mtproto/referenceDatabase';
-import {AnyDialog, FilterType, GLOBAL_FOLDER_ID} from '../storages/dialogs';
-import {ChatRights} from './appChatsManager';
-import {MyDocument} from './appDocsManager';
-import {MyPhoto} from './appPhotosManager';
-import DEBUG from '../../config/debug';
-import SlicedArray, {Slice, SliceEnd} from '../../helpers/slicedArray';
-import {FOLDER_ID_ALL, FOLDER_ID_ARCHIVE, GENERAL_TOPIC_ID, HIDDEN_PEER_ID, MESSAGES_ALBUM_MAX_SIZE, MUTE_UNTIL, NULL_PEER_ID, REAL_FOLDERS, REAL_FOLDER_ID, REPLIES_HIDDEN_CHANNEL_ID, REPLIES_PEER_ID, SERVICE_PEER_ID, TEST_NO_SAVED, THUMB_TYPE_FULL} from '../mtproto/mtproto_config';
-import {getMiddleware} from '../../helpers/middleware';
-import assumeType from '../../helpers/assumeType';
-import copy from '../../helpers/object/copy';
-import getObjectKeysAndSort from '../../helpers/object/getObjectKeysAndSort';
-import forEachReverse from '../../helpers/array/forEachReverse';
-import deepEqual from '../../helpers/object/deepEqual';
-import splitStringByLength from '../../helpers/string/splitStringByLength';
-import debounce from '../../helpers/schedulers/debounce';
-import {AppManager} from './manager';
-import getPhotoMediaInput from './utils/photos/getPhotoMediaInput';
-import parseMarkdown from '../richTextProcessor/parseMarkdown';
-import getServerMessageId from './utils/messageId/getServerMessageId';
-import filterMessagesByInputFilter from './utils/messages/filterMessagesByInputFilter';
-import ctx from '../../environment/ctx';
-import {getEnvironment} from '../../environment/utils';
-import getDialogIndex from './utils/dialogs/getDialogIndex';
-import defineNotNumerableProperties from '../../helpers/object/defineNotNumerableProperties';
-import getDocumentMediaInput from './utils/docs/getDocumentMediaInput';
-import getFileNameForUpload from '../../helpers/getFileNameForUpload';
-import noop from '../../helpers/noop';
-import appTabsManager from './appTabsManager';
-import MTProtoMessagePort from '../mtproto/mtprotoMessagePort';
-import getGroupedText from './utils/messages/getGroupedText';
-import pause from '../../helpers/schedulers/pause';
-import makeError from '../../helpers/makeError';
-import getStickerEffectThumb from './utils/stickers/getStickerEffectThumb';
-import getDocumentInput from './utils/docs/getDocumentInput';
-import reactionsEqual from './utils/reactions/reactionsEqual';
-import getPeerActiveUsernames from './utils/peers/getPeerActiveUsernames';
-import {BroadcastEvents} from '../rootScope';
-import setBooleanFlag from '../../helpers/object/setBooleanFlag';
-import getMessageThreadId from './utils/messages/getMessageThreadId';
-import callbackify from '../../helpers/callbackify';
-import wrapMessageEntities from '../richTextProcessor/wrapMessageEntities';
-import isLegacyMessageId from './utils/messageId/isLegacyMessageId';
-import {joinDeepPath} from '../../helpers/object/setDeepProperty';
-import insertInDescendSortedArray from '../../helpers/array/insertInDescendSortedArray';
-import {LOCAL_ENTITIES} from '../richTextProcessor';
-import {isDialog, isSavedDialog, isForumTopic, isMonoforumDialog} from './utils/dialogs/isDialog';
-import getDialogKey from './utils/dialogs/getDialogKey';
-import getHistoryStorageKey, {getSearchStorageFilterKey} from './utils/messages/getHistoryStorageKey';
-import {ApiLimitType} from '../mtproto/api_methods';
-import getFwdFromName from './utils/messages/getFwdFromName';
-import filterUnique from '../../helpers/array/filterUnique';
-import getSearchType from './utils/messages/getSearchType';
-import getMainGroupedMessage from './utils/messages/getMainGroupedMessage';
-import getUnreadReactions from './utils/messages/getUnreadReactions';
-import isMentionUnread from './utils/messages/isMentionUnread';
-import canMessageHaveFactCheck from './utils/messages/canMessageHaveFactCheck';
-import commonStateStorage from '../commonStateStorage';
-import PaidMessagesQueue from './utils/messages/paidMessagesQueue';
-import type {ConfirmedPaymentResult} from '../../components/chat/paidMessagesInterceptor';
-import RepayRequestHandler, {RepayRequest} from '../mtproto/repayRequestHandler';
-import canVideoBeAnimated from './utils/docs/canVideoBeAnimated';
-import getPhotoInput from './utils/photos/getPhotoInput';
-import {BatchProcessor} from '../../helpers/sortedList';
-import {increment, MonoforumDialog} from '../storages/monoforumDialogs';
-import formatStarsAmount from './utils/payments/formatStarsAmount';
-import {makeMessageMediaInputForSuggestedPost} from './utils/messages/makeMessageMediaInput';
+import type {ApiFileManager} from '@appManagers/apiFileManager';
+import type {MediaSize} from '@helpers/mediaSize';
+import type {Progress} from '@lib/appDownloadManager';
+import type {VIDEO_MIME_TYPE} from '@environment/videoMimeTypesSupport';
+import type {Mirrors} from '@lib/apiManagerProxy';
+import LazyLoadQueueBase from '@components/lazyLoadQueueBase';
+import deferredPromise, {CancellablePromise} from '@helpers/cancellablePromise';
+import tsNow from '@helpers/tsNow';
+import {nextRandomUint, randomLong} from '@helpers/random';
+import {Chat, ChatFull, Dialog as MTDialog, DialogPeer, DocumentAttribute, InputMedia, InputMessage, InputPeerNotifySettings, InputSingleMedia, Message, MessageAction, MessageEntity, MessageFwdHeader, MessageMedia, MessageReplies, MessageReplyHeader, MessagesDialogs, MessagesFilter, MessagesMessages, MethodDeclMap, NotifyPeer, PeerNotifySettings, PhotoSize, SendMessageAction, Update, Photo, Updates, ReplyMarkup, InputPeer, InputPhoto, InputDocument, InputGeoPoint, WebPage, GeoPoint, ReportReason, MessagesGetDialogs, InputChannel, InputDialogPeer, ReactionCount, MessagePeerReaction, MessagesSearchCounter, Peer, MessageReactions, Document, InputFile, Reaction, ForumTopic as MTForumTopic, MessagesForumTopics, MessagesGetReplies, MessagesGetHistory, MessagesAffectedHistory, UrlAuthResult, MessagesTranscribedAudio, ReadParticipantDate, WebDocument, MessagesSearch, MessagesSearchGlobal, InputReplyTo, InputUser, MessagesSendMessage, MessagesSendMedia, MessagesGetSavedHistory, MessagesSavedDialogs, SavedDialog as MTSavedDialog, User, MissingInvitee, TextWithEntities, ChannelsSearchPosts, FactCheck, MessageExtendedMedia, SponsoredMessage, MessagesSponsoredMessages, InputGroupCall, TodoItem, TodoCompletion, SearchPostsFlood, UserFull} from '@layer';
+import {ArgumentTypes, InvokeApiOptions, Modify} from '@types';
+import {logger, LogTypes} from '@lib/logger';
+import {ReferenceContext} from '@lib/storages/references';
+import {AnyDialog, FilterType, GLOBAL_FOLDER_ID} from '@lib/storages/dialogs';
+import {ChatRights} from '@appManagers/appChatsManager';
+import {MyDocument} from '@appManagers/appDocsManager';
+import {MyPhoto} from '@appManagers/appPhotosManager';
+import DEBUG from '@config/debug';
+import SlicedArray, {Slice, SliceEnd} from '@helpers/slicedArray';
+import {FOLDER_ID_ALL, FOLDER_ID_ARCHIVE, GENERAL_TOPIC_ID, HIDDEN_PEER_ID, MESSAGES_ALBUM_MAX_SIZE, MUTE_UNTIL, NULL_PEER_ID, REAL_FOLDERS, REAL_FOLDER_ID, REPLIES_HIDDEN_CHANNEL_ID, REPLIES_PEER_ID, SERVICE_PEER_ID, TEST_NO_SAVED, THUMB_TYPE_FULL, TOPIC_COLORS} from '@appManagers/constants';
+import {getMiddleware} from '@helpers/middleware';
+import assumeType from '@helpers/assumeType';
+import copy from '@helpers/object/copy';
+import getObjectKeysAndSort from '@helpers/object/getObjectKeysAndSort';
+import forEachReverse from '@helpers/array/forEachReverse';
+import deepEqual from '@helpers/object/deepEqual';
+import splitStringByLength from '@helpers/string/splitStringByLength';
+import debounce from '@helpers/schedulers/debounce';
+import {AppManager} from '@appManagers/manager';
+import getPhotoMediaInput from '@appManagers/utils/photos/getPhotoMediaInput';
+import parseMarkdown from '@lib/richTextProcessor/parseMarkdown';
+import getServerMessageId from '@appManagers/utils/messageId/getServerMessageId';
+import filterMessagesByInputFilter from '@appManagers/utils/messages/filterMessagesByInputFilter';
+import ctx from '@environment/ctx';
+import {getEnvironment} from '@environment/utils';
+import getDialogIndex from '@appManagers/utils/dialogs/getDialogIndex';
+import defineNotNumerableProperties from '@helpers/object/defineNotNumerableProperties';
+import getDocumentMediaInput from '@appManagers/utils/docs/getDocumentMediaInput';
+import getFileNameForUpload from '@helpers/getFileNameForUpload';
+import noop from '@helpers/noop';
+import appTabsManager from '@appManagers/appTabsManager';
+import MTProtoMessagePort from '@lib/mainWorker/mainMessagePort';
+import getGroupedText from '@appManagers/utils/messages/getGroupedText';
+import pause from '@helpers/schedulers/pause';
+import makeError from '@helpers/makeError';
+import getStickerEffectThumb from '@appManagers/utils/stickers/getStickerEffectThumb';
+import getDocumentInput from '@appManagers/utils/docs/getDocumentInput';
+import reactionsEqual from '@appManagers/utils/reactions/reactionsEqual';
+import getPeerActiveUsernames from '@appManagers/utils/peers/getPeerActiveUsernames';
+import {BroadcastEvents} from '@lib/rootScope';
+import setBooleanFlag from '@helpers/object/setBooleanFlag';
+import getMessageThreadId from '@appManagers/utils/messages/getMessageThreadId';
+import callbackify from '@helpers/callbackify';
+import wrapMessageEntities from '@lib/richTextProcessor/wrapMessageEntities';
+import isLegacyMessageId from '@appManagers/utils/messageId/isLegacyMessageId';
+import {joinDeepPath} from '@helpers/object/setDeepProperty';
+import insertInDescendSortedArray from '@helpers/array/insertInDescendSortedArray';
+import {LOCAL_ENTITIES} from '@lib/richTextProcessor';
+import {isDialog, isSavedDialog, isForumTopic, isMonoforumDialog} from '@appManagers/utils/dialogs/isDialog';
+import getDialogKey from '@appManagers/utils/dialogs/getDialogKey';
+import getHistoryStorageKey, {getSearchStorageFilterKey} from '@appManagers/utils/messages/getHistoryStorageKey';
+import {ApiLimitType} from '@appManagers/apiManagerMethods';
+import getFwdFromName from '@appManagers/utils/messages/getFwdFromName';
+import filterUnique from '@helpers/array/filterUnique';
+import getSearchType from '@appManagers/utils/messages/getSearchType';
+import getMainGroupedMessage from '@appManagers/utils/messages/getMainGroupedMessage';
+import getUnreadReactions from '@appManagers/utils/messages/getUnreadReactions';
+import isMentionUnread from '@appManagers/utils/messages/isMentionUnread';
+import canMessageHaveFactCheck from '@appManagers/utils/messages/canMessageHaveFactCheck';
+import commonStateStorage from '@lib/commonStateStorage';
+import PaidMessagesQueue from '@appManagers/utils/messages/paidMessagesQueue';
+import type {ConfirmedPaymentResult} from '@components/chat/paidMessagesInterceptor';
+import RepayRequestHandler, {RepayRequest} from '@appManagers/utils/repayRequestHandler';
+import getPhotoInput from '@appManagers/utils/photos/getPhotoInput';
+import {BatchProcessor} from '@helpers/sortedList';
+import {increment, MonoforumDialog} from '@lib/storages/monoforumDialogs';
+import formatStarsAmount from '@appManagers/utils/payments/formatStarsAmount';
+import {makeMessageMediaInputForSuggestedPost} from '@appManagers/utils/messages/makeMessageMediaInput';
+import createObservedState, {wrapObject} from '@helpers/createObservedState';
+import createHistoryStorage, {createHistoryStorageSearchSlicedArray} from '@appManagers/utils/messages/createHistoryStorage';
+import {isTempId} from '@appManagers/utils/messages/isTempId';
+import fitSymbols from '@helpers/string/fitSymbols';
+import isObject from '@helpers/object/isObject';
+import pickKeys from '@helpers/object/pickKeys';
+import namedPromises from '@helpers/namedPromises';
+import callbackifyAll from '@helpers/callbackifyAll';
+import {createBotforumTopicFromAction} from './utils/dialogs/createBotforumTopicFromAction';
 
 // console.trace('include');
 // TODO: если удалить диалог находясь в папке, то он не удалится из папки и будет виден в настройках
@@ -96,8 +104,11 @@ const DO_NOT_READ_HISTORY = false;
 const DO_NOT_SEND_MESSAGES = false;
 const SEND_MESSAGES_TO_PAID_QUEUE = false;
 const DO_NOT_DELETE_MESSAGES = false;
+const FETCH_TARGETED_MESSAGE = false;
 
 const GLOBAL_HISTORY_PEER_ID = NULL_PEER_ID;
+const TOPIC_TITLE_MAX_LENGTH = 16;
+const TOPIC_TITLE_DEFAULT = 'New Chat';
 
 export const SUGGESTED_POST_MIN_THRESHOLD_SECONDS = 60; // avoid last minute suggests, or if the user was thinking a lot before clicking send
 
@@ -124,18 +135,21 @@ export type SendFileDetails = {
     size: MediaSize
   },
   strippedBytes: PhotoSize.photoStrippedSize['bytes'],
-  spoiler: boolean
+  spoiler: boolean,
+  /**
+   * If it's a GIF (looped)
+   */
+  isAnimated: boolean,
 }>;
 
 export type HistoryStorageKey = `${HistoryStorage['type']}_${PeerId}` | `replies_${PeerId}_${number}` | `search_${PeerId}_${SearchStorageFilterKey}_${number}`;
 export type HistoryStorage = {
   _maxId: number,
-  _count: number | null,
   count: number | null,
-  history: SlicedArray<number>,
+  history?: SlicedArray<number>,
   searchHistory?: SlicedArray<`${PeerId}_${number}`>,
 
-  maxId?: number,
+  readonly maxId?: number,
   readPromise?: Promise<void>,
   readMaxId?: number,
   readOutboxMaxId?: number,
@@ -144,7 +158,7 @@ export type HistoryStorage = {
   maxOutId?: number,
   replyMarkup?: Exclude<ReplyMarkup, ReplyMarkup.replyInlineMarkup>,
 
-  type: 'history' | 'replies' | 'search',
+  readonly type: 'history' | 'replies' | 'search',
   key: HistoryStorageKey,
   wasFetched?: boolean;
 
@@ -164,7 +178,8 @@ export type HistoryResult = {
   isEnd: ReturnType<Slice<number>['getEnds']>,
   offsetIdOffset?: number,
   nextRate?: number,
-  messages?: MyMessage[]
+  messages?: MyMessage[],
+  flood?: SearchPostsFlood
 };
 
 export type Dialog = MTDialog.dialog;
@@ -192,7 +207,7 @@ export type PinnedStorage = Partial<{
   maxId: number
 }>;
 export type MessagesStorage = Map<number, Message.message | Message.messageService> & {peerId: PeerId, type: MessagesStorageType, key: MessagesStorageKey};
-export type MessagesStorageType = 'scheduled' | 'history' | 'grouped';
+export type MessagesStorageType = 'scheduled' | 'history' | 'grouped' | 'logs';
 export type MessagesStorageKey = `${PeerId}_${MessagesStorageType}`;
 
 export type MyMessageActionType = Message.messageService['action']['_'];
@@ -222,6 +237,17 @@ const processAfter = (cb: () => void) => {
   cb();
 };
 
+const passHistoryStorageProperties: Set<keyof HistoryStorage> = new Set([
+  '_maxId',
+  'count',
+  'readMaxId',
+  'readOutboxMaxId',
+  'maxOutId',
+  'replyMarkup',
+  'key',
+  'wasFetched'
+]);
+
 export type SuggestedPostPayload = {
   stars?: number;
   timestamp?: number;
@@ -240,6 +266,7 @@ export type MessageSendingParams = Partial<{
   replyTo: InputReplyTo,
   replyToMonoforumPeerId: PeerId,
   scheduleDate: number,
+  scheduleRepeatPeriod: number,
   silent: boolean,
   sendAsPeerId: number,
   updateStickersetOrder: boolean,
@@ -281,6 +308,8 @@ export type RequestHistoryOptions = {
   needRealOffsetIdOffset?: boolean,
   fromPeerId?: PeerId,
   isPublicHashtag?: boolean,
+  isPublicPosts?: boolean,
+  allowStars?: Long,
   isCacheableSearch?: boolean,
   hashtagType?: 'this' | 'my' | 'public',
   chatType?: 'all' | 'users' | 'groups' | 'channels',
@@ -351,12 +380,103 @@ type SendContactArgs = {
   confirmedPaymentResult?: ConfirmedPaymentResult;
 };
 
+type GenerateTopicCreatedServiceMessageArgs = {
+  peerId: PeerId;
+  title: string;
+};
+
+type CreateBotforumTopicArgs = {
+  peerId: PeerId;
+  title: string;
+  tempId: number;
+  randomId: string;
+  message: ReturnType<AppMessagesManager['generateTopicCreatedServiceMessage']>;
+  iconColor?: number;
+};
+
+type GetPendingOrCreateBotforumTopicArgs = {
+  peerId: PeerId;
+  title?: string;
+};
+
+type GenerateTypingBotforumMessageArgs = {
+  peerId: PeerId;
+  threadId: number;
+  action: SendMessageAction.sendMessageTextDraftAction;
+};
+
+type SendFileArgs = MessageSendingParams & SendFileDetails & Partial<{
+  isRoundMessage: boolean,
+  isVoiceMessage: boolean,
+  isGroupedItem: boolean,
+  isMedia: boolean,
+
+  groupId: string,
+  caption: string,
+  entities: MessageEntity[],
+  background: boolean,
+  clearDraft: boolean,
+  noSound: boolean,
+
+  waveform: Uint8Array,
+
+  stars: number,
+  groupedMessage: Message.message,
+  useTempMediaId: boolean,
+
+  // ! only for internal use
+  processAfter?: typeof processAfter
+}>;
+
+type MakeDocumentAndMetaForSendingFileArgs = Pick<SendFileArgs,
+  | 'file'
+  | 'strippedBytes'
+  | 'entities'
+  | 'useTempMediaId'
+  | 'isVoiceMessage'
+  | 'width'
+  | 'height'
+  | 'objectURL'
+  | 'waveform'
+  | 'duration'
+  | 'isMedia'
+  | 'isRoundMessage'
+  | 'noSound'
+  | 'thumb'
+  | 'isAnimated'
+> & {
+  mediaTempId: number;
+  isDocument: boolean;
+};
+
+type EditMessageMediaArgs = {
+  message: Message.message;
+  text: string;
+  sendFileDetails: SendFileDetails;
+  options?: Partial<{
+    newMedia: InputMedia;
+    scheduleDate: number;
+    entities: MessageEntity[];
+    isMedia: boolean;
+  }> & Partial<Pick<Parameters<AppMessagesManager['sendText']>[0], 'webPage' | 'webPageOptions' | 'noWebPage' | 'invertMedia'>>
+};
+
+type InvokeEditMessageMediaArgs = {
+  message: Message.message;
+  inputMedia: InputMedia;
+  entities?: MessageEntity[];
+  scheduleDate?: number;
+  invertMedia?: boolean;
+};
+
 type MessageContext = {searchStorages?: Set<HistoryStorage>};
 
 export class AppMessagesManager extends AppManager {
   private messagesStorageByPeerId: {[peerId: string]: MessagesStorage};
   private groupedMessagesStorage: {[groupId: string]: MessagesStorage}; // will be used for albums
   private scheduledMessagesStorage: {[peerId: PeerId]: MessagesStorage};
+  private logsMessagesStorage: {[peerId: PeerId]: MessagesStorage}; // messages extracted from admin logs
+
   private historiesStorage: {
     [peerId: PeerId]: HistoryStorage
   };
@@ -395,6 +515,13 @@ export class AppMessagesManager extends AppManager {
     }
   } = {};
 
+  private pendingNewBotforumTopics: Record<PeerId, {
+    newId?: number;
+    tempId: number;
+    beforeMessageSendCallbacks: Array<() => void>;
+    messageSendCallbacks: Array<() => void>;
+  }> = {};
+
   private sendSmthLazyLoadQueue = new LazyLoadQueueBase(10);
 
   private needSingleMessages: Map<PeerId, Map<number, CancellablePromise<Message.message | Message.messageService>>> = new Map();
@@ -421,8 +548,6 @@ export class AppMessagesManager extends AppManager {
 
   private reloadConversationsPromise: Promise<void>;
   private reloadConversationsPeers: Map<PeerId, {inputDialogPeer: InputDialogPeer, promise: CancellablePromise<Dialog>, sentRequest?: boolean}> = new Map();
-
-  public log = logger('MESSAGES', LogTypes.Error | LogTypes.Debug | LogTypes.Log | LogTypes.Warn);
 
   private groupedTempId = 0;
   private mediaTempId = 0;
@@ -456,6 +581,20 @@ export class AppMessagesManager extends AppManager {
   private paidMessagesQueue = new PaidMessagesQueue;
 
   private repayRequestHandler: RepayRequestHandler;
+
+  private typingBotforumMessages: Map<PeerId, Set<string>> = new Map();
+
+  private pendingEditingMessages: Map<number, {
+    canceled?: boolean;
+    mediaTempId: number;
+    originalMessage: Message.message;
+  }> = new Map();
+
+  constructor() {
+    super();
+    this.name = 'MESSAGES';
+    this.logTypes = LogTypes.Error | LogTypes.Debug | LogTypes.Log | LogTypes.Warn;
+  }
 
   protected after() {
     this.clear(true);
@@ -634,6 +773,12 @@ export class AppMessagesManager extends AppManager {
       }
     });
 
+    this.rootScope.addEventListener('dialog_drop', (dialog) => {
+      if(isDialog(dialog)) {
+        this.flushStoragesByPeerId(dialog.peerId);
+      }
+    });
+
     this.batchUpdatesDebounced = debounce(() => {
       for(const event in this.batchUpdates) {
         const details = this.batchUpdates[event as keyof BatchUpdates];
@@ -676,6 +821,7 @@ export class AppMessagesManager extends AppManager {
     this.messagesStorageByPeerId = {};
     this.groupedMessagesStorage = {};
     this.scheduledMessagesStorage = {};
+    this.logsMessagesStorage = {};
     this.historiesStorage = {};
     this.threadsStorage = {};
     this.searchesStorage = {};
@@ -684,6 +830,8 @@ export class AppMessagesManager extends AppManager {
     this.threadsToReplies = {};
     this.references = {};
     this.waitingTranscriptions = new Map();
+    this.pendingNewBotforumTopics = {};
+    this.pendingEditingMessages = new Map();
 
     this.dialogsStorage && this.dialogsStorage.clear(init);
     this.filtersStorage && this.filtersStorage.clear(init);
@@ -722,6 +870,7 @@ export class AppMessagesManager extends AppManager {
     options: Partial<{
       newMedia: InputMedia,
       scheduleDate: number,
+      scheduleRepeatPeriod: number,
       entities: MessageEntity[]
     }> & Partial<Pick<Parameters<AppMessagesManager['sendText']>[0], 'webPage' | 'webPageOptions' | 'noWebPage' | 'invertMedia'>> = {}
   ): Promise<void> {
@@ -756,6 +905,7 @@ export class AppMessagesManager extends AppManager {
       entities: sendEntities,
       no_webpage: options.noWebPage,
       schedule_date,
+      schedule_repeat_period: options.scheduleRepeatPeriod || undefined,
       invert_media: options.invertMedia,
       ...(inputMediaWebPage ? {media: inputMediaWebPage} : {})
     }).then((updates) => {
@@ -774,6 +924,291 @@ export class AppMessagesManager extends AppManager {
 
       throw error;
     });
+  }
+
+  public async editMessageMedia({message, text, sendFileDetails, options = {}}: EditMessageMediaArgs) {
+    let {file} = sendFileDetails;
+    const {peerId} = message;
+
+    const originalMessage = structuredClone(message);
+
+    const isDocument = !(file instanceof File) && !(file instanceof Blob);
+    if(isDocument) {
+      file = this.appDocsManager.getDoc((file as MyDocument).id) || file;
+    }
+
+    let caption = text || '';
+
+    let entities = options.entities || [];
+    if(caption) {
+      [caption, entities] = parseMarkdown(caption, entities);
+    }
+
+    const mediaTempId = this.mediaTempId++;
+
+    const {photo, document, attachType, actionName, fileType, apiFileName, attributes} = this.makeDocumentAndMetaForSendingFile({
+      file,
+      isDocument,
+      mediaTempId,
+      entities,
+      isMedia: options.isMedia,
+      ...pickKeys(sendFileDetails, [
+        'strippedBytes',
+        'width',
+        'height',
+        'objectURL',
+        'duration',
+        'thumb',
+        'isAnimated'
+      ])
+    });
+
+    const sentDeferred = deferredPromise<InputMedia>();
+
+    const uploadingFileName = !isDocument ? getFileNameForUpload(file as File | Blob) : undefined;
+    if(uploadingFileName) {
+      this.uploadFilePromises[uploadingFileName] = sentDeferred;
+    }
+
+    const media: MessageMedia = isDocument ? undefined : {
+      _: photo ? 'messageMediaPhoto' : 'messageMediaDocument',
+      pFlags: {},
+      // preloader,
+      photo,
+      document
+    };
+
+
+    if(options.invertMedia) {
+      message.pFlags.invert_media = true;
+    }
+
+    message.entities = entities;
+    message.message = caption;
+    message.media = isDocument ? {
+      _: 'messageMediaDocument',
+      pFlags: {},
+      document: file
+    } as MessageMedia.messageMediaDocument : media;
+    message.uploadingFileName = [uploadingFileName];
+
+    let
+      uploaded = false,
+      uploadPromise: ReturnType<ApiFileManager['upload']> = null
+    ;
+
+    const upload = () => {
+      if(isDocument) {
+        const inputMedia: InputMedia = {
+          _: 'inputMediaDocument',
+          id: getDocumentInput(file as MyDocument),
+          pFlags: {}
+        };
+
+        sentDeferred.resolve(inputMedia);
+      } else if(file instanceof File || file instanceof Blob) {
+        const load = () => {
+          if(!uploaded || message?.error) {
+            uploaded = false;
+
+            uploadPromise = this.apiFileManager.upload({file, fileName: uploadingFileName});
+            uploadPromise.catch((err) => {
+              if(uploaded) {
+                return;
+              }
+
+              this.log('cancelling upload', media);
+
+              // this.setTyping(peerId, {_: 'sendMessageCancelAction'}, undefined, options.threadId);
+              sentDeferred.reject(err);
+            });
+
+            uploadPromise.addNotifyListener((progress: Progress) => {
+              /* if(DEBUG) {
+                this.log('upload progress', progress);
+              } */
+
+              const percents = Math.max(1, Math.floor(100 * progress.done / progress.total));
+              // if(actionName) {
+              //   this.setTyping(peerId, {_: actionName, progress: percents | 0}, undefined, options.threadId);
+              // }
+              sentDeferred.notifyAll(progress);
+            });
+
+            sentDeferred.notifyAll({done: 0, total: file.size});
+          }
+
+          let thumbUploadPromise: ReturnType<typeof this.uploadThumbAndCover>;
+          if(attachType === 'video' && sendFileDetails.objectURL && sendFileDetails.thumb?.blob) {
+            thumbUploadPromise = this.uploadThumbAndCover({
+              blob: sendFileDetails.thumb.blob,
+              isCover: !!sendFileDetails.thumb.isCover,
+              peer: this.appPeersManager.getInputPeerById(peerId)
+            });
+          }
+
+          uploadPromise && uploadPromise.then(async(inputFile) => {
+            /* if(DEBUG) {
+              this.log('appMessagesManager: sendFile uploaded:', inputFile);
+            } */
+
+            (inputFile as InputFile.inputFile).name = apiFileName;
+            uploaded = true;
+            let inputMedia: InputMedia;
+            switch(attachType) {
+              case 'photo':
+                inputMedia = {
+                  _: 'inputMediaUploadedPhoto',
+                  file: inputFile,
+                  pFlags: {
+                    spoiler: sendFileDetails.spoiler || undefined
+                  }
+                };
+                break;
+
+              default:
+                inputMedia = {
+                  _: 'inputMediaUploadedDocument',
+                  file: inputFile,
+                  mime_type: fileType,
+                  pFlags: {
+                    force_file: actionName === 'sendMessageUploadDocumentAction' || undefined,
+                    spoiler: sendFileDetails.spoiler || undefined
+                    // nosound_video: options.noSound ? true : undefined
+                  },
+                  attributes
+                };
+            }
+
+            // if(options.stars && !options.isGroupedItem) {
+            //   inputMedia = {
+            //     _: 'inputMediaPaidMedia',
+            //     extended_media: [inputMedia],
+            //     stars_amount: '' + options.stars
+            //   };
+            // }
+
+            if(thumbUploadPromise) {
+              try {
+                const thumbUploadResult = await thumbUploadPromise;
+                assumeType<InputMedia.inputMediaUploadedDocument>(inputMedia);
+
+                inputMedia.thumb = thumbUploadResult.file;
+                inputMedia.video_cover = thumbUploadResult.coverPhoto;
+              } catch(err) {
+                this.log.error('sendFile thumb upload error:', err);
+              }
+            }
+
+            sentDeferred.resolve(inputMedia);
+          }, (error: ApiError) => {
+            this.revertMessageEdit(message.mid);
+          });
+
+          return sentDeferred;
+        };
+
+        load();
+        // if(options.isGroupedItem) {
+        // } else {
+        //   this.sendSmthLazyLoadQueue.push({
+        //     load
+        //   });
+        // }
+      }
+
+      return sentDeferred;
+    };
+
+    upload();
+
+    this.runTempUpdateForMessageEdit(message);
+
+    // Needs to be after the updateEditMessage event
+    this.pendingEditingMessages.set(message.mid, {
+      originalMessage,
+      mediaTempId
+    });
+
+    const inputMedia = await sentDeferred;
+
+    const callInvoke = (message: Message.message) => this.invokeEditMessageMedia({
+      message,
+      inputMedia,
+      entities,
+      scheduleDate: options.scheduleDate,
+      invertMedia: options.invertMedia
+    });
+
+    if(!message.pFlags.is_outgoing) {
+      return callInvoke(message);
+    }
+
+    return this.invokeAfterMessageIsSent(message.mid, 'edit', (message) => {
+      if(message?._ !== 'message') return;
+      return callInvoke(message);
+    });
+  }
+
+  private runTempUpdateForMessageEdit(message: Message.message) {
+    if(message.pFlags?.is_scheduled) {
+      this.onUpdateNewScheduledMessage({
+        _: 'updateNewScheduledMessage',
+        message
+      });
+    } else {
+      this.onUpdateEditMessage({
+        _:  'updateEditMessage',
+        message,
+        pts: 0,
+        pts_count: 0
+      });
+    }
+  }
+
+  private invokeEditMessageMedia({message, inputMedia, entities, scheduleDate, invertMedia}: InvokeEditMessageMediaArgs) {
+    const sendEntities = this.getInputEntities(entities);
+
+    const schedule_date = scheduleDate || (message.pFlags.is_scheduled ? message.date : undefined);
+    return this.apiManager.invokeApi('messages.editMessage', {
+      peer: this.appPeersManager.getInputPeerById(message.peerId),
+      id: message.id,
+      message: message.message,
+      entities: sendEntities,
+      media: inputMedia,
+      schedule_date,
+      invert_media: invertMedia
+    }).then((updates) => {
+      this.apiUpdatesManager.processUpdateMessage(updates);
+    }, (error: ApiError) => {
+      this.log.error('editMessage error:', error);
+
+      this.revertMessageEdit(message.mid);
+
+      if(error?.type === 'MESSAGE_NOT_MODIFIED') {
+        error.handled = true;
+        return;
+      }
+
+      if(error?.type === 'MESSAGE_EMPTY') {
+        error.handled = true;
+      }
+
+      throw error;
+    }).finally(() => {
+      this.pendingEditingMessages.delete(message.mid);
+    });
+  }
+
+  private revertMessageEdit(mid: number) {
+    const pending = this.pendingEditingMessages.get(mid);
+    if(!pending) return;
+
+    pending.canceled = true;
+
+    this.runTempUpdateForMessageEdit(pending.originalMessage);
+
+    this.pendingEditingMessages.delete(mid);
   }
 
   public async transcribeAudio(message: Message.message, noPending?: boolean): Promise<MessagesTranscribedAudio> {
@@ -828,6 +1263,13 @@ export class AppMessagesManager extends AppManager {
     return promise || ret;
   }
 
+  private getCommonThingsForSending() {
+    return namedPromises({
+      config: this.apiManager.getConfig(),
+      appConfig: this.apiManager.getAppConfig()
+    });
+  }
+
   public async sendText(
     options: MessageSendingParams & Partial<{
       text: string,
@@ -855,9 +1297,18 @@ export class AppMessagesManager extends AppManager {
     options.entities ??= [];
     options.webPageOptions ??= {};
 
-    this.checkSendOptions(options);
+    const {config, appConfig} = await this.checkSendOptions(options);
 
-    const config = await this.apiManager.getConfig();
+    if(appConfig.emojies_send_dice?.includes(text.trim())) {
+      return this.sendOther({
+        ...options,
+        inputMedia: {
+          _: 'inputMediaDice',
+          emoticon: text.trim()
+        }
+      });
+    }
+
     const MAX_LENGTH = config.message_length_max;
     const splitted = splitStringByLength(text, MAX_LENGTH);
     text = splitted[0];
@@ -929,6 +1380,7 @@ export class AppMessagesManager extends AppManager {
           entities: sendEntities,
           clear_draft: options.clearDraft,
           schedule_date: options.scheduleDate || undefined,
+          schedule_repeat_period: options.scheduleRepeatPeriod || undefined,
           silent: options.silent,
           send_as: sendAs,
           update_stickersets_order: options.updateStickersetOrder,
@@ -1047,241 +1499,12 @@ export class AppMessagesManager extends AppManager {
 
     return Promise.all(promises).then(noop);
   }
-  public async _sendText(
-    options: MessageSendingParams & Partial<{
-      text: string,
-      entities: MessageEntity[],
-      viaBotId: BotId,
-      queryId: string,
-      resultId: string,
-      noWebPage: true,
-      replyMarkup: ReplyMarkup,
-      clearDraft: true,
-      invertMedia: boolean,
-      webPage: WebPage,
-      webPageOptions: Partial<{
-        largeMedia: boolean,
-        smallMedia: boolean,
-        optional: boolean
-      }>
-    }>
-  ) {
-    let {peerId, text} = options;
-    if(!text.trim()) {
-      return;
-    }
-
-    options.entities ??= [];
-    options.webPageOptions ??= {};
-
-    this.checkSendOptions(options);
-
-    const config = await this.apiManager.getConfig();
-    const MAX_LENGTH = config.message_length_max;
-    const splitted = splitStringByLength(text, MAX_LENGTH);
-    text = splitted[0];
-    if(splitted.length > 1) {
-      if(options.webPage?._ === 'webPage' && !text.includes(options.webPage.url)) {
-        delete options.webPage;
-      }
-    }
-
-    peerId = this.appPeersManager.getPeerMigratedTo(peerId) || peerId;
-
-    let entities = options.entities;
-    if(!options.viaBotId) {
-      [text, entities] = parseMarkdown(text, entities);
-    }
-
-    const sendEntities = this.getInputEntities(entities);
-
-    const message = this.generateOutgoingMessage(peerId, options);
-    message.entities = entities;
-    message.message = text;
-
-    const isChannel = this.appPeersManager.isChannel(peerId);
-
-    const webPageSend = this.generateOutgoingWebPage(message, options);
-
-    const toggleError = (error?: ApiError) => {
-      this.onMessagesSendError([message], error);
-      this.rootScope.dispatchEvent('messages_pending');
-    };
-
-    const paidStars = options.confirmedPaymentResult?.starsAmount || undefined;
-
-    message.send = () => {
-      toggleError();
-      const sentRequestOptions: PendingAfterMsg = {};
-      if(this.pendingAfterMsgs[peerId]) {
-        sentRequestOptions.afterMessageId = this.pendingAfterMsgs[peerId].messageId;
-      }
-
-      const sendAs = options.sendAsPeerId ? this.appPeersManager.getInputPeerById(options.sendAsPeerId) : undefined
-      const inputPeer = this.appPeersManager.getInputPeerById(peerId);
-      const replyTo = options.replyTo;
-      let apiPromise: any;
-      if(options.viaBotId) {
-        apiPromise = this.apiManager.invokeApiAfter('messages.sendInlineBotResult', {
-          peer: inputPeer,
-          random_id: message.random_id,
-          reply_to: replyTo,
-          query_id: options.queryId,
-          id: options.resultId,
-          clear_draft: options.clearDraft,
-          send_as: sendAs,
-          allow_paid_stars: paidStars
-        }, sentRequestOptions);
-      } else {
-        const commonOptions: Partial<MessagesSendMessage | MessagesSendMedia> = {
-          peer: inputPeer,
-          message: text,
-          random_id: message.random_id,
-          reply_to: replyTo,
-          entities: sendEntities,
-          clear_draft: options.clearDraft,
-          schedule_date: options.scheduleDate || undefined,
-          silent: options.silent,
-          send_as: sendAs,
-          update_stickersets_order: options.updateStickersetOrder,
-          invert_media: options.invertMedia,
-          effect: options.effect,
-          allow_paid_stars: paidStars
-        };
-
-        const mergedOptions: MessagesSendMessage | MessagesSendMedia = {
-          ...commonOptions as any,
-          ...webPageSend
-        };
-
-        apiPromise = this.apiManager.invokeApiAfter(
-          options.webPage ? 'messages.sendMedia' : 'messages.sendMessage',
-          mergedOptions,
-          sentRequestOptions
-        );
-      }
-
-      this.pendingAfterMsgs[peerId] = sentRequestOptions;
-
-      return apiPromise.then((updates: Updates) => {
-        if(updates._ === 'updateShortSentMessage') {
-          // * fix copying object with promise
-          const promise = message.promise;
-          delete message.promise;
-          const newMessage = copy(message);
-          defineNotNumerableProperties(message, ['promise']);
-          message.promise = promise;
-
-          newMessage.date = updates.date;
-          newMessage.id = updates.id;
-          newMessage.media = updates.media;
-          newMessage.entities = updates.entities;
-          newMessage.ttl_period = updates.ttl_period;
-          this.wrapMessageEntities(newMessage);
-          if(updates.pFlags.out) {
-            newMessage.pFlags.out = true;
-          }
-
-          // * override with new updates
-          const {pts, pts_count} = updates;
-
-          this.apiUpdatesManager.processLocalUpdate({
-            _: 'updateMessageID',
-            random_id: message.random_id,
-            id: newMessage.id
-          });
-
-          this.apiUpdatesManager.processLocalUpdate({
-            _: options.scheduleDate ? 'updateNewScheduledMessage' : (isChannel ? 'updateNewChannelMessage' : 'updateNewMessage'),
-            message: newMessage,
-            pts,
-            pts_count
-          });
-
-          updates = undefined;
-        } else if((updates as Updates.updates).updates) {
-          (updates as Updates.updates).updates.forEach((update) => {
-            if(update._ === 'updateDraftMessage') {
-              update.local = true;
-            }
-          });
-        }
-
-        if(updates) {
-          this.apiUpdatesManager.processUpdateMessage(updates);
-          this.apiUpdatesManager.processPaidMessageUpdate({
-            paidStars,
-            wereStarsReserved: options.confirmedPaymentResult?.canUndo
-          });
-        }
-
-        return updates;
-      }, (error: ApiError) => {
-        toggleError(error);
-        throw error;
-      }).finally(() => {
-        if(this.pendingAfterMsgs[peerId] === sentRequestOptions) {
-          delete this.pendingAfterMsgs[peerId];
-        }
-      });
-    };
-
-    this.beforeMessageSending(message, {
-      isScheduled: !!options.scheduleDate || undefined,
-      threadId: options.threadId,
-      clearDraft: options.clearDraft,
-      sequential: true,
-      confirmedPaymentResult: options.confirmedPaymentResult
-    });
-
-    // 直接返回message.send()的结果
-    if(splitted.length === 1) {
-      return message.send();
-    }
-
-    // 如果消息需要分片发送，则返回第一条消息的发送结果
-    const otherPromises = [];
-    for(let i = 1; i < splitted.length; ++i) {
-      otherPromises.push(this.sendText({
-        ...options,
-        peerId,
-        text: splitted[i]
-      }));
-    }
-
-    // 在后台处理其他分片的发送
-    Promise.all(otherPromises).catch(console.error);
-    
-    return message.send();
-  }
-
-  public _sendFile(options: MessageSendingParams & SendFileDetails & Partial<{
-    isRoundMessage: boolean,
-    isVoiceMessage: boolean,
-    isGroupedItem: boolean,
-    isMedia: boolean,
-
-    groupId: string,
-    caption: string,
-    entities: MessageEntity[],
-    background: boolean,
-    clearDraft: boolean,
-    noSound: boolean,
-
-    waveform: Uint8Array,
-
-    stars: number,
-    groupedMessage: Message.message,
-    useTempMediaId: boolean,
-
-    // ! only for internal use
-    processAfter?: typeof processAfter
-  }>) {
+  public async sendFile(options: SendFileArgs) {
     let file = options.file;
     let {peerId} = options;
     peerId = this.appPeersManager.getPeerMigratedTo(peerId) || peerId;
 
-    this.checkSendOptions(options);
+    await this.checkSendOptions(options);
 
     const isDocument = !(file instanceof File) && !(file instanceof Blob);
     if(isDocument) {
@@ -1291,234 +1514,72 @@ export class AppMessagesManager extends AppManager {
     const hadMessageBefore = !!options.groupedMessage;
     const message = options.groupedMessage || this.generateOutgoingMessage(peerId, options);
 
-    let attachType: 'document' | 'audio' | 'video' | 'voice' | 'photo', apiFileName: string;
-
-    const fileType = (file as Document.document).mime_type || file.type;
-    const fileName = file instanceof File ? file.name : '';
     let caption = options.caption || '';
-
-    this.log('sendFile', file, fileType);
 
     let entities = options.entities || [];
     if(caption) {
       [caption, entities] = parseMarkdown(caption, entities);
     }
 
-    const attributes: DocumentAttribute[] = [];
-
-    const isPhoto = getEnvironment().IMAGE_MIME_TYPES_SUPPORTED.has(fileType);
-
-    const strippedPhotoSize: PhotoSize.photoStrippedSize = options.strippedBytes && {
-      _: 'photoStrippedSize',
-      bytes: options.strippedBytes,
-      type: 'i'
-    };
-
     const mediaTempId = options.useTempMediaId ? this.mediaTempId++ : message.id;
-    let photo: MyPhoto, document: MyDocument;
 
-    let actionName: Extract<SendMessageAction['_'], 'sendMessageUploadAudioAction' | 'sendMessageUploadDocumentAction' | 'sendMessageUploadPhotoAction' | 'sendMessageUploadVideoAction'>;
-    if(isDocument) { // maybe it's a sticker or gif
-      attachType = 'document';
-      apiFileName = '';
-    } else if(fileType.indexOf('audio/') === 0 || ['video/ogg'].indexOf(fileType) >= 0) {
-      attachType = 'audio';
-      apiFileName = 'audio.' + (fileType.split('/')[1] === 'ogg' ? 'ogg' : 'mp3');
-      actionName = 'sendMessageUploadAudioAction';
+    const documentAndMeta = this.makeDocumentAndMetaForSendingFile({
+      mediaTempId,
+      isDocument,
+      file,
+      entities,
+      ...pickKeys(options, [
+        'strippedBytes',
+        'useTempMediaId',
+        'isVoiceMessage',
+        'width',
+        'height',
+        'objectURL',
+        'waveform',
+        'duration',
+        'isMedia',
+        'isRoundMessage',
+        'noSound',
+        'thumb',
+        'isAnimated'
+      ])
+    });
 
-      if(options.isVoiceMessage) {
-        attachType = 'voice';
-        if(message) message.pFlags.media_unread = true;
-      }
+    const {
+      document,
+      apiFileName,
+      actionName,
+      photo,
+      fileType,
+      mediaUnread,
+      attributes
+    } = documentAndMeta;
 
-      const attribute: DocumentAttribute.documentAttributeAudio = {
-        _: 'documentAttributeAudio',
-        pFlags: {
-          voice: options.isVoiceMessage || undefined
-        },
-        waveform: options.waveform,
-        duration: options.duration || undefined
-      };
+    let {
+      attachType
+    } = documentAndMeta;
 
-      attributes.push(attribute);
-    } else if(!options.isMedia) {
-      attachType = 'document';
-      apiFileName = 'document.' + fileType.split('/')[1];
-      actionName = 'sendMessageUploadDocumentAction';
-    } else if(isPhoto) {
-      attachType = 'photo';
-      apiFileName = 'photo.' + fileType.split('/')[1];
-      actionName = 'sendMessageUploadPhotoAction';
-
-      const photoSize = {
-        _: 'photoSize',
-        w: options.width,
-        h: options.height,
-        type: THUMB_TYPE_FULL,
-        location: null,
-        size: file.size
-      } as PhotoSize.photoSize;
-
-      photo = {
-        _: 'photo',
-        id: mediaTempId,
-        sizes: [photoSize],
-        w: options.width,
-        h: options.height
-      } as any;
-
-      if(strippedPhotoSize) {
-        photo.sizes.unshift(strippedPhotoSize);
-      }
-
-      this.thumbsStorage.setCacheContextURL(
-        photo,
-        photoSize.type,
-        options.objectURL || '',
-        file.size
-      );
-
-      photo = this.appPhotosManager.savePhoto(photo);
-    } else if(getEnvironment().VIDEO_MIME_TYPES_SUPPORTED.has(fileType as VIDEO_MIME_TYPE)) {
-      attachType = 'video';
-      apiFileName = 'video.mp4';
-      actionName = 'sendMessageUploadVideoAction';
-
-      const videoAttribute: DocumentAttribute.documentAttributeVideo = {
-        _: 'documentAttributeVideo',
-        pFlags: {
-          round_message: options.isRoundMessage || undefined,
-          supports_streaming: true
-        },
-        duration: options.duration,
-        w: options.width,
-        h: options.height
-      };
-
-      attributes.push(videoAttribute);
-
-      // * must follow after video attribute
-      if(options.noSound &&
-        file.size > (10 * 1024) &&
-        file.size < (10 * 1024 * 1024)) {
-        attributes.push({
-          _: 'documentAttributeAnimated'
-        });
-      }
-    } else {
-      attachType = 'document';
-      apiFileName = 'document.' + fileType.split('/')[1];
-      actionName = 'sendMessageUploadDocumentAction';
+    if(message && mediaUnread) {
+      message.pFlags.media_unread = true;
     }
 
-    attributes.push({_: 'documentAttributeFilename', file_name: fileName || apiFileName});
-
-    if(
-      (['document', 'video', 'audio', 'voice'] as (typeof attachType)[]).includes(attachType) &&
-      !isDocument
-    ) {
-      const thumbs: PhotoSize[] = [];
-      document = {
-        _: 'document',
-        id: mediaTempId,
-        duration: options.duration,
-        attributes,
-        w: options.width,
-        h: options.height,
-        thumbs,
-        mime_type: fileType,
-        size: file.size
-      } as any;
-
-      if(options.objectURL) {
-        this.thumbsStorage.setCacheContextURL(
-          document,
-          undefined,
-          options.objectURL,
-          file.size
-        );
-      }
-
-      let thumb: PhotoSize.photoSize;
-      if(isPhoto) {
-        attributes.push({
-          _: 'documentAttributeImageSize',
-          w: options.width,
-          h: options.height
-        });
-
-        thumb = {
-          _: 'photoSize',
-          w: options.width,
-          h: options.height,
-          type: THUMB_TYPE_FULL,
-          size: file.size
-        };
-      } else if(attachType === 'video') {
-        if(options.thumb) {
-          thumb = {
-            _: 'photoSize',
-            w: options.thumb.size.width,
-            h: options.thumb.size.height,
-            type: 'local-thumb',
-            size: options.thumb.blob.size
-          };
-
-          this.thumbsStorage.setCacheContextURL(
-            document,
-            thumb.type,
-            options.thumb.url,
-            thumb.size
-          );
-        }
-      }
-
-      if(thumb) {
-        thumbs.push(thumb);
-      }
-
-      if(strippedPhotoSize) {
-        thumbs.unshift(strippedPhotoSize);
-      }
-
-      /* if(thumbs.length) {
-        const thumb = thumbs[0] as PhotoSize.photoSize;
-        const docThumb = appPhotosManager.getDocumentCachedThumb(document.id);
-        docThumb.downloaded = thumb.size;
-        docThumb.url = thumb.url;
-      } */
-
-      document = this.appDocsManager.saveDoc(document);
-    }
-
+    this.log('sendFile', file, fileType);
     this.log('sendFile', attachType, apiFileName, file.type, options);
 
     const sentDeferred = deferredPromise<InputMedia>();
-    // sentDeferred.cancel = () => {
-    //   const error = new Error('Download canceled');
-    //   error.name = 'AbortError';
-    //   sentDeferred.reject(error);
 
-    //   if(uploadPromise?.cancel) {
-    //     uploadPromise.cancel();
-    //   }
-    // };
-
-    const media: MessageMedia = isDocument ? undefined : {
-      _: photo ? 'messageMediaPhoto' : 'messageMediaDocument',
-      pFlags: {},
-      // preloader,
+    const media: MessageMedia = {
+      _: photo && !isDocument ? 'messageMediaPhoto' : 'messageMediaDocument',
+      pFlags: {
+        ...(options.spoiler ? {spoiler: true} : {})
+      },
       photo,
-      document
+      document: isDocument ? file as Document.document : document
     };
 
-    if(media) {
+    if(!isDocument) {
       defineNotNumerableProperties(media as any, ['promise']);
       (media as any).promise = sentDeferred;
-
-      if(options.spoiler) {
-        (media as MessageMedia.messageMediaPhoto).pFlags.spoiler = true;
-      }
     }
 
     const sendEntities = this.getInputEntities(entities);
@@ -1535,536 +1596,8 @@ export class AppMessagesManager extends AppManager {
 
       message.entities = entities;
       message.message = caption;
-      message.media = isDocument ? {
-        _: 'messageMediaDocument',
-        pFlags: {},
-        document: file
-      } as MessageMedia.messageMediaDocument : media;
-      message.uploadingFileName = [uploadingFileName];
-
-      if(options.stars) {
-        message.media = this.generateOutgoingPaidMedia([message], options.stars);
-      }
-    }
-
-    const toggleError = (error?: ApiError) => {
-      this.onMessagesSendError([message], error);
-      this.rootScope.dispatchEvent('messages_pending');
-    };
-
-    let uploaded = false,
-      uploadPromise: ReturnType<ApiFileManager['upload']> = null;
-
-    const upload = () => {
-      if(isDocument) {
-        const inputMedia: InputMedia = {
-          _: 'inputMediaDocument',
-          id: getDocumentInput(file as MyDocument),
-          pFlags: {}
-        };
-
-        sentDeferred.resolve(inputMedia);
-      } else if(file instanceof File || file instanceof Blob) {
-        const load = () => {
-          if(!uploaded || message?.error) {
-            uploaded = false;
-
-            uploadPromise = this.apiFileManager.upload({file, fileName: uploadingFileName});
-            uploadPromise.catch((err) => {
-              if(uploaded) {
-                return;
-              }
-
-              this.log('cancelling upload', media);
-
-              message && this.cancelPendingMessage(message.random_id);
-              this.setTyping(peerId, {_: 'sendMessageCancelAction'}, undefined, options.threadId);
-              sentDeferred.reject(err);
-            });
-
-            uploadPromise.addNotifyListener((progress: Progress) => {
-              /* if(DEBUG) {
-                this.log('upload progress', progress);
-              } */
-
-              const percents = Math.max(1, Math.floor(100 * progress.done / progress.total));
-              if(actionName) {
-                this.setTyping(peerId, {_: actionName, progress: percents | 0}, undefined, options.threadId);
-              }
-              sentDeferred.notifyAll(progress);
-            });
-
-            sentDeferred.notifyAll({done: 0, total: file.size});
-          }
-
-          let thumbUploadPromise: typeof uploadPromise;
-          if(attachType === 'video' && options.objectURL && options.thumb?.blob) {
-            thumbUploadPromise = this.apiFileManager.upload({file: options.thumb.blob});
-          }
-
-          uploadPromise && uploadPromise.then(async(inputFile) => {
-            /* if(DEBUG) {
-              this.log('appMessagesManager: sendFile uploaded:', inputFile);
-            } */
-
-            (inputFile as InputFile.inputFile).name = apiFileName;
-            uploaded = true;
-            let inputMedia: InputMedia;
-            switch(attachType) {
-              case 'photo':
-                inputMedia = {
-                  _: 'inputMediaUploadedPhoto',
-                  file: inputFile,
-                  pFlags: {
-                    spoiler: options.spoiler || undefined
-                  }
-                };
-                break;
-
-              default:
-                inputMedia = {
-                  _: 'inputMediaUploadedDocument',
-                  file: inputFile,
-                  mime_type: fileType,
-                  pFlags: {
-                    force_file: actionName === 'sendMessageUploadDocumentAction' || undefined,
-                    spoiler: options.spoiler || undefined
-                    // nosound_video: options.noSound ? true : undefined
-                  },
-                  attributes
-                };
-            }
-
-            if(options.stars && !options.isGroupedItem) {
-              inputMedia = {
-                _: 'inputMediaPaidMedia',
-                extended_media: [inputMedia],
-                stars_amount: '' + options.stars
-              };
-            }
-
-            if(thumbUploadPromise) {
-              try {
-                const inputFile = await thumbUploadPromise;
-                (inputMedia as InputMedia.inputMediaUploadedDocument).thumb = inputFile;
-              } catch(err) {
-                this.log.error('sendFile thumb upload error:', err);
-              }
-            }
-
-            sentDeferred.resolve(inputMedia);
-          }, (error: ApiError) => {
-            toggleError(error);
-          });
-
-          return sentDeferred;
-        };
-
-        if(options.isGroupedItem) {
-          load();
-        } else {
-          this.sendSmthLazyLoadQueue.push({
-            load
-          });
-        }
-      }
-
-      return sentDeferred;
-    };
-
-    if(!hadMessageBefore && !options.confirmedPaymentResult?.canUndo) {
-      message.send = upload;
-    }
-
-    if(!hadMessageBefore) this.beforeMessageSending(message, {
-      isGroupedItem: options.isGroupedItem,
-      isScheduled: !!options.scheduleDate || undefined,
-      threadId: options.threadId,
-      clearDraft: options.clearDraft,
-      processAfter: options.processAfter
-    });
-
-    if(!options.isGroupedItem) {
-      const invokeSend = (inputMedia: Awaited<typeof sentDeferred>) => {
-        const paidStars = options.confirmedPaymentResult?.starsAmount || undefined;
-        return this.apiManager.invokeApi('messages.sendMedia', {
-          background: options.background,
-          peer: this.appPeersManager.getInputPeerById(peerId),
-          media: inputMedia,
-          message: caption,
-          random_id: message.random_id,
-          reply_to: options.replyTo,
-          schedule_date: options.scheduleDate,
-          silent: options.silent,
-          entities: sendEntities,
-          clear_draft: options.clearDraft,
-          send_as: options.sendAsPeerId ? this.appPeersManager.getInputPeerById(options.sendAsPeerId) : undefined,
-          update_stickersets_order: options.updateStickersetOrder,
-          invert_media: options.invertMedia,
-          effect: options.effect,
-          allow_paid_stars: paidStars
-        }).then((updates) => {
-          this.apiUpdatesManager.processUpdateMessage(updates)
-          this.apiUpdatesManager.processPaidMessageUpdate({
-            paidStars,
-            wereStarsReserved: options.confirmedPaymentResult?.canUndo
-          });
-        });
-      };
-
-      const send = () => {
-        sentDeferred.then((inputMedia) => {
-          this.setTyping(peerId, {_: 'sendMessageCancelAction'}, undefined, options.threadId);
-
-          let promise: Promise<void>;
-          if(inputMedia._ === 'inputMediaDocument') {
-            promise = this.apiFileManager.invokeApiWithReference({
-              context: inputMedia.id as InputDocument.inputDocument,
-              callback: () => invokeSend(inputMedia)
-            });
-          } else {
-            promise = invokeSend(inputMedia);
-          }
-
-          return promise.catch((error: ApiError) => {
-            if(attachType === 'photo' &&
-              (error.type === 'PHOTO_INVALID_DIMENSIONS' ||
-              error.type === 'PHOTO_SAVE_FILE_INVALID')) {
-              error.handled = true;
-              attachType = 'document';
-              message.send();
-              return;
-            }
-
-            toggleError(error);
-            throw error;
-          });
-        });
-
-        const messagePromise = message.promise as CancellablePromise<void>;
-        sentDeferred.then(
-          () => messagePromise.resolve(),
-          (err) => messagePromise.reject(err)
-        );
-      };
-
-      if(options.confirmedPaymentResult?.canUndo) {
-        upload();
-
-        this.paidMessagesQueue.add(peerId, {
-          send,
-          cancel: () => {
-            this.cancelPendingMessage(message.random_id);
-            (message.promise as CancellablePromise<void>)?.reject();
-          }
-        });
-      } else {
-        send();
-      }
-    }
-
-    const ret: {
-      message: typeof message,
-      promise: typeof sentDeferred,
-      send: typeof upload,
-      media: typeof media,
-      uploadingFileName: typeof uploadingFileName
-    } = {
-      message,
-      media,
-      uploadingFileName
-    } as any;
-
-    defineNotNumerableProperties(ret, ['promise', 'send']);
-    ret.promise = sentDeferred;
-    ret.send = upload;
-
-    return ret.send();
-  }
-  public sendFile(options: MessageSendingParams & SendFileDetails & Partial<{
-    isRoundMessage: boolean,
-    isVoiceMessage: boolean,
-    isGroupedItem: boolean,
-    isMedia: boolean,
-
-    groupId: string,
-    caption: string,
-    entities: MessageEntity[],
-    background: boolean,
-    clearDraft: boolean,
-    noSound: boolean,
-
-    waveform: Uint8Array,
-
-    stars: number,
-    groupedMessage: Message.message,
-    useTempMediaId: boolean,
-
-    // ! only for internal use
-    processAfter?: typeof processAfter
-  }>) {
-    let file = options.file;
-    let {peerId} = options;
-    peerId = this.appPeersManager.getPeerMigratedTo(peerId) || peerId;
-
-    this.checkSendOptions(options);
-
-    const isDocument = !(file instanceof File) && !(file instanceof Blob);
-    if(isDocument) {
-      file = this.appDocsManager.getDoc((file as MyDocument).id) || file;
-    }
-
-    const hadMessageBefore = !!options.groupedMessage;
-    const message = options.groupedMessage || this.generateOutgoingMessage(peerId, options);
-
-    let attachType: 'document' | 'audio' | 'video' | 'voice' | 'photo', apiFileName: string;
-
-    const fileType = (file as Document.document).mime_type || file.type;
-    const fileName = file instanceof File ? file.name : '';
-    let caption = options.caption || '';
-
-    this.log('sendFile', file, fileType);
-
-    let entities = options.entities || [];
-    if(caption) {
-      [caption, entities] = parseMarkdown(caption, entities);
-    }
-
-    const attributes: DocumentAttribute[] = [];
-
-    const isPhoto = getEnvironment().IMAGE_MIME_TYPES_SUPPORTED.has(fileType);
-
-    const strippedPhotoSize: PhotoSize.photoStrippedSize = options.strippedBytes && {
-      _: 'photoStrippedSize',
-      bytes: options.strippedBytes,
-      type: 'i'
-    };
-
-    const mediaTempId = options.useTempMediaId ? this.mediaTempId++ : message.id;
-    let photo: MyPhoto, document: MyDocument;
-
-    let actionName: Extract<SendMessageAction['_'], 'sendMessageUploadAudioAction' | 'sendMessageUploadDocumentAction' | 'sendMessageUploadPhotoAction' | 'sendMessageUploadVideoAction'>;
-    if(isDocument) { // maybe it's a sticker or gif
-      attachType = 'document';
-      apiFileName = '';
-    } else if(fileType.indexOf('audio/') === 0 || ['video/ogg'].indexOf(fileType) >= 0) {
-      attachType = 'audio';
-      apiFileName = 'audio.' + (fileType.split('/')[1] === 'ogg' ? 'ogg' : 'mp3');
-      actionName = 'sendMessageUploadAudioAction';
-
-      if(options.isVoiceMessage) {
-        attachType = 'voice';
-        if(message) message.pFlags.media_unread = true;
-      }
-
-      const attribute: DocumentAttribute.documentAttributeAudio = {
-        _: 'documentAttributeAudio',
-        pFlags: {
-          voice: options.isVoiceMessage || undefined
-        },
-        waveform: options.waveform,
-        duration: options.duration || undefined
-      };
-
-      attributes.push(attribute);
-    } else if(!options.isMedia) {
-      attachType = 'document';
-      apiFileName = 'document.' + fileType.split('/')[1];
-      actionName = 'sendMessageUploadDocumentAction';
-    } else if(isPhoto) {
-      attachType = 'photo';
-      apiFileName = 'photo.' + fileType.split('/')[1];
-      actionName = 'sendMessageUploadPhotoAction';
-
-      const photoSize = {
-        _: 'photoSize',
-        w: options.width,
-        h: options.height,
-        type: THUMB_TYPE_FULL,
-        location: null,
-        size: file.size
-      } as PhotoSize.photoSize;
-
-      photo = {
-        _: 'photo',
-        id: mediaTempId,
-        sizes: [photoSize],
-        w: options.width,
-        h: options.height
-      } as any;
-
-      if(strippedPhotoSize) {
-        photo.sizes.unshift(strippedPhotoSize);
-      }
-
-      this.thumbsStorage.setCacheContextURL(
-        photo,
-        photoSize.type,
-        options.objectURL || '',
-        file.size
-      );
-
-      photo = this.appPhotosManager.savePhoto(photo);
-    } else if(getEnvironment().VIDEO_MIME_TYPES_SUPPORTED.has(fileType as VIDEO_MIME_TYPE)) {
-      attachType = 'video';
-      apiFileName = 'video.mp4';
-      actionName = 'sendMessageUploadVideoAction';
-
-      const videoAttribute: DocumentAttribute.documentAttributeVideo = {
-        _: 'documentAttributeVideo',
-        pFlags: {
-          round_message: options.isRoundMessage || undefined,
-          supports_streaming: true
-        },
-        duration: options.duration,
-        w: options.width,
-        h: options.height
-      };
-
-      attributes.push(videoAttribute);
-
-      // * must follow after video attribute
-      if(canVideoBeAnimated(options.noSound, file.size)) {
-        attributes.push({
-          _: 'documentAttributeAnimated'
-        });
-      }
-    } else {
-      attachType = 'document';
-      apiFileName = 'document.' + fileType.split('/')[1];
-      actionName = 'sendMessageUploadDocumentAction';
-    }
-
-    attributes.push({_: 'documentAttributeFilename', file_name: fileName || apiFileName});
-
-    if(
-      (['document', 'video', 'audio', 'voice'] as (typeof attachType)[]).includes(attachType) &&
-      !isDocument
-    ) {
-      const thumbs: PhotoSize[] = [];
-      document = {
-        _: 'document',
-        id: mediaTempId,
-        duration: options.duration,
-        attributes,
-        w: options.width,
-        h: options.height,
-        thumbs,
-        mime_type: fileType,
-        size: file.size
-      } as any;
-
-      if(options.objectURL) {
-        this.thumbsStorage.setCacheContextURL(
-          document,
-          undefined,
-          options.objectURL,
-          file.size
-        );
-      }
-
-      let thumb: PhotoSize.photoSize;
-      if(isPhoto) {
-        attributes.push({
-          _: 'documentAttributeImageSize',
-          w: options.width,
-          h: options.height
-        });
-
-        thumb = {
-          _: 'photoSize',
-          w: options.width,
-          h: options.height,
-          type: THUMB_TYPE_FULL,
-          size: file.size
-        };
-      } else if(attachType === 'video') {
-        if(options.thumb) {
-          thumb = {
-            _: 'photoSize',
-            w: options.thumb.size.width,
-            h: options.thumb.size.height,
-            type: 'local-thumb',
-            size: options.thumb.blob.size
-          };
-
-          this.thumbsStorage.setCacheContextURL(
-            document,
-            thumb.type,
-            options.thumb.url,
-            thumb.size
-          );
-        }
-      }
-
-      if(thumb) {
-        thumbs.push(thumb);
-      }
-
-      if(strippedPhotoSize) {
-        thumbs.unshift(strippedPhotoSize);
-      }
-
-      /* if(thumbs.length) {
-        const thumb = thumbs[0] as PhotoSize.photoSize;
-        const docThumb = appPhotosManager.getDocumentCachedThumb(document.id);
-        docThumb.downloaded = thumb.size;
-        docThumb.url = thumb.url;
-      } */
-
-      document = this.appDocsManager.saveDoc(document);
-    }
-
-    this.log('sendFile', attachType, apiFileName, file.type, options);
-
-    const sentDeferred = deferredPromise<InputMedia>();
-    // sentDeferred.cancel = () => {
-    //   const error = new Error('Download canceled');
-    //   error.name = 'AbortError';
-    //   sentDeferred.reject(error);
-
-    //   if(uploadPromise?.cancel) {
-    //     uploadPromise.cancel();
-    //   }
-    // };
-
-    const media: MessageMedia = isDocument ? undefined : {
-      _: photo ? 'messageMediaPhoto' : 'messageMediaDocument',
-      pFlags: {},
-      // preloader,
-      photo,
-      document
-    };
-
-    if(media) {
-      defineNotNumerableProperties(media as any, ['promise']);
-      (media as any).promise = sentDeferred;
-
-      if(options.spoiler) {
-        (media as MessageMedia.messageMediaPhoto).pFlags.spoiler = true;
-      }
-    }
-
-    const sendEntities = this.getInputEntities(entities);
-
-    const uploadingFileName = !isDocument ? getFileNameForUpload(file as File | Blob) : undefined;
-    if(uploadingFileName) {
-      this.uploadFilePromises[uploadingFileName] = sentDeferred;
-    }
-
-    if(!hadMessageBefore) {
-      if(options.invertMedia) {
-        message.pFlags.invert_media = true;
-      }
-
-      message.entities = entities;
-      message.message = caption;
-      message.media = isDocument ? {
-        _: 'messageMediaDocument',
-        pFlags: {},
-        document: file
-      } as MessageMedia.messageMediaDocument : media;
-      message.uploadingFileName = [uploadingFileName];
+      message.media = media;
+      message.uploadingFileName = uploadingFileName ? [uploadingFileName] : undefined;
 
       if(options.stars) {
         message.media = this.generateOutgoingPaidMedia([message], options.stars);
@@ -2076,17 +1609,15 @@ export class AppMessagesManager extends AppManager {
       this.rootScope.dispatchEvent('messages_pending');
     };
 
-    let
-      uploaded = false,
-      uploadPromise: ReturnType<ApiFileManager['upload']> = null
-    ;
+    let uploaded = false,
+      uploadPromise: ReturnType<ApiFileManager['upload']>;
 
     const upload = () => {
       if(isDocument) {
         const inputMedia: InputMedia = {
           _: 'inputMediaDocument',
           id: getDocumentInput(file as MyDocument),
-          pFlags: {}
+          pFlags: pickKeys((media as MessageMedia.messageMediaDocument).pFlags, ['spoiler'])
         };
 
         sentDeferred.resolve(inputMedia);
@@ -2229,6 +1760,7 @@ export class AppMessagesManager extends AppManager {
           random_id: message.random_id,
           reply_to: options.replyTo,
           schedule_date: options.scheduleDate,
+          schedule_repeat_period: options.scheduleRepeatPeriod || undefined,
           silent: options.silent,
           entities: sendEntities,
           clear_draft: options.clearDraft,
@@ -2328,6 +1860,212 @@ export class AppMessagesManager extends AppManager {
     return ret;
   }
 
+  private makeDocumentAndMetaForSendingFile(args: MakeDocumentAndMetaForSendingFileArgs) {
+    const {file, isDocument, mediaTempId} = args;
+
+    let attachType: 'document' | 'audio' | 'video' | 'voice' | 'photo', apiFileName: string;
+    let mediaUnread: boolean;
+
+    const fileType = (file as Document.document).mime_type || file.type;
+    const fileName = file instanceof File ? file.name : '';
+
+    const attributes: DocumentAttribute[] = [];
+
+    const isPhoto = getEnvironment().IMAGE_MIME_TYPES_SUPPORTED.has(fileType);
+
+    const strippedPhotoSize: PhotoSize.photoStrippedSize = args.strippedBytes && {
+      _: 'photoStrippedSize',
+      bytes: args.strippedBytes,
+      type: 'i'
+    };
+
+    let photo: MyPhoto, document: MyDocument;
+
+    let actionName: Extract<SendMessageAction['_'], 'sendMessageUploadAudioAction' | 'sendMessageUploadDocumentAction' | 'sendMessageUploadPhotoAction' | 'sendMessageUploadVideoAction'>;
+
+    if(isDocument) { // maybe it's a sticker or gif
+      attachType = 'document';
+      apiFileName = '';
+    } else if(fileType.indexOf('audio/') === 0 || ['video/ogg'].indexOf(fileType) >= 0) {
+      attachType = 'audio';
+      apiFileName = 'audio.' + (fileType.split('/')[1] === 'ogg' ? 'ogg' : 'mp3');
+      actionName = 'sendMessageUploadAudioAction';
+
+      if(args.isVoiceMessage) {
+        attachType = 'voice';
+        mediaUnread = true;
+      }
+
+      const attribute: DocumentAttribute.documentAttributeAudio = {
+        _: 'documentAttributeAudio',
+        pFlags: {
+          voice: args.isVoiceMessage || undefined
+        },
+        waveform: args.waveform,
+        duration: args.duration || undefined
+      };
+
+      attributes.push(attribute);
+    } else if(!args.isMedia) {
+      attachType = 'document';
+      apiFileName = 'document.' + fileType.split('/')[1];
+      actionName = 'sendMessageUploadDocumentAction';
+    } else if(isPhoto) {
+      attachType = 'photo';
+      apiFileName = 'photo.' + fileType.split('/')[1];
+      actionName = 'sendMessageUploadPhotoAction';
+
+      const photoSize = {
+        _: 'photoSize',
+        w: args.width,
+        h: args.height,
+        type: THUMB_TYPE_FULL,
+        location: null,
+        size: file.size
+      } as PhotoSize.photoSize;
+
+      photo = {
+        _: 'photo',
+        id: mediaTempId,
+        sizes: [photoSize],
+        w: args.width,
+        h: args.height
+      } as any;
+
+      if(strippedPhotoSize) {
+        photo.sizes.unshift(strippedPhotoSize);
+      }
+
+      this.thumbsStorage.setCacheContextURL(
+        photo,
+        photoSize.type,
+        args.objectURL || '',
+        file.size
+      );
+
+      photo = this.appPhotosManager.savePhoto(photo);
+    } else if(getEnvironment().VIDEO_MIME_TYPES_SUPPORTED.has(fileType as VIDEO_MIME_TYPE)) {
+      attachType = 'video';
+      apiFileName = 'video.mp4';
+      actionName = 'sendMessageUploadVideoAction';
+
+      const videoAttribute: DocumentAttribute.documentAttributeVideo = {
+        _: 'documentAttributeVideo',
+        pFlags: {
+          round_message: args.isRoundMessage || undefined,
+          supports_streaming: true
+        },
+        duration: args.duration,
+        w: args.width,
+        h: args.height
+      };
+
+      attributes.push(videoAttribute);
+
+      // * must follow after video attribute
+      if(args.isAnimated) {
+        attributes.push({
+          _: 'documentAttributeAnimated'
+        });
+      }
+    } else {
+      attachType = 'document';
+      apiFileName = 'document.' + fileType.split('/')[1];
+      actionName = 'sendMessageUploadDocumentAction';
+    }
+
+    attributes.push({_: 'documentAttributeFilename', file_name: fileName || apiFileName});
+
+    if(
+      (['document', 'video', 'audio', 'voice'] as (typeof attachType)[]).includes(attachType) &&
+      !isDocument
+    ) {
+      const thumbs: PhotoSize[] = [];
+      document = {
+        _: 'document',
+        id: mediaTempId,
+        duration: args.duration,
+        attributes,
+        w: args.width,
+        h: args.height,
+        thumbs,
+        mime_type: fileType,
+        size: file.size
+      } as any;
+
+      if(args.objectURL) {
+        this.thumbsStorage.setCacheContextURL(
+          document,
+          undefined,
+          args.objectURL,
+          file.size
+        );
+      }
+
+      let thumb: PhotoSize.photoSize;
+      if(isPhoto) {
+        attributes.push({
+          _: 'documentAttributeImageSize',
+          w: args.width,
+          h: args.height
+        });
+
+        thumb = {
+          _: 'photoSize',
+          w: args.width,
+          h: args.height,
+          type: THUMB_TYPE_FULL,
+          size: file.size
+        };
+      } else if(attachType === 'video') {
+        if(args.thumb) {
+          thumb = {
+            _: 'photoSize',
+            w: args.thumb.size.width,
+            h: args.thumb.size.height,
+            type: 'local-thumb',
+            size: args.thumb.blob.size
+          };
+
+          this.thumbsStorage.setCacheContextURL(
+            document,
+            thumb.type,
+            args.thumb.url,
+            thumb.size
+          );
+        }
+      }
+
+      if(thumb) {
+        thumbs.push(thumb);
+      }
+
+      if(strippedPhotoSize) {
+        thumbs.unshift(strippedPhotoSize);
+      }
+
+      /* if(thumbs.length) {
+        const thumb = thumbs[0] as PhotoSize.photoSize;
+        const docThumb = appPhotosManager.getDocumentCachedThumb(document.id);
+        docThumb.downloaded = thumb.size;
+        docThumb.url = thumb.url;
+      } */
+
+      document = this.appDocsManager.saveDoc(document);
+    }
+
+    return {
+      document,
+      apiFileName,
+      actionName,
+      attachType,
+      photo,
+      fileType,
+      mediaUnread,
+      attributes
+    };
+  }
+
   private async uploadThumbAndCover({blob, isCover, peer}: UploadThumbAndCoverArgs) {
     const file = await this.apiFileManager.upload({file: blob});
 
@@ -2367,7 +2105,7 @@ export class AppMessagesManager extends AppManager {
     clearDraft?: boolean,
     stars?: number
   }) {
-    this.checkSendOptions(options);
+    await this.checkSendOptions(options);
 
     if(options.sendFileDetails.length === 1) {
       return this.sendFile({...options, ...options.sendFileDetails[0]});
@@ -2397,7 +2135,7 @@ export class AppMessagesManager extends AppManager {
     let firstMessage: Message.message;
     const isSingleMessageForAlbum = !!options.stars;
     const preserveMediaTempId = this.mediaTempId;
-    const results = options.sendFileDetails.map((details, idx) => {
+    const _results = options.sendFileDetails.map(async(details, idx) => {
       const o: Parameters<AppMessagesManager['sendFile']>[0] = {
         peerId,
         isGroupedItem: true,
@@ -2422,7 +2160,7 @@ export class AppMessagesManager extends AppManager {
         o.effect = options.effect;
       }
 
-      const result = this.sendFile(o);
+      const result = await this.sendFile(o);
 
       if(idx === 0) {
         firstMessage = result.message;
@@ -2431,6 +2169,7 @@ export class AppMessagesManager extends AppManager {
 
       return result;
     });
+    const results = await Promise.all(_results);
 
     if(options.stars) {
       const message = results[0].message;
@@ -2475,6 +2214,7 @@ export class AppMessagesManager extends AppManager {
             peer: inputPeer,
             reply_to: options.replyTo,
             schedule_date: options.scheduleDate,
+            schedule_repeat_period: options.scheduleRepeatPeriod || undefined,
             silent: options.silent,
             clear_draft: options.clearDraft,
             send_as: options.sendAsPeerId ? this.appPeersManager.getInputPeerById(options.sendAsPeerId) : undefined,
@@ -2620,7 +2360,7 @@ export class AppMessagesManager extends AppManager {
     });
   }
 
-  public sendOther(
+  public async sendOther(
     options: MessageSendingParams & Partial<{
       inputMedia: InputMedia | {_: 'messageMediaPending', messageMedia: MessageMedia},
       viaBotId: BotId,
@@ -2636,7 +2376,7 @@ export class AppMessagesManager extends AppManager {
     peerId = this.appPeersManager.getPeerMigratedTo(peerId) || peerId;
 
     const noOutgoingMessage = /* inputMedia?._ === 'inputMediaPhotoExternal' ||  */inputMedia?._ === 'inputMediaDocumentExternal';
-    this.checkSendOptions(options);
+    await this.checkSendOptions(options);
     const message = this.generateOutgoingMessage(peerId, options);
 
     let media: MessageMedia;
@@ -2666,20 +2406,17 @@ export class AppMessagesManager extends AppManager {
         media = {
           _: 'messageMediaPhoto',
           photo: this.appPhotosManager.getPhoto((inputMedia.id as InputPhoto.inputPhoto).id),
-          pFlags: {}
+          pFlags: pickKeys(inputMedia.pFlags, ['spoiler'])
         };
         break;
       }
 
       case 'inputMediaDocument': {
         const doc = this.appDocsManager.getDoc((inputMedia.id as InputDocument.inputDocument).id);
-        /* if(doc.sticker && doc.stickerSetInput) {
-          appStickersManager.pushPopularSticker(doc.id);
-        } */
         media = {
           _: 'messageMediaDocument',
           document: doc,
-          pFlags: {}
+          pFlags: pickKeys(inputMedia.pFlags, ['spoiler'])
         };
         break;
       }
@@ -2759,8 +2496,17 @@ export class AppMessagesManager extends AppManager {
         break;
       }
 
+      case 'inputMediaDice': {
+        media = {
+          _: 'messageMediaDice',
+          emoticon: inputMedia.emoticon,
+          value: 0
+        };
+        break;
+      }
+
       case 'messageMediaPending': {
-        media = (inputMedia as any).messageMedia;
+        media = inputMedia.messageMedia;
         break;
       }
     }
@@ -2779,7 +2525,6 @@ export class AppMessagesManager extends AppManager {
       }
 
       const paidStars = options.confirmedPaymentResult?.starsAmount || undefined;
-
       const sendAs = options.sendAsPeerId ? this.appPeersManager.getInputPeerById(options.sendAsPeerId) : undefined;
       let apiPromise: Promise<any>;
       if(options.viaBotId) {
@@ -2801,9 +2546,11 @@ export class AppMessagesManager extends AppManager {
           media: inputMedia as InputMedia,
           random_id: message.random_id,
           reply_to: options.replyTo,
-          message: '',
+          message: message.message,
+          entities: undefined,
           clear_draft: options.clearDraft,
           schedule_date: options.scheduleDate,
+          schedule_repeat_period: options.scheduleRepeatPeriod || undefined,
           silent: options.silent,
           send_as: sendAs,
           update_stickersets_order: options.updateStickersetOrder,
@@ -2896,7 +2643,26 @@ export class AppMessagesManager extends AppManager {
     }
   }
 
-  private checkSendOptions(options: MessageSendingParams) {
+  private checkSendOptions(options: MessageSendingParams & Partial<{ text: string }>) {
+    const {peerId} = options;
+    if(
+      this.appPeersManager.isBotforum(peerId) &&
+      this.appPeersManager.canManageBotforumTopics(peerId) &&
+      !options.replyToMsgId &&
+      (!options.threadId || isTempId(options.threadId))
+    ) {
+      options.threadId = undefined;
+      const pendingTopic = this.getPendingOrCreateBotforumTopic({peerId, title: fitSymbols(options.text || TOPIC_TITLE_DEFAULT, TOPIC_TITLE_MAX_LENGTH)});
+
+      if(!options.replyToMsgId) {
+        options.replyToMsgId = pendingTopic.tempId;
+        pendingTopic.beforeMessageSendCallbacks.push(() => {
+          options.replyToMsgId = pendingTopic.newId;
+          if(options.replyTo?._ === 'inputReplyToMessage') options.replyTo.reply_to_msg_id = pendingTopic.newId;
+        });
+      }
+    }
+
     if(options.threadId && !options.replyToMsgId) {
       options.replyToMsgId = options.threadId;
     }
@@ -2908,6 +2674,9 @@ export class AppMessagesManager extends AppManager {
     //     delete options.scheduleDate;
     //   }
     // }
+
+    // * make sure every sending method is awaiting the same promises
+    return this.getCommonThingsForSending();
   }
 
   private beforeMessageSending(message: Message.message, options: Pick<MessageSendingParams, 'threadId' | 'savedReaction' | 'confirmedPaymentResult'> & Partial<{
@@ -3009,7 +2778,11 @@ export class AppMessagesManager extends AppManager {
         }
         if(DO_NOT_SEND_MESSAGES) return;
 
-        if(SEND_MESSAGES_TO_PAID_QUEUE || options.confirmedPaymentResult?.canUndo) {
+        if(this.pendingNewBotforumTopics[peerId] && !options.threadId) {
+          this.pendingNewBotforumTopics[peerId].messageSendCallbacks.push(() => {
+            message.send();
+          });
+        } else if(SEND_MESSAGES_TO_PAID_QUEUE || options.confirmedPaymentResult?.canUndo) {
           this.paidMessagesQueue.add(peerId, {
             send: () => void message?.send?.(),
             cancel: () => void this.cancelPendingMessage(message?.random_id)
@@ -3057,7 +2830,7 @@ export class AppMessagesManager extends AppManager {
     }
 
     let topMessage: number;
-    if(options.threadId && !this.appPeersManager.isForum(peerId)) {
+    if(options.threadId && !this.appPeersManager.isForum(peerId) && !this.appPeersManager.isBotforum(peerId)) {
       const historyStorage = this.getHistoryStorage(peerId, options.threadId);
       topMessage = historyStorage.history.first[0];
     }
@@ -3099,6 +2872,7 @@ export class AppMessagesManager extends AppManager {
       pending: true,
       effect: options.effect,
       paid_message_stars: options.confirmedPaymentResult?.starsAmount || undefined,
+      schedule_repeat_period: options.scheduleRepeatPeriod || undefined,
       saved_peer_id: options.replyToMonoforumPeerId ? this.appPeersManager.getOutputPeer(options.replyToMonoforumPeerId) : (peerId === this.appPeersManager.peerId ? this.appPeersManager.getOutputPeer(this.appPeersManager.peerId) : undefined),
       media,
       suggested_post: options.suggestedPost ? {
@@ -3136,6 +2910,34 @@ export class AppMessagesManager extends AppManager {
     return message;
   }
 
+  private generateTopicCreatedServiceMessage({peerId, title}: GenerateTopicCreatedServiceMessageArgs) {
+    const iconColor = TOPIC_COLORS[Math.floor(Math.random() * TOPIC_COLORS.length)];
+
+    const message = {
+      _: 'messageService',
+      pFlags: {
+        out: true,
+        reactions_are_possible: true
+      },
+      id: this.generateTempMessageId(peerId),
+      random_id: randomLong(),
+      from_id: this.appPeersManager.getOutputPeer(this.rootScope.myId),
+      peer_id: this.appPeersManager.getOutputPeer(peerId),
+      date: tsNow(true) + this.timeManager.getServerTimeOffset(),
+      pending: true,
+      action: {
+        _: 'messageActionTopicCreate',
+        pFlags: {
+          title_missing: true
+        },
+        title: title,
+        icon_color: iconColor
+      }
+    } satisfies Message.messageService;
+
+    return message;
+  }
+
   private generateReplyHeader(peerId: PeerId, replyTo: InputReplyTo): MessageReplyHeader {
     if(!replyTo) {
       return;
@@ -3161,12 +2963,17 @@ export class AppMessagesManager extends AppManager {
 
     const channelId = this.appPeersManager.isChannel(peerId) ? peerId.toChatId() : undefined;
     const isForum = this.appPeersManager.isForum(peerId);
+    const isBotforum = this.appPeersManager.isBotforum(peerId);
     const replyToMsgId = this.appMessagesIdsManager.generateMessageId(replyTo.reply_to_msg_id, channelId);
     let replyToTopId = replyTo.top_msg_id ? this.appMessagesIdsManager.generateMessageId(replyTo.top_msg_id, channelId) : undefined;
     const originalMessage = this.getMessageByPeer(peerId, replyToMsgId);
 
     if(isForum && !replyToTopId && originalMessage) {
-      replyToTopId = getMessageThreadId(originalMessage, true);
+      replyToTopId = getMessageThreadId(originalMessage, {isForum: true});
+    }
+
+    if(isBotforum && !replyToTopId && originalMessage && getMessageThreadId(originalMessage, {isBotforum: true})) {
+      replyToTopId = getMessageThreadId(originalMessage, {isBotforum: true});
     }
 
     const header: MessageReplyHeader = {
@@ -3175,7 +2982,7 @@ export class AppMessagesManager extends AppManager {
       reply_to_msg_id: replyToMsgId || replyToTopId
     };
 
-    if(replyToTopId && isForum && GENERAL_TOPIC_ID !== replyToTopId) {
+    if(replyToTopId && ((isForum && GENERAL_TOPIC_ID !== replyToTopId) || isBotforum)) {
       header.pFlags.forum_topic = true;
     }
 
@@ -3448,7 +3255,7 @@ export class AppMessagesManager extends AppManager {
       message.peerId,
       isDialog(dialog) ? undefined : getDialogKey(dialog)
     );
-    historyStorage.maxId = message.mid;
+    historyStorage._maxId = message.mid;
 
     this.dialogsStorage.generateIndexForDialog(dialog, false, message);
 
@@ -3487,6 +3294,7 @@ export class AppMessagesManager extends AppManager {
 
       delete this.pendingByRandomId[randomId];
       this.deleteMessageFromStorage(storage, tempId);
+      this.deletePendingTopMsg(peerId, tempId);
 
       return true;
     }
@@ -3530,6 +3338,12 @@ export class AppMessagesManager extends AppManager {
 
     return outDialogs;
   } */
+
+  private deletePendingTopMsg(peerId: PeerId, id: number) {
+    if(this.pendingTopMsgs[peerId] === id) {
+      delete this.pendingTopMsgs[peerId];
+    }
+  }
 
   public async fillConversations(folderId = GLOBAL_FOLDER_ID): Promise<void> {
     const middleware = this.middleware.get();
@@ -3582,15 +3396,17 @@ export class AppMessagesManager extends AppManager {
     folderId,
     query,
     offsetTopicId,
-    filterType = this.dialogsStorage.getFilterType(folderId)
+    filterType = this.dialogsStorage.getFilterType(folderId),
+    offsetBotforumTopic
   }: {
     limit: number,
     folderId: number,
     query?: string,
     offsetTopicId?: ForumTopic['id'],
-    filterType?: FilterType
+    filterType?: FilterType,
+    offsetBotforumTopic?: ForumTopic
   }) {
-    const log = this.log.bindPrefix('getTopMessages');
+    const log = this.log.bindPrefix('getTopMessages-' + nextRandomUint(16));
     // const dialogs = this.dialogsStorage.getFolder(folderId);
     const offsetId = 0;
     let offsetPeerId: PeerId;
@@ -3609,7 +3425,13 @@ export class AppMessagesManager extends AppManager {
     const peerId = this.dialogsStorage.isVirtualFilter(folderId) ? folderId : undefined;
 
     const processResult = (result: MessagesDialogs | MessagesForumTopics | MessagesSavedDialogs) => {
-      if(!middleware() || result._ === 'messages.dialogsNotModified' || result._ === 'messages.savedDialogsNotModified') return null;
+      if(
+        !middleware() ||
+        result._ === 'messages.dialogsNotModified' ||
+        result._ === 'messages.savedDialogsNotModified'
+      ) {
+        return null;
+      }
 
       log('result', result);
 
@@ -3646,12 +3468,6 @@ export class AppMessagesManager extends AppManager {
         if(!dialog) {
           arr.splice(idx, 1);
           return;
-        }
-
-        // const d = Object.assign({}, dialog);
-        // ! нужно передавать folderId, так как по папке !== 0 нет свойства folder_id
-        if(!peerId) {
-          (dialog as Dialog).folder_id ??= setFolderId;
         }
 
         this.dialogsStorage.saveDialog({
@@ -3762,9 +3578,10 @@ export class AppMessagesManager extends AppManager {
 
       const dialogs = items;
       const slicedDialogs = limit === useLimit ? dialogs : dialogs.slice(0, limit);
+
       return {
         isEnd: isEnd && slicedDialogs[slicedDialogs.length - 1] === dialogs[dialogs.length - 1],
-        count: count ?? items.length,
+        count: Math.max(count || 0, items.length),
         dialogs: slicedDialogs
       };
     };
@@ -3777,11 +3594,11 @@ export class AppMessagesManager extends AppManager {
     let promise: Promise<ReturnType<typeof processResult>>, method: string, params: any;
     if(filterType === FilterType.Forum) {
       promise = this.apiManager.invokeApiSingleProcess({
-        method: method = 'channels.getForumTopics',
+        method: method = 'messages.getForumTopics',
         params: params = {
-          channel: this.appChatsManager.getChannelInput(peerId.toChatId()),
+          peer: this.appPeersManager.getInputPeerById(peerId),
           limit: useLimit,
-          offset_date: offsetTopicId ? undefined : offsetDate,
+          offset_date: offsetBotforumTopic?.date || (offsetTopicId ? undefined : offsetDate),
           offset_id: offsetId,
           offset_topic: offsetTopicId,
           q: query
@@ -4000,12 +3817,17 @@ export class AppMessagesManager extends AppManager {
       with_my_score: options.withMyScore,
       silent: options.silent,
       schedule_date: options.scheduleDate,
+      schedule_repeat_period: options.scheduleRepeatPeriod || undefined,
       drop_author: options.dropAuthor,
       drop_media_captions: options.dropCaptions,
       send_as: options.sendAsPeerId ? this.appPeersManager.getInputPeerById(options.sendAsPeerId) : undefined,
       top_msg_id: options.threadId ? this.appMessagesIdsManager.generateMessageId(options.threadId) : undefined,
       allow_paid_stars: paidStars,
-      reply_to: this.getInputReplyTo({peerId, replyToMonoforumPeerId: options.replyToMonoforumPeerId})
+      reply_to: this.getInputReplyTo({
+        peerId,
+        replyToMonoforumPeerId: options.replyToMonoforumPeerId,
+        replyToMsgId: this.appPeersManager.isBotforum(peerId) ? options.threadId : undefined
+      })
     }, sentRequestOptions).then((updates) => {
       this.log('forwardMessages updates:', updates);
       this.apiUpdatesManager.processUpdateMessage(updates);
@@ -4070,8 +3892,8 @@ export class AppMessagesManager extends AppManager {
     return Promise.all(promises).then(noop);
   }
 
-  public forwardMessages(options: MessageForwardParams) {
-    this.checkSendOptions(options);
+  public async forwardMessages(options: MessageForwardParams) {
+    await this.checkSendOptions(options);
 
     const {peerId, fromPeerId, mids} = options;
     const channelId = this.appPeersManager.isChannel(fromPeerId) ? fromPeerId.toChatId() : undefined;
@@ -4253,6 +4075,25 @@ export class AppMessagesManager extends AppManager {
     return message;
   }
 
+  private iterateHistoryStorages(
+    storages: HistoryStorage | Record<string, HistoryStorage>,
+    callback: (storage: HistoryStorage) => void
+  ) {
+    if(!storages) {
+      return;
+    }
+
+    if('key' in storages) {
+      callback(storages as HistoryStorage);
+      return;
+    }
+
+    for(const key in storages) {
+      const storage = storages[key];
+      this.iterateHistoryStorages(storage, callback);
+    }
+  }
+
   public mirrorAllMessages(port?: MessageEventSource) {
     const mirror: Mirrors['messages'] = {};
     [
@@ -4268,6 +4109,23 @@ export class AppMessagesManager extends AppManager {
     MTProtoMessagePort.getInstance<false>().invokeVoid('mirror', {
       name: 'messages',
       value: mirror,
+      accountNumber: this.getAccountNumber()
+    }, port);
+
+    const historyMirror: Mirrors['historyStorage'] = {};
+    [
+      this.historiesStorage,
+      this.searchesStorage,
+      this.threadsStorage
+    ].forEach((storages) => {
+      this.iterateHistoryStorages(storages as any, (historyStorage) => {
+        historyMirror[historyStorage.key] = this.historyStorageAsTransferable(historyStorage);
+      });
+    });
+
+    MTProtoMessagePort.getInstance<false>().invokeVoid('mirror', {
+      name: 'historyStorage',
+      value: historyMirror,
       accountNumber: this.getAccountNumber()
     }, port);
   }
@@ -4337,6 +4195,11 @@ export class AppMessagesManager extends AppManager {
     return storage?.delete(mid);
   }
 
+  public deleteMessageFromHistoryStorage(peerId: PeerId, mid: number) {
+    const storage = this.getHistoryMessagesStorage(peerId);
+    return this.deleteMessageFromStorage(storage, mid);
+  }
+
   private createMessageStorage(peerId: PeerId, type: MessagesStorageType) {
     const storage: MessagesStorage = new Map() as any;
     storage.peerId = peerId;
@@ -4364,6 +4227,10 @@ export class AppMessagesManager extends AppManager {
 
   public getHistoryMessagesStorage(peerId: PeerId) {
     return this.messagesStorageByPeerId[peerId] ??= this.createMessageStorage(peerId, 'history');
+  }
+
+  public getLogsMessagesStorage(peerId: PeerId) {
+    return this.logsMessagesStorage[peerId] ??= this.createMessageStorage(peerId, 'logs');
   }
 
   public getGlobalHistoryMessagesStorage() {
@@ -4405,6 +4272,14 @@ export class AppMessagesManager extends AppManager {
     }
 
     return this.getMessageFromStorage(this.getHistoryMessagesStorage(peerId), messageId);
+  }
+
+  public getMessageByPeerOrFromLogs(peerId: PeerId, messageId: number) {
+    if(!peerId) {
+      return this.getMessageById(messageId);
+    }
+
+    return this.getMessageFromStorage(this.getHistoryMessagesStorage(peerId), messageId) || this.getMessageFromStorage(this.getLogsMessagesStorage(peerId), messageId);
   }
 
   public getMessagePeer(message: any): PeerId {
@@ -4572,6 +4447,8 @@ export class AppMessagesManager extends AppManager {
               return message.fromId === this.appPeersManager.peerId;
             }
           };
+        } else if(this.appPeersManager.isBotforum(peerId) && threadOrSavedId) {
+          filterMessage = (message) => getMessageThreadId(message, {isBotforum: true}) === threadOrSavedId;
         }
 
         if(filterMessage) {
@@ -4644,9 +4521,9 @@ export class AppMessagesManager extends AppManager {
       });
     } else {
       promise = this.apiManager.invokeApiSingleProcess({
-        method: 'channels.deleteTopicHistory',
+        method: 'messages.deleteTopicHistory',
         params: {
-          channel: this.appChatsManager.getChannelInput(peerId.toChatId()),
+          peer: this.appPeersManager.getInputPeerById(peerId),
           top_msg_id: getServerMessageId(threadOrSavedId)
         },
         processResult
@@ -4714,7 +4591,21 @@ export class AppMessagesManager extends AppManager {
     });
   }
 
-  private flushStoragesByPeerId(peerId: PeerId) {
+  public flushStoragesByPeerId(peerId: PeerId) {
+    [
+      this.historiesStorage[peerId],
+      this.searchesStorage[peerId],
+      this.threadsStorage[peerId]
+    ].forEach((s) => {
+      this.iterateHistoryStorages(s as any, (historyStorage) => {
+        MTProtoMessagePort.getInstance<false>().invokeVoid('mirror', {
+          name: 'historyStorage',
+          key: joinDeepPath(historyStorage.key, 'delete'),
+          accountNumber: this.getAccountNumber()
+        });
+      });
+    });
+
     [
       this.historiesStorage,
       this.threadsStorage,
@@ -5005,6 +4896,9 @@ export class AppMessagesManager extends AppManager {
 
         if(replyTo.reply_to_msg_id) {
           replyTo.reply_to_msg_id = message.reply_to_mid = this.appMessagesIdsManager.generateMessageId(replyTo.reply_to_msg_id, replyToChannelId);
+          if(this.deletedMessages.has(`${peerId}_${replyTo.reply_to_msg_id}`)) {
+            replyTo.reply_to_msg_deleted = true;
+          }
         }
 
         if(replyTo.reply_to_top_id) {
@@ -5295,16 +5189,7 @@ export class AppMessagesManager extends AppManager {
       }
 
       case 'messageMediaPhoto': {
-        if(media.ttl_seconds) {
-          unsupported = true;
-        } else {
-          media.photo = this.appPhotosManager.savePhoto(media.photo, mediaContext);
-        }
-
-        if(!(media as MessageMedia.messageMediaPhoto).photo) { // * found this bug on test DC
-          delete message[key];
-        }
-
+        media.photo = this.appPhotosManager.savePhoto(media.photo, mediaContext);
         break;
       }
 
@@ -5316,18 +5201,8 @@ export class AppMessagesManager extends AppManager {
       }
 
       case 'messageMediaDocument': {
-        if(media.ttl_seconds) {
-          unsupported = true;
-        } else {
-          const originalDoc = media.document;
-
-          media.document = this.appDocsManager.saveDoc(originalDoc, mediaContext, media.alt_documents);
-
-          if(!media.document && originalDoc._ !== 'documentEmpty') {
-            unsupported = true;
-          }
-        }
-
+        const originalDoc = media.document;
+        media.document = this.appDocsManager.saveDoc(originalDoc, mediaContext, media.alt_documents);
         break;
       }
 
@@ -5392,29 +5267,70 @@ export class AppMessagesManager extends AppManager {
     this.saveMessages(result.messages);
   }
 
-  public async getFirstMessageToEdit(peerId: PeerId, threadId?: number) {
+  public async getFirstMessageToEdit({
+    peerId,
+    threadId,
+    forReply,
+    mid,
+    up
+  }: {
+    peerId: PeerId,
+    threadId?: number,
+    forReply?: boolean,
+    mid?: number,
+    up?: boolean
+  }) {
     const historyStorage = this.getHistoryStorage(peerId, threadId);
     const slice = historyStorage.history.slice;
-    if(slice.isEnd(SliceEnd.Bottom) && slice.length) {
-      let goodMessage: Message.message | Message.messageService;
-      const myPeerId = this.appPeersManager.peerId;
-      for(const mid of slice) {
-        const message = this.getMessageByPeer(peerId, mid);
-        const good = myPeerId === peerId ? message.fromId === myPeerId : message.pFlags.out;
+    if(!slice.isEnd(SliceEnd.Bottom)) {
+      return;
+    }
 
-        if(good) {
-          if(await this.canEditMessage(message, 'text')) {
-            goodMessage = this.getGroupsFirstMessage(message as Message.message);
-            break;
-          }
-
-          // * this check will allow editing only last message
-          // break;
-        }
+    let mids = [...slice.slice()];
+    if(mid) {
+      const index = mids.indexOf(mid);
+      if(index === -1) {
+        return;
       }
 
-      return goodMessage;
+      if(up) {
+        mids = mids.slice(index + 1);
+      } else {
+        mids = mids.slice(0, index).reverse();
+      }
+
+      forEachReverse(mids, (mid, idx) => {
+        const message = this.getMessageByPeer(peerId, mid);
+        if(this.getGroupsFirstMessage(message as Message.message) !== message) {
+          mids.splice(idx, 1)
+        }
+      });
     }
+
+    if(!mids.length) {
+      return;
+    }
+
+    let goodMessage: Message.message | Message.messageService;
+    const myPeerId = this.appPeersManager.peerId;
+    for(const mid of mids) {
+      const message = this.getMessageByPeer(peerId, mid);
+      const good = forReply ?
+        !message.pFlags.is_outgoing :
+        (myPeerId === peerId ? message.fromId === myPeerId : message.pFlags.out);
+
+      if(good) {
+        if(forReply || await this.canEditMessage(message, 'text')) {
+          goodMessage = this.getGroupsFirstMessage(message as Message.message);
+          break;
+        }
+
+        // * this check will allow editing only last message
+        // break;
+      }
+    }
+
+    return goodMessage;
   }
 
   public wrapMessageEntities(_message: {message: string, entities?: MessageEntity[], totalEntities?: MessageEntity[]} | TextWithEntities) {
@@ -5501,7 +5417,11 @@ export class AppMessagesManager extends AppManager {
     });
   }
 
-  public editPeerFolders(peerIds: PeerId[], folderId: number) {
+  public editPeerFolders(peerIds: PeerId[], folderId: REAL_FOLDER_ID) {
+    if(!REAL_FOLDERS.has(folderId)) {
+      throw makeError('UNKNOWN');
+    }
+
     this.apiManager.invokeApi('folders.editPeerFolders', {
       folder_peers: peerIds.map((peerId) => {
         return {
@@ -5511,10 +5431,11 @@ export class AppMessagesManager extends AppManager {
         };
       })
     }).then((updates) => {
-      const peerId = peerIds[0];
-      if(peerIds.length === 1 && folderId === FOLDER_ID_ALL) {
-        this.appProfileManager.refreshPeerSettingsIfNeeded(peerId);
-      }
+      peerIds.forEach((peerId) => {
+        if(folderId === FOLDER_ID_ALL) {
+          this.appProfileManager.refreshPeerSettingsIfNeeded(peerId);
+        }
+      });
 
       // this.log('editPeerFolders updates:', updates);
       this.apiUpdatesManager.processUpdateMessage(updates); // WARNING! возможно тут нужно добавлять channelId, и вызывать апдейт для каждого канала отдельно
@@ -5563,7 +5484,7 @@ export class AppMessagesManager extends AppManager {
     }
 
     if(isTopic) {
-      return this.appChatsManager.updatePinnedForumTopic(peerId.toChatId(), topicOrSavedId, pinned);
+      return this.updatePinnedForumTopic(peerId, topicOrSavedId, pinned);
     }
 
     let promise: Promise<boolean>;
@@ -5691,7 +5612,7 @@ export class AppMessagesManager extends AppManager {
     }
 
     if(message.media?._ === 'messageMediaDocument' &&
-        ((message.media.document as Document.document).sticker || (message.media.document as Document.document).type === 'round')) {
+        (!message.media.document || (message.media.document as Document.document).sticker || (message.media.document as Document.document).type === 'round')) {
       return false;
     }
 
@@ -5858,24 +5779,9 @@ export class AppMessagesManager extends AppManager {
     } else {
       searchStorage = ((this.searchesStorage[options.peerId] ??= {})[options.threadId || options.monoforumThreadId] ??= {})[filter] ??= this.createHistoryStorage(o);
     }
-    if(options.isCacheableSearch) { // * don't update messages list if it's a global search
-      if(!searchStorage.searchHistory) {
-        const slicedArray = searchStorage.searchHistory = new SlicedArray();
-        slicedArray.insertSlice = (slice) => {
-          slicedArray.first.push(...slice);
-          return slicedArray.first;
-        };
 
-        slicedArray.findOffsetInSlice = (offsetId, slice) => {
-          const index = slice.indexOf(offsetId);
-          if(index !== -1) {
-            return {
-              slice,
-              offset: index + 1
-            };
-          }
-        };
-      }
+    if(options.isCacheableSearch) { // * don't update messages list if it's a global search
+
     } else if(!searchStorage.originalInsertSlice) {
       searchStorage.originalInsertSlice = searchStorage.history.insertSlice.bind(searchStorage.history);
       searchStorage.history.insertSlice = (...args) => {
@@ -6033,7 +5939,7 @@ export class AppMessagesManager extends AppManager {
       if(historyStorage.maxId && historyStorage.maxId < newMaxId && first.isEnd(SliceEnd.Bottom)) {
         first.unsetEnd(SliceEnd.Bottom);
       }
-      historyStorage.maxId = newMaxId;
+      historyStorage._maxId = newMaxId;
 
       this.threadsToReplies[threadKey] = peerId + '_' + mid;
 
@@ -6290,12 +6196,24 @@ export class AppMessagesManager extends AppManager {
         // apiPromise = new Promise<void>((resolve) => resolve());
       }
 
-      this.apiUpdatesManager.processLocalUpdate({
-        _: 'updateReadChannelDiscussionInbox',
-        channel_id: peerId.toChatId(),
-        top_msg_id: threadId,
-        read_max_id: maxId
-      });
+      if(peerId.isAnyChat()) {
+        this.apiUpdatesManager.processLocalUpdate({
+          _: 'updateReadChannelDiscussionInbox',
+          channel_id: peerId.toChatId(),
+          top_msg_id: threadId,
+          read_max_id: maxId
+        });
+      } else {
+        this.apiUpdatesManager.processLocalUpdate({
+          _: 'updateReadHistoryInbox',
+          peer: this.appPeersManager.getOutputPeer(peerId),
+          top_msg_id: threadId,
+          max_id: maxId,
+          still_unread_count: 0,
+          pts: undefined,
+          pts_count: undefined
+        });
+      }
     } else if(this.appPeersManager.isChannel(peerId)) {
       if(!historyStorage.readPromise) {
         apiPromise = this.apiManager.invokeApi('channels.readHistory', {
@@ -6705,7 +6623,7 @@ export class AppMessagesManager extends AppManager {
     // insertSlice([newerMessage?.mid, message.mid, olderMessage?.mid].filter(Boolean));
     insertInDescendSortedArray(slice, mid);
 
-    historyStorage.maxId = Math.max(historyStorage.maxId, message.mid);
+    historyStorage._maxId = Math.max(historyStorage.maxId, message.mid);
     historyStorage.channelJoinedMid = message.mid;
     if(historyStorage.originalInsertSlice) {
       historyStorage.history.insertSlice = historyStorage.originalInsertSlice;
@@ -6739,38 +6657,99 @@ export class AppMessagesManager extends AppManager {
   }
 
   public createHistoryStorage(options: Parameters<typeof getHistoryStorageKey>[0]): HistoryStorage {
-    const self = this;
-    return {
-      history: new SlicedArray(),
-      type: options.type,
-      key: getHistoryStorageKey(options),
-      wasFetched: false,
-      _maxId: undefined,
-      _count: null,
-      get count() {
-        return this._count;
-      },
-      set count(count) {
-        this._count = count;
-        if(self.historyMaxIdSubscribed.has(this.key)) {
-          self.rootScope.dispatchEvent('history_count', {historyKey: this.key, count});
-        }
-      },
-      get maxId() {
-        const maxId = this._maxId;
-        if(maxId) {
-          return maxId;
+    const historyStorage = createHistoryStorage(options);
+    if(options.searchType === 'uncached') {
+      return historyStorage;
+    }
+
+    if(options.isCacheableSearch && options.searchType === 'cached') {
+      historyStorage.searchHistory = createHistoryStorageSearchSlicedArray();
+    } else {
+      historyStorage.history = new SlicedArray();
+    }
+
+    // * using proxy to catch only outside calls
+    let ignoreSliceCalls = false;
+    const observeKey = historyStorage.searchHistory ? 'searchHistory' : 'history';
+    const observed = createObservedState(historyStorage, {
+      onSet: ({prop, value, oldValue, state}) => {
+        if(!passHistoryStorageProperties.has(prop as keyof HistoryStorage)) {
+          return;
         }
 
-        const first = this.history.first;
-        if(first.isEnd(SliceEnd.Bottom)) {
-          return first[0];
-        }
+        MTProtoMessagePort.getInstance<false>().invokeVoid('mirror', {
+          name: 'historyStorage',
+          key: joinDeepPath(
+            prop === 'key' ? oldValue : historyStorage.key,
+            prop
+          ),
+          value,
+          accountNumber: this.getAccountNumber()
+        });
       },
-      set maxId(maxId) {
-        this._maxId = maxId;
+
+      observe: {
+        [observeKey]: {
+          methods: ['push', 'unshift', 'insertSlice', 'delete', 'deleteSlice'],
+          onCallBefore: () => {
+            ignoreSliceCalls = true;
+          },
+          onCall: ({method, args, result, state}) => {
+            ignoreSliceCalls = false;
+
+            args.forEach((arg, idx, array) => {
+              if(isObject(arg) && arg.unwrapped) {
+                array[idx] = arg.unwrapped;
+              }
+            });
+
+            // console.log('history', method, args, result, state);
+            MTProtoMessagePort.getInstance<false>().invokeVoid('mirror', {
+              name: 'historyStorage',
+              key: joinDeepPath(historyStorage.key, observeKey, method),
+              value: args,
+              accountNumber: this.getAccountNumber()
+            });
+          }
+        }
       }
+    });
+
+    // * can't listen as proxy because it won't call from inside of SlicedArray
+    // * afterwards listening only outside calls
+    // * also make sure that slice is included in the history
+    const slicedArrayToObserve = observed[observeKey];
+    const originalConstructSlice: any = slicedArrayToObserve.constructSlice.bind(slicedArrayToObserve);
+    slicedArrayToObserve.constructSlice = (...args: any[]) => {
+      const result = originalConstructSlice(...args as any);
+      const proxy = wrapObject(result, {
+        methods: ['setEnd', 'unsetEnd', 'splice'],
+        onCall: ({method, args, result, state}) => {
+          if(ignoreSliceCalls) {
+            return;
+          }
+
+          const index = slicedArrayToObserve.slices.indexOf(proxy);
+          if(index === -1) {
+            // console.warn('slice unknown call', observed, proxy);
+            return;
+          }
+
+          // console.log('slice call', method, args, result, state);
+          MTProtoMessagePort.getInstance<false>().invokeVoid('mirror', {
+            name: 'historyStorage',
+            key: joinDeepPath(historyStorage.key, 'slices', index, method),
+            value: args,
+            accountNumber: this.getAccountNumber()
+          });
+        }
+      }, historyStorage);
+      proxy.unwrapped = result;
+      return proxy;
     };
+    slicedArrayToObserve.slices.splice(0, Infinity, slicedArrayToObserve.constructSlice() as any);
+
+    return observed;
   }
 
   public getHistoryStorage(peerId: PeerId, threadId?: number) {
@@ -6782,35 +6761,35 @@ export class AppMessagesManager extends AppManager {
     return this.historiesStorage[peerId] ??= this.processNewHistoryStorage(peerId, this.createHistoryStorage({type: 'history', peerId}));
   }
 
-  public getHistoryStorageTransferable(options: RequestHistoryOptions & {
-    backLimit?: number,
-    historyStorage?: HistoryStorage
-  }) {
-    this.processRequestHistoryOptions(options);
-    const historyStorage = options.historyStorage;
+  private historyStorageAsTransferable(historyStorage: HistoryStorage) {
     const {
-      count,
       history,
       searchHistory,
-      maxId,
-      readMaxId,
-      readOutboxMaxId,
-      maxOutId,
-      replyMarkup
+      maxId
     } = historyStorage;
 
-    return {
-      count,
+    const historyStorageCopy = {};
+    passHistoryStorageProperties.forEach((prop) => {
+      // @ts-ignore
+      historyStorageCopy[prop] = historyStorage[prop];
+    });
+
+    const ret: any = {
+      ...historyStorageCopy,
       history: undefined as HistoryStorage,
       historySerialized: history.toJSON(),
       searchHistory: undefined as HistoryStorage,
       searchHistorySerialized: searchHistory?.toJSON(),
-      maxId,
-      readMaxId,
-      readOutboxMaxId,
-      maxOutId,
-      replyMarkup
+      maxId
     };
+
+    for(const key in ret) {
+      if(ret[key] === undefined) {
+        delete ret[key];
+      }
+    }
+
+    return ret;
   }
 
   private getNotifyPeerSettings(peerId: PeerId, threadId?: number) {
@@ -6891,6 +6870,27 @@ export class AppMessagesManager extends AppManager {
     }
   }
 
+  private updateNoForwardsOnNewMessage(message: MyMessage) {
+    const action = (message as Message.messageService).action;
+    if(action?._ !== 'messageActionNoForwardsToggle') {
+      return;
+    }
+
+    this.appProfileManager.modifyCachedFullUser(message.peerId.toUserId(), (userFull) => {
+      const {pFlags} = userFull;
+      if(action.new_value) {
+        if(message.pFlags.out) {
+          pFlags.noforwards_my_enabled = true;
+        } else {
+          pFlags.noforwards_peer_enabled = true;
+        }
+      } else {
+        delete pFlags.noforwards_my_enabled;
+        delete pFlags.noforwards_peer_enabled;
+      }
+    });
+  }
+
   public hasOutgoingMessage(peerId: PeerId) {
     for(const randomId in this.pendingByRandomId) {
       if(this.pendingByRandomId[randomId].peerId === peerId) {
@@ -6899,6 +6899,173 @@ export class AppMessagesManager extends AppManager {
     }
 
     return false;
+  }
+
+  public editForumTopic(options: {
+    peerId: PeerId,
+    topicId: number,
+    title?: string,
+    iconEmojiId?: DocId,
+    closed?: boolean,
+    hidden?: boolean
+  }) {
+    const {peerId, topicId, title, iconEmojiId, closed, hidden} = options;
+    return this.apiManager.invokeApi('messages.editForumTopic', {
+      peer: this.appPeersManager.getInputPeerById(peerId),
+      topic_id: getServerMessageId(topicId),
+      title,
+      icon_emoji_id: iconEmojiId,
+      closed,
+      hidden
+    }).then((updates) => {
+      this.apiUpdatesManager.processUpdateMessage(updates);
+    });
+  }
+
+  public async createForumTopic(options: {
+    peerId: PeerId,
+    title: string,
+    iconColor: number,
+    iconEmojiId: DocId
+  }) {
+    const {peerId, title, iconColor, iconEmojiId} = options;
+
+    const channelId = peerId.isUser() ? undefined : peerId.toChatId();
+    const channelFull = channelId ? undefined : await this.appProfileManager.getChannelFull(channelId);
+    const sendAsInputPeer = channelFull?.default_send_as && this.appPeersManager.getInputPeerById(this.appPeersManager.getPeerId(channelFull.default_send_as));
+
+    return this.apiManager.invokeApi('messages.createForumTopic', {
+      peer: this.appPeersManager.getInputPeerById(peerId),
+      title,
+      icon_color: iconColor,
+      icon_emoji_id: iconEmojiId,
+      random_id: randomLong(),
+      send_as: sendAsInputPeer
+    }).then((updates) => {
+      this.apiUpdatesManager.processUpdateMessage(updates);
+
+      const update = (updates as Updates.updates).updates.find((update) => update._ === 'updateNewChannelMessage') as Update.updateNewChannelMessage;
+      return this.appMessagesIdsManager.generateMessageId(update.message.id, channelId);
+    });
+  }
+
+  private getPendingOrCreateBotforumTopic({peerId, title}: GetPendingOrCreateBotforumTopicArgs) {
+    if(this.pendingNewBotforumTopics[peerId]) {
+      return this.pendingNewBotforumTopics[peerId];
+    }
+
+    const topicCreatedMessage = this.generateTopicCreatedServiceMessage({peerId, title: title || 'New Chat'})
+    const temporaryThreadId = topicCreatedMessage.id;
+
+    const storages: HistoryStorage[] = [
+      this.getHistoryStorage(peerId),
+      this.getHistoryStorage(peerId, temporaryThreadId)
+    ].filter(Boolean);
+
+    for(const storage of storages) {
+      storage.history.unshift(temporaryThreadId);
+    }
+
+    const [message] = this.saveMessages([topicCreatedMessage]);
+
+    const storage = this.getHistoryMessagesStorage(peerId);
+    this.rootScope.dispatchEvent('history_append', {storageKey: storage.key, message});
+
+    this.createPendingBotforumTopic({
+      peerId,
+      tempId: topicCreatedMessage.id,
+      randomId: topicCreatedMessage.random_id,
+      title: title || 'New Chat',
+      message: topicCreatedMessage,
+      iconColor: topicCreatedMessage.action.icon_color
+    });
+
+    return this.pendingNewBotforumTopics[peerId];
+  }
+
+  private async createPendingBotforumTopic({peerId, title, tempId, randomId, message, iconColor}: CreateBotforumTopicArgs) {
+    const beforeMessageSendCallbacks: Array<() => void> = [];
+    const messageSendCallbacks: Array<() => void> = [];
+
+    this.pendingNewBotforumTopics[peerId] = {
+      tempId,
+      beforeMessageSendCallbacks,
+      messageSendCallbacks
+    };
+
+    const temporaryTopic = this.generateTemporaryTopic(message);
+    const dumpTemporaryTopic = this.dialogsStorage.setTemporaryForumTopic(temporaryTopic);
+
+    this.rootScope.dispatchEvent('botforum_pending_topic_created', {peerId, tempId});
+
+    const pendingTopic = this.pendingNewBotforumTopics[peerId];
+
+    this.pendingByRandomId[randomId] = {
+      tempId: pendingTopic.tempId,
+      threadId: pendingTopic.tempId,
+      peerId,
+      storage: this.getHistoryMessagesStorage(peerId)
+    };
+
+    const updates = await this.apiManager.invokeApi('messages.createForumTopic', {
+      peer: this.appPeersManager.getInputPeerById(peerId),
+      title,
+      icon_color: iconColor,
+      random_id: randomId,
+      title_missing: true
+    });
+
+    if(updates._ === 'updates') {
+      const messageIdUpdate = updates.updates.find((update) => update._ === 'updateMessageID');
+      if(messageIdUpdate) {
+        pendingTopic.newId = this.appMessagesIdsManager.generateMessageId(messageIdUpdate.id);
+      }
+    }
+
+    this.apiUpdatesManager.processUpdateMessage(updates);
+
+    await this.dialogsStorage.getForumTopicById(peerId, pendingTopic.newId);
+    this.rootScope.dispatchEvent('botforum_pending_topic_created', {peerId, tempId, newId: pendingTopic.newId});
+
+    dumpTemporaryTopic();
+
+
+    delete this.pendingNewBotforumTopics[peerId];
+
+    beforeMessageSendCallbacks.forEach((callback) => callback());
+    messageSendCallbacks.forEach((callback) => callback());
+  }
+
+  private generateTemporaryTopic(message: ReturnType<AppMessagesManager['generateTopicCreatedServiceMessage']> & Pick<Message.messageService, 'peerId'>): MTForumTopic.forumTopic {
+    return {
+      _: 'forumTopic',
+      id: message.id,
+      peerId: message.peerId,
+      date: message.date,
+      from_id: message.from_id,
+      title: message.action.title,
+      icon_color: message.action.icon_color,
+      top_message: message.id,
+      read_inbox_max_id: 0,
+      read_outbox_max_id: 0,
+      unread_count: 0,
+      unread_mentions_count: 0,
+      unread_reactions_count: 0,
+      notify_settings: {_: 'peerNotifySettings'},
+      pFlags: {
+        title_missing: true
+      }
+    };
+  }
+
+  public updatePinnedForumTopic(peerId: PeerId, topicId: number, pinned: boolean) {
+    return this.apiManager.invokeApi('messages.updatePinnedForumTopic', {
+      peer: this.appPeersManager.getInputPeerById(peerId),
+      topic_id: getServerMessageId(topicId),
+      pinned
+    }).then((updates) => {
+      this.apiUpdatesManager.processUpdateMessage(updates);
+    });
   }
 
   private onUpdateMessageId = (update: Update.updateMessageID) => {
@@ -6969,7 +7136,7 @@ export class AppMessagesManager extends AppManager {
         message
       } as Update.updateNewDiscussionMessage;
 
-      if(this.appChatsManager.isForum(peerId.toChatId()) && !this.dialogsStorage.getForumTopic(peerId, threadId)) {
+      if((this.appChatsManager.isForum(peerId.toChatId()) || this.appPeersManager.isBotforum(peerId)) && !this.dialogsStorage.getForumTopic(peerId, threadId)) {
         // this.dialogsStorage.getForumTopicById(peerId, threadId);
         this.handleNewUpdateAfterReload(peerId, update, threadId);
       } else if(peerId === this.appPeersManager.peerId && !this.dialogsStorage.getAnyDialog(peerId, threadId)) {
@@ -7061,6 +7228,7 @@ export class AppMessagesManager extends AppManager {
     } else {
       // * catch situation with disconnect. if message's id is lower than we already have (in bottom end slice), will sort it
       const firstSlice = historyStorage.history.first;
+      let inserted = false;
       if(firstSlice.isEnd(SliceEnd.Bottom)) {
         let i = 0;
         for(const length = firstSlice.length; i < length; ++i) {
@@ -7069,8 +7237,13 @@ export class AppMessagesManager extends AppManager {
           }
         }
 
-        firstSlice.splice(i, 0, message.mid);
-      } else {
+        if(i > 0) {
+          firstSlice.splice(i, 0, message.mid);
+          inserted = true;
+        }
+      }
+
+      if(!inserted) {
         historyStorage.history.unshift(message.mid);
       }
 
@@ -7080,7 +7253,7 @@ export class AppMessagesManager extends AppManager {
     }
 
     if(!historyStorage.maxId || message.mid > historyStorage.maxId) {
-      historyStorage.maxId = message.mid;
+      historyStorage._maxId = message.mid;
     }
 
     if(this.mergeReplyKeyboard(historyStorage, message)) {
@@ -7126,6 +7299,7 @@ export class AppMessagesManager extends AppManager {
 
     if(!isLocalThreadUpdate) {
       this.updateSlowModeOnNewMessage(message);
+      this.updateNoForwardsOnNewMessage(message);
     }
 
     // commented to render the message if it's been sent faster than history_append came to main thread
@@ -7290,7 +7464,7 @@ export class AppMessagesManager extends AppManager {
     const mid = this.appMessagesIdsManager.generateMessageId(message.id, channelId);
     const storage = this.getHistoryMessagesStorage(peerId);
     if(!storage.has(mid)) {
-      this.fixDialogUnreadMentionsIfNoMessage({peerId, threadId: getMessageThreadId(message, this.appPeersManager.isForum(peerId)), force: true});
+      this.fixDialogUnreadMentionsIfNoMessage({peerId, threadId: getMessageThreadId(message, {isForum: this.appPeersManager.isForum(peerId)}), force: true});
       // this.fixDialogUnreadMentionsIfNoMessage(peerId);
       return;
     }
@@ -7301,8 +7475,25 @@ export class AppMessagesManager extends AppManager {
     const newMessage = this.modifyMessage(oldMessage, () => {
       this.saveMessages([message], {storage});
       const newMessage: Message = this.getMessageFromStorage(storage, mid);
+      // if(newMessage?._ === 'message' && oldMessage?._ === 'message' && oldMessage.uploadingFileName) {
+      //   newMessage.uploadingFileName = [...oldMessage.uploadingFileName];
+      // }
+
+
       return newMessage;
     }, false, true);
+
+    const pendingEdit = this.pendingEditingMessages.get(mid);
+    if(pendingEdit && !pendingEdit.canceled) {
+      const {mediaTempId} = pendingEdit;
+      if(message._ === 'message') {
+        if(message.media?._ === 'messageMediaPhoto' && message.media.photo?._ === 'photo') {
+          this.updatePhoto(message.media.photo, '' + mediaTempId);
+        } else if(message.media?._ === 'messageMediaDocument' && message.media.document?._ === 'document') {
+          this.updateDocument(message.media.document, mediaTempId);
+        }
+      }
+    }
 
     this.handleEditedMessage(oldMessage, newMessage, storage);
 
@@ -7401,10 +7592,11 @@ export class AppMessagesManager extends AppManager {
       update._ === 'updateReadMonoForumOutbox' ? true : undefined;
 
     const isForum = channelId ? this.appChatsManager.isForum(channelId) : false;
+    const isBotforum = this.appPeersManager.isBotforum(peerId);
     const isMonoforum = channelId ? this.appChatsManager.isMonoforum(channelId) : false;
     const storage = this.getHistoryMessagesStorage(peerId);
     const history = getObjectKeysAndSort(storage, 'desc');
-    const foundDialog = threadId && isForum ?
+    const foundDialog = threadId && (isForum || isBotforum) ?
       this.dialogsStorage.getForumTopic(peerId, threadId) :
       this.getDialogOnly(peerId);
     const stillUnreadCount = (update as Update.updateReadChannelInbox).still_unread_count;
@@ -7444,7 +7636,7 @@ export class AppMessagesManager extends AppManager {
         continue;
       }
 
-      const messageThreadId = getMessageThreadId(message, isForum);
+      const messageThreadId = getMessageThreadId(message, {isForum, isBotforum});
 
 
       if(threadId && messageThreadId !== threadId ||
@@ -7563,16 +7755,30 @@ export class AppMessagesManager extends AppManager {
     const peerId = channelId ? channelId.toPeerId(true) : this.findPeerIdByMids(mids);
     for(let i = 0, length = mids.length; i < length; ++i) {
       const mid = mids[i];
-      const message: MyMessage = this.getMessageByPeer(peerId, mid);
+      let message: MyMessage = this.getMessageByPeer(peerId, mid);
       if(message) {
         if(message.pFlags.media_unread) {
-          this.modifyMessage(message, (message) => {
+          message = this.modifyMessage(message, (message) => {
             delete message.pFlags.media_unread;
           });
 
           if(!message.pFlags.out && isMentionUnread(message)) {
             this.modifyCachedMentionsAndSave({peerId, mid, addMention: false});
           }
+        }
+
+        if(((message as Message.message).media as MessageMedia.messageMediaPhoto)?.ttl_seconds) {
+          message = this.modifyMessage(message, (message) => {
+            delete ((message as Message.message).media as MessageMedia.messageMediaPhoto).photo;
+            delete ((message as Message.message).media as MessageMedia.messageMediaDocument).document;
+          });
+
+          this.rootScope.dispatchEvent('message_edit', {
+            message,
+            storageKey: this.getHistoryMessagesStorage(message.peerId).key,
+            peerId,
+            mid: message.mid
+          });
         }
 
         if(getUnreadReactions(message)) {
@@ -7712,7 +7918,11 @@ export class AppMessagesManager extends AppManager {
       if(historyUpdated.msgs.has(dialog.top_message)) {
         const historyStorage = this.getHistoryStorage(dialog.peerId, _isDialog ? undefined : getDialogKey(dialog));
         const slice = historyStorage.history.first;
-        if(slice.isEnd(SliceEnd.Bottom) && slice.length) {
+
+        // If there are some temporary messages in the history, we still want to reload the dialog in case it was fully deleted (e.g. from other client)
+        const hasMessages = !!slice.filter(id => !isTempId(id)).length;
+
+        if(slice.isEnd(SliceEnd.Bottom) && hasMessages) {
           const mid = slice[0];
           const message = this.getMessageByPeer(peerId, mid);
           this.setDialogTopMessage(message, dialog);
@@ -7742,11 +7952,20 @@ export class AppMessagesManager extends AppManager {
     const needDialog = this.appChatsManager.isInChat(channelId);
 
     const canViewHistory = !!getPeerActiveUsernames(channel)[0] || !channel.pFlags.left;
-    const hasHistory = this.historiesStorage[peerId] !== undefined;
+    const historyStorage = this.historiesStorage[peerId];
+    const hasHistory = historyStorage !== undefined;
 
     if(canViewHistory !== hasHistory) {
       delete this.historiesStorage[peerId];
       this.rootScope.dispatchEvent('history_forbidden', peerId);
+
+      if(historyStorage) {
+        MTProtoMessagePort.getInstance<false>().invokeVoid('mirror', {
+          name: 'historyStorage',
+          key: joinDeepPath(historyStorage.key, 'delete'),
+          accountNumber: this.getAccountNumber()
+        });
+      }
     }
 
     const dialog = this.getDialogOnly(peerId);
@@ -7844,7 +8063,7 @@ export class AppMessagesManager extends AppManager {
     const pinned = update.pFlags?.pinned;
     const storage = this.getHistoryMessagesStorage(peerId);
     const missingMessages = mids.filter((mid) => !storage.has(mid));
-    const getMissingPromise = missingMessages.length && Promise.all(missingMessages.map((mid) => this.reloadMessages(peerId, mid))).catch(noop);
+    const getMissingPromise = missingMessages.length && Promise.resolve(this.reloadMessages(peerId, missingMessages)).catch(noop);
     callbackify(getMissingPromise, () => {
       let processMessage: (message: Message.message) => void;
       if(pinned) {
@@ -8023,8 +8242,11 @@ export class AppMessagesManager extends AppManager {
       return threadKey;
     }
 
-    if(peerId.isAnyChat() || (threadMessage as Message.message).saved_peer_id) {
-      const threadId = getMessageThreadId(threadMessage, this.appChatsManager.isForum(peerId.toChatId()));
+    if(peerId.isAnyChat() || this.appPeersManager.isBotforum(peerId) || (threadMessage as Message.message).saved_peer_id) {
+      const threadId = getMessageThreadId(threadMessage, {
+        isForum: this.appChatsManager.isForum(peerId.toChatId()),
+        isBotforum: this.appPeersManager.isBotforum(peerId)
+      });
       if(threadId) {
         threadKey = peerId + '_' + threadId;
       }
@@ -8034,7 +8256,7 @@ export class AppMessagesManager extends AppManager {
   }
 
   public updateMessage(peerId: PeerId, mid: number, broadcastEventName?: 'replies_updated'): Promise<Message.message> {
-    const promise: Promise<Message.message> = this.reloadMessages(peerId, mid, true).then(() => {
+    const promise: Promise<Message.message> = Promise.resolve(this.reloadMessage(peerId, mid, true)).then(() => {
       const message = this.getMessageByPeer(peerId, mid) as Message.message;
       if(!message) {
         return;
@@ -8051,7 +8273,10 @@ export class AppMessagesManager extends AppManager {
   }
 
   private checkPendingMessage(message: MyMessage) {
-    const randomId = this.pendingByMessageId[message.mid];
+    const randomId =
+      this.pendingByMessageId[message.mid] ||
+      this.getBotforumTypingMessage(message);
+
     let pendingMessage: ReturnType<AppMessagesManager['finalizePendingMessage']>;
     if(randomId) {
       const pendingData = this.pendingByRandomId[randomId];
@@ -8059,14 +8284,68 @@ export class AppMessagesManager extends AppManager {
         this.rootScope.dispatchEvent('history_update', {
           storageKey: pendingData.storage.key,
           message,
+          tempId: pendingData.tempId,
           sequential: pendingData.sequential
         });
       }
 
       delete this.pendingByMessageId[message.mid];
+      this.deleteBotforumTypingMessageByRandomId(message.peerId, '' + randomId);
     }
 
     return pendingMessage;
+  }
+
+
+  private getBotforumTypingMessage(message: MyMessage) {
+    if(message._ !== 'message' || message.pFlags.out) return;
+    const randomIds = this.typingBotforumMessages.get(message.peerId);
+    if(!randomIds) return;
+    return randomIds.values().next().value; // first value
+  }
+
+  /**
+   * @deprecated now only one typing message per peer is allowed
+   */
+  private guessBotforumTypingMessage(message: MyMessage) {
+    if(message._ !== 'message' || message.pFlags.out) return;
+
+    const randomIds = this.typingBotforumMessages.get(message.peerId);
+    if(!randomIds) return;
+
+    let result: MyMessage, resultLength = 0;
+
+    for(const randomId of randomIds) {
+      const pendingData = this.pendingByRandomId[randomId];
+      const existingMessage = this.getMessageByPeer(pendingData.peerId, pendingData.tempId);
+
+      if(existingMessage?._ !== 'message') continue;
+
+      if(message.message?.startsWith(existingMessage.message || '') && existingMessage.message?.length > resultLength) {
+        result = existingMessage;
+        resultLength = message.message.length || 0;
+      }
+    }
+
+    return result?.random_id;
+  }
+
+  private deleteBotforumTypingMessageByRandomId(peerId: PeerId, randomId: string) {
+    const randomIds = this.typingBotforumMessages.get(peerId);
+    if(!randomIds) return;
+
+    randomIds.delete(randomId);
+
+    if(randomIds.size === 0) {
+      this.typingBotforumMessages.delete(peerId);
+    }
+
+    const pendingMessage = this.pendingByRandomId[randomId];
+    if(pendingMessage) {
+      const storages: HistoryStorage[] = [this.getHistoryStorage(peerId), this.getHistoryStorage(peerId, pendingMessage.threadId)]
+      .filter(Boolean);
+      storages.forEach(storage => storage.history?.delete(pendingMessage.tempId))
+    }
   }
 
   public mutePeer(options: {peerId: PeerId, muteUntil: number, threadId?: number}) {
@@ -8164,11 +8443,15 @@ export class AppMessagesManager extends AppManager {
       delete finalMessage.error;
       delete finalMessage.random_id;
       delete finalMessage.send;
+      if(finalMessage._ === 'message') {
+        delete finalMessage.pFlags.currentlyTyping;
+      }
     }
 
     this.rootScope.dispatchEvent('messages_pending');
 
     delete this.pendingByRandomId[randomId];
+    this.deletePendingTopMsg(peerId, tempId);
 
     this.finalizePendingMessageCallbacks(storage, tempId, finalMessage);
 
@@ -8194,47 +8477,10 @@ export class AppMessagesManager extends AppManager {
       const {photo: newPhoto, document: newDoc} = message.media as any;
       const newExtendedMedia = (message.media as MessageMedia.messageMediaPaidMedia).extended_media as MessageExtendedMedia.messageExtendedMedia[];
 
-      const updatePhoto = (newPhoto: Photo.photo, photoId: string) => {
-        const photo = this.appPhotosManager.getPhoto(photoId);
-        if(!photo) {
-          return;
-        }
-
-        const newPhotoSize = newPhoto.sizes[newPhoto.sizes.length - 1];
-        const oldCacheContext = this.thumbsStorage.getCacheContext(photo, THUMB_TYPE_FULL);
-        this.thumbsStorage.setCacheContextURL(newPhoto, newPhotoSize.type, oldCacheContext.url, oldCacheContext.downloaded);
-
-        // const photoSize = newPhoto.sizes[newPhoto.sizes.length - 1] as PhotoSize.photoSize;
-        // const downloadOptions = getPhotoDownloadOptions(newPhoto, photoSize);
-        // const fileName = getFileNameByLocation(downloadOptions.location);
-        // this.appDownloadManager.fakeDownload(fileName, oldCacheContext.url);
-      };
-
-      const updateDocument = (newDoc: Document.document, docId: DocId) => {
-        const oldDoc = this.appDocsManager.getDoc(docId);
-        if(!oldDoc) {
-          return;
-        }
-
-        const oldCacheContext = this.thumbsStorage.getCacheContext(oldDoc);
-        if(
-          /* doc._ !== 'documentEmpty' &&  */
-          oldDoc.type &&
-          oldDoc.type !== 'sticker' &&
-          oldDoc.mime_type !== 'image/gif' &&
-          oldCacheContext.url
-        ) {
-          this.thumbsStorage.setCacheContextURL(newDoc, undefined, oldCacheContext.url, oldCacheContext.downloaded);
-
-          // const fileName = getDocumentInputFileName(newDoc);
-          // this.appDownloadManager.fakeDownload(fileName, oldCacheContext.url);
-        }
-      };
-
       if(newPhoto) {
-        updatePhoto(newPhoto, '' + tempId);
+        this.updatePhoto(newPhoto, '' + tempId);
       } else if(newDoc) {
-        updateDocument(newDoc, '' + tempId);
+        this.updateDocument(newDoc, '' + tempId);
       } else if((message.media as MessageMedia.messageMediaPoll).poll) {
         delete this.appPollsManager.polls[tempId];
         delete this.appPollsManager.results[tempId];
@@ -8244,8 +8490,8 @@ export class AppMessagesManager extends AppManager {
           const {photo} = extendedMedia.media as MessageMedia.messageMediaPhoto;
           const {document} = extendedMedia.media as MessageMedia.messageMediaDocument;
           const id = '' + (mediaTempId + idx);
-          if(photo) updatePhoto(photo as Photo.photo, id);
-          else if(document) updateDocument(document as Document.document, id);
+          if(photo) this.updatePhoto(photo as Photo.photo, id);
+          else if(document) this.updateDocument(document as Document.document, id);
         });
       }
     }
@@ -8268,6 +8514,43 @@ export class AppMessagesManager extends AppManager {
 
     this.rootScope.dispatchEvent('message_sent', {storageKey: storage.key, tempId, tempMessage, mid: message.mid, message});
   }
+
+  private updatePhoto(newPhoto: Photo.photo, photoId: string) {
+    const photo = this.appPhotosManager.getPhoto(photoId);
+    if(!photo) {
+      return;
+    }
+
+    const newPhotoSize = newPhoto.sizes[newPhoto.sizes.length - 1];
+    const oldCacheContext = this.thumbsStorage.getCacheContext(photo, THUMB_TYPE_FULL);
+    this.thumbsStorage.setCacheContextURL(newPhoto, newPhotoSize.type, oldCacheContext.url, oldCacheContext.downloaded);
+
+    // const photoSize = newPhoto.sizes[newPhoto.sizes.length - 1] as PhotoSize.photoSize;
+    // const downloadOptions = getPhotoDownloadOptions(newPhoto, photoSize);
+    // const fileName = getFileNameByLocation(downloadOptions.location);
+    // this.appDownloadManager.fakeDownload(fileName, oldCacheContext.url);
+  };
+
+  private updateDocument(newDoc: Document.document, docId: DocId) {
+    const oldDoc = this.appDocsManager.getDoc(docId);
+    if(!oldDoc) {
+      return;
+    }
+
+    const oldCacheContext = this.thumbsStorage.getCacheContext(oldDoc);
+    if(
+      /* doc._ !== 'documentEmpty' &&  */
+      oldDoc.type &&
+      oldDoc.type !== 'sticker' &&
+      oldDoc.mime_type !== 'image/gif' &&
+      oldCacheContext.url
+    ) {
+      this.thumbsStorage.setCacheContextURL(newDoc, undefined, oldCacheContext.url, oldCacheContext.downloaded);
+
+      // const fileName = getDocumentInputFileName(newDoc);
+      // this.appDownloadManager.fakeDownload(fileName, oldCacheContext.url);
+    }
+  };
 
   public incrementMaxSeenId(maxId: number) {
     if(!maxId || !(!this.maxSeenId || maxId > this.maxSeenId)) {
@@ -8352,15 +8635,17 @@ export class AppMessagesManager extends AppManager {
     });
   }
 
-  public async canViewMessageReadParticipants(message: Message) {
+  public async canViewMessageReadParticipants(message: MyMessage) {
     if(
-      message?._ !== 'message' ||
+      !message ||
       message.pFlags.is_outgoing ||
       !message.pFlags.out ||
       message.pFlags.unread ||
       message.peerId === this.appPeersManager.peerId ||
       this.appPeersManager.isBroadcast(message.peerId) ||
-      this.appPeersManager.isMonoforum(message.peerId)
+      this.appPeersManager.isMonoforum(message.peerId) ||
+      this.appPeersManager.isBot(message.peerId) ||
+      (message as Message.message).pFlags.is_scheduled
     ) {
       return false;
     }
@@ -8436,7 +8721,7 @@ export class AppMessagesManager extends AppManager {
     port.invokeVoid('notificationBuild', {
       message,
       accountNumber: this.getAccountNumber(),
-      isOtherTabActive: !!tab.state.idleStartTime,
+      isOtherTabActive: tab ? !!tab.state.idleStartTime : true,
       ...options
     }, tab?.source);
   }
@@ -8449,8 +8734,8 @@ export class AppMessagesManager extends AppManager {
     return this.getMessageFromStorage(this.getScheduledMessagesStorage(peerId), mid);
   }
 
-  public getScheduledMessages(peerId: PeerId) {
-    if(!this.canSendToPeer(peerId)) return;
+  public async getScheduledMessages(peerId: PeerId) {
+    if(!(await this.canSendToPeer(peerId))) return;
     if(this.appPeersManager.isMonoforum(peerId)) return;
 
     const storage = this.getScheduledMessagesStorage(peerId);
@@ -8549,7 +8834,9 @@ export class AppMessagesManager extends AppManager {
     if(monoforumPeerId) return HistoryType.Monoforum;
 
     if(threadId) {
-      if(peerId.isUser()) {
+      if(this.appPeersManager.isBotforum(peerId)) {
+        return HistoryType.Topic;
+      } else if(peerId.isUser()) {
         return HistoryType.Saved;
       } else if(this.appPeersManager.isForum(peerId)) {
         return HistoryType.Topic;
@@ -8635,7 +8922,9 @@ export class AppMessagesManager extends AppManager {
       return haveSlice;
     };
 
-    const willFill = options.fetchIfWasNotFetched && !historyStorage.wasFetched;
+    const isThreadTemporary = options.threadId && isTempId(options.threadId);
+
+    const willFill = options.fetchIfWasNotFetched && !historyStorage.wasFetched && !isThreadTemporary;
 
     const haveSlice = getPossibleSlice();
     if(
@@ -8650,6 +8939,21 @@ export class AppMessagesManager extends AppManager {
         isEnd: haveSlice.slice.getEnds(),
         offsetIdOffset: haveSlice.offsetIdOffset,
         messages: options.isCacheableSearch ? haveSlice.slice.map((str) => this.getMessageByPeer(+str.split('_')[0], +str.split('_')[1])) : undefined
+      };
+    }
+
+    if(isThreadTemporary) {
+      const first = historyStorage.history.first;
+      first.setEnd(SliceEnd.Both);
+
+      const slice = first.slice(0, 0);
+      slice.setEnd(SliceEnd.Both);
+
+      return {
+        count: 0,
+        history: Array.from(slice),
+        isEnd: slice.getEnds(),
+        offsetIdOffset: 0
       };
     }
 
@@ -8674,7 +8978,8 @@ export class AppMessagesManager extends AppManager {
           isEnd: historyStorage.history.slice.getEnds(),
           offsetIdOffset: (historyResult as MessagesMessages.messagesMessagesSlice)?.offset_id_offset || 0,
           nextRate: (historyResult as MessagesMessages.messagesMessagesSlice)?.next_rate,
-          messages: historyResult.messages as MyMessage[]
+          messages: historyResult.messages as MyMessage[],
+          flood: (historyResult as MessagesMessages.messagesMessagesSlice)?.search_flood
         };
       }
 
@@ -8814,12 +9119,14 @@ export class AppMessagesManager extends AppManager {
     // * offset_id will be inclusive only if there is 'add_offset' <= -1 (-1 - will only include the 'offset_id')
     // * check that offset_id is not 0
     if(
+      !FETCH_TARGETED_MESSAGE &&
       offsetId &&
       getServerMessageId(offsetId) &&
       !mids.includes(offsetId) &&
       offsetIdOffset <= count &&
       (addOffset || 0) >= 0 && // ! warning
-      !searchSlicedArray
+      !searchSlicedArray &&
+      !!historyStorage.history.findSlice(offsetId)
     ) {
       let i = 0;
       for(const length = mids.length; i < length; ++i) {
@@ -8951,7 +9258,7 @@ export class AppMessagesManager extends AppManager {
         }
 
         if(historyStorage.maxId !== newMaxId) {
-          historyStorage.maxId = slice[0]; // ! WARNING
+          historyStorage._maxId = slice[0]; // ! WARNING
 
           this.reloadConversation(peerId); // when top_message is deleted but cached
         }
@@ -8992,7 +9299,8 @@ export class AppMessagesManager extends AppManager {
           if(
             groupedIds[0] &&
             groupedIds[0] !== groupedIds[MESSAGES_ALBUM_MAX_SIZE - 1] &&
-            slice?.index === (bottom ? 0 : slice.slice.length - 1)
+            slice &&
+            slice.index === (bottom ? 0 : slice.slice.length - 1)
           ) {
             messagesSlice.forEach((message) => {
               if(message.grouped_id === groupedIds[0]) {
@@ -9152,8 +9460,16 @@ export class AppMessagesManager extends AppManager {
     chatType,
     fromPeerId,
     savedReaction,
-    isPublicHashtag
+    isPublicHashtag,
+    isPublicPosts,
+    allowStars
   }: RequestHistoryOptions) {
+    const fetchTargetedMessage = FETCH_TARGETED_MESSAGE && !addOffset;
+    if(fetchTargetedMessage) {
+      addOffset = -1;
+      limit += 1;
+    }
+
     const offsetMessage = offsetId && this.getMessageByPeer(offsetPeerId || peerId, offsetId);
     offsetPeerId ??= offsetMessage?.peerId;
 
@@ -9180,13 +9496,18 @@ export class AppMessagesManager extends AppManager {
       inputFilter ??= {_: 'inputMessagesFilterEmpty'};
     }
 
-    if(isPublicHashtag) {
+    if(isPublicHashtag || isPublicPosts) {
       const searchOptions: ChannelsSearchPosts = {
         ...commonOptions,
-        hashtag: query.slice(1),
         offset_rate: nextRate,
         offset_peer: this.appPeersManager.getInputPeerById(offsetPeerId)
       };
+      if(isPublicHashtag) {
+        searchOptions.hashtag = query.slice(1)
+      } else {
+        searchOptions.query = query
+        searchOptions.allow_paid_stars = allowStars
+      }
 
       method = 'channels.searchPosts';
       options = searchOptions;
@@ -9273,12 +9594,19 @@ export class AppMessagesManager extends AppManager {
 
     return promise.then((historyResult) => {
       if(DEBUG) {
-        this.log('requestHistory result:', peerId, historyResult, offsetId, limit, addOffset);
+        this.log('requestHistory result:', peerId, copy(historyResult), offsetId, limit, addOffset);
       }
 
       const {messages} = historyResult;
 
       this.saveApiResult(historyResult);
+
+      if(fetchTargetedMessage) {
+        const index = messages.findIndex((message) => message.id === offsetId);
+        // if(index !== -1) {
+        //   messages.splice(index, 1);
+        // }
+      }
 
       if('pts' in historyResult) {
         this.apiUpdatesManager.addChannelState(peerId.toChatId(), historyResult.pts);
@@ -9387,15 +9715,7 @@ export class AppMessagesManager extends AppManager {
     });
   }
 
-  public reloadMessages(peerId: PeerId, mid: number, overwrite?: boolean): Promise<MyMessage>;
-  public reloadMessages(peerId: PeerId, mid: number[], overwrite?: boolean): Promise<MyMessage[]>;
-  public reloadMessages(peerId: PeerId, mid: number | number[], overwrite?: boolean): Promise<MyMessage | MyMessage[]> {
-    if(Array.isArray(mid)) {
-      return Promise.all(mid.map((mid) => {
-        return this.reloadMessages(peerId, mid, overwrite);
-      }));
-    }
-
+  public reloadMessage(peerId: PeerId, mid: number, overwrite?: boolean): MaybePromise<MyMessage> {
     if(peerId.isAnyChat() && isLegacyMessageId(mid)) {
       peerId = GLOBAL_HISTORY_PEER_ID;
     }
@@ -9403,7 +9723,7 @@ export class AppMessagesManager extends AppManager {
     const message = this.getMessageByPeer(peerId, mid);
     if(this.deletedMessages.has(`${peerId}_${mid}`) || (message && !overwrite)) {
       this.rootScope.dispatchEvent('messages_downloaded', {peerId, mids: [mid]});
-      return Promise.resolve(message);
+      return message;
     } else {
       let map = this.needSingleMessages.get(peerId);
       if(!map) {
@@ -9420,6 +9740,12 @@ export class AppMessagesManager extends AppManager {
       this.fetchSingleMessages();
       return promise;
     }
+  }
+
+  public reloadMessages(peerId: PeerId, mid: number[], overwrite?: boolean): MaybePromise<MyMessage[]> {
+    return callbackifyAll(mid.map((mid) => {
+      return this.reloadMessage(peerId, mid, overwrite);
+    }), (messages) => messages);
   }
 
   public getExtendedMedia(peerId: PeerId, mids: number[]) {
@@ -9463,16 +9789,21 @@ export class AppMessagesManager extends AppManager {
   }
 
   private clearMessageReplyTo(message: MyMessage) {
-    message = this.getMessageByPeer(message.peerId, message.mid); // message can come from other thread
+    let cleared = false;
+    if(!message) return cleared;
+    message = this.getMessageByPeerOrFromLogs(message.peerId, message.mid); // message can come from other thread
+    if(!message || (message.reply_to as MessageReplyHeader.messageReplyHeader).reply_to_msg_deleted) return cleared;
     this.modifyMessage(message, (message) => {
-      delete message.reply_to_mid; // ! WARNING!
-      delete message.reply_to; // ! WARNING!
+      (message.reply_to as MessageReplyHeader.messageReplyHeader).reply_to_msg_deleted = true;
     }, this.getHistoryMessagesStorage(message.peerId), true); // * mirror it
+    cleared = true;
+    return cleared;
   }
 
   public fetchMessageReplyTo(message: MyMessage) {
-    message = this.getMessageByPeer(message.peerId, message.mid); // message can come from other thread
-    if(!message.reply_to) return Promise.resolve(this.generateEmptyMessage(0));
+    if(!message) return this.generateEmptyMessage(0);
+    message = this.getMessageByPeerOrFromLogs(message.peerId, message.mid); // message can come from other thread
+    if(!message?.reply_to) return this.generateEmptyMessage(0);
     const replyTo = message.reply_to;
     if(replyTo._ === 'messageReplyStoryHeader') {
       const result = this.appStoriesManager.getStoryById(this.appPeersManager.getPeerId(replyTo.peer), replyTo.story_id);
@@ -9486,12 +9817,13 @@ export class AppMessagesManager extends AppManager {
     }
 
     const replyToPeerId = replyTo.reply_to_peer_id ? this.appPeersManager.getPeerId(replyTo.reply_to_peer_id) : message.peerId;
-    return this.reloadMessages(replyToPeerId, message.reply_to_mid).then((originalMessage) => {
+    const result = this.reloadMessage(replyToPeerId, message.reply_to_mid);
+    return callbackify(result, (originalMessage) => {
       if(!originalMessage) { // ! break the infinite loop
         this.clearMessageReplyTo(message);
       }
 
-      if(message._ === 'messageService') {
+      if(message._ === 'messageService' && result instanceof Promise) {
         const peerId = message.peerId;
         this.rootScope.dispatchEvent('message_edit', {
           storageKey: `${peerId}_history`,
@@ -9513,7 +9845,7 @@ export class AppMessagesManager extends AppManager {
     return threadId ? `${peerId}_${threadId}` : peerId;
   }
 
-  public setTyping(
+  public async setTyping(
     peerId: PeerId,
     action: SendMessageAction,
     force?: boolean,
@@ -9527,7 +9859,7 @@ export class AppMessagesManager extends AppManager {
     let typing = this.typings[key];
     if(
       !peerId ||
-      !this.canSendToPeer(peerId) ||
+      !(await this.canSendToPeer(peerId)) ||
       peerId === this.appPeersManager.peerId ||
       // (!force && deepEqual(typing?.action, action))
       (!force && typing?.action?._ === action._) ||
@@ -9564,7 +9896,7 @@ export class AppMessagesManager extends AppManager {
       const smth: Photo.photo | MyDocument = (c as MessageMedia.messageMediaPhoto).photo as any || (c as MessageMedia.messageMediaDocument).document as any;
 
       if(smth?.file_reference) {
-        this.referenceDatabase.deleteContext(smth.file_reference, {type: 'message', peerId: message.peerId, messageId: message.mid});
+        this.referencesStorage.deleteContext(smth.file_reference, {type: 'message', peerId: message.peerId, messageId: message.mid});
       }
 
       if('webpage' in media && media.webpage) {
@@ -9576,6 +9908,10 @@ export class AppMessagesManager extends AppManager {
       if((media as MessageMedia.messageMediaPoll).poll) {
         this.appPollsManager.updatePollToMessage(message as Message.message, false);
       }
+    }
+
+    if((message as Message.message).summary_from_language) {
+      this.appTranslationsManager.clearSummaries(message.peerId, message.mid);
     }
   }
 
@@ -9718,18 +10054,32 @@ export class AppMessagesManager extends AppManager {
       )) {
         this.appTranslationsManager.resetMessageTranslations(oldMessage.peerId, oldMessage.mid);
       }
+
+      if(oldMessage.summary_from_language) {
+        this.appTranslationsManager.clearSummaries(oldMessage.peerId, oldMessage.mid);
+      }
     }
   }
 
   private dispatchGroupedEdit(groupedId: string, storage: MessagesStorage, deletedMids?: number[]) {
     const mids = this.getMidsByGroupedId(groupedId);
     const messages = mids.map((mid) => this.getMessageFromStorage(storage, mid)) as Message.message[];
-    this.rootScope.dispatchEvent('grouped_edit', {peerId: messages[0].peerId, groupedId, deletedMids: deletedMids || [], messages});
+    this.rootScope.dispatchEvent('grouped_edit', {
+      peerId: messages[0].peerId,
+      groupedId,
+      deletedMids: deletedMids || [],
+      messages
+    });
   }
 
   public getDialogUnreadCount(dialog: Dialog | ForumTopic | MonoforumDialog) {
     let unreadCount = dialog.unread_count;
-    if(!isForumTopic(dialog) && !isMonoforumDialog(dialog) && this.appPeersManager.isForum(dialog.peerId) && !dialog.pFlags.view_forum_as_messages) {
+    if(
+      !isForumTopic(dialog) &&
+      !isMonoforumDialog(dialog) &&
+      this.appPeersManager.isForum(dialog.peerId) &&
+      !dialog.pFlags.view_forum_as_messages
+    ) {
       const forumUnreadCount = this.dialogsStorage.getForumUnreadCount(dialog.peerId);
       if(forumUnreadCount instanceof Promise) {
         unreadCount = 0;
@@ -9748,6 +10098,7 @@ export class AppMessagesManager extends AppManager {
   public canForward(message: Message.message | Message.messageService) {
     return message?._ === 'message' &&
       !(message as Message.message).pFlags.noforwards &&
+      !(message.media as MessageMedia.messageMediaPhoto)?.ttl_seconds &&
       !this.appPeersManager.noForwards(message.peerId);
   }
 
@@ -9960,7 +10311,7 @@ export class AppMessagesManager extends AppManager {
     });
   }
 
-  public getSponsoredMessage(peerId: PeerId): Promise<MessagesSponsoredMessages> {
+  public async getSponsoredMessage(peerId: PeerId): Promise<MessagesSponsoredMessages> {
     // return Promise.resolve({
     //   '_': 'messages.sponsoredMessages',
     //   'posts_between': 5,
@@ -10008,7 +10359,7 @@ export class AppMessagesManager extends AppManager {
     // });
 
     // * don't show sponsored messages in own channels
-    if(!peerId.isUser() && this.canSendToPeer(peerId)) {
+    if(!peerId.isUser() && await this.canSendToPeer(peerId)) {
       return Promise.resolve({
         _: 'messages.sponsoredMessagesEmpty'
       });
@@ -10088,8 +10439,8 @@ export class AppMessagesManager extends AppManager {
     let oldItem: TodoCompletion;
     this.modifyMessage(message, (message) => {
       const checklist = message.media as MessageMedia.messageMediaToDo;
-      if(!checklist.completions) checklist.completions = []
-      const now = Date.now() / 1000
+      if(!checklist.completions) checklist.completions = [];
+      const now = Date.now() / 1000;
 
       if(params.action === 'complete') {
         const existing = checklist.completions.findIndex((completion) => completion.id === params.taskId);
@@ -10100,9 +10451,9 @@ export class AppMessagesManager extends AppManager {
         checklist.completions.push({
           _: 'todoCompletion',
           id: params.taskId,
-          completed_by: this.rootScope.myId,
+          completed_by: this.appPeersManager.getOutputPeer(this.rootScope.myId),
           date: now
-        })
+        });
       } else {
         const existing = checklist.completions.findIndex((completion) => completion.id === params.taskId);
         if(existing !== -1) {
@@ -10110,14 +10461,14 @@ export class AppMessagesManager extends AppManager {
           checklist.completions.splice(existing, 1);
         }
       }
-    }, storage)
+    }, storage);
 
     this.rootScope.dispatchEvent('message_edit', {
       storageKey: storage.key,
       peerId: params.peerId,
       mid: params.mid,
       message
-    })
+    });
 
     const key = `${params.peerId}:${params.mid}`;
     this.checklistBatcher.addToBatch(key, {taskId: params.taskId, oldItem, action: params.action});
@@ -10235,6 +10586,89 @@ export class AppMessagesManager extends AppManager {
         this.apiUpdatesManager.processUpdateMessage(updates);
       }
     })
+  }
+
+  public handleTypingBotforumUpdate(update: Update.updateUserTyping) {
+    const action = update.action;
+    if(action._ !== 'sendMessageTextDraftAction') return;
+
+    const peerId = update.user_id.toPeerId();
+    const threadId = update.top_msg_id;
+    const randomId = '' + action.random_id;
+
+    if(!this.typingBotforumMessages.has(peerId)) this.typingBotforumMessages.set(peerId, new Set);
+    const existingRandomIds = this.typingBotforumMessages.get(peerId);
+
+    if(!existingRandomIds.has(randomId)) {
+      existingRandomIds.add(randomId);
+
+      const generatedMessage = this.generateTypingBotforumMessage({peerId, threadId, action});
+
+      const storages: HistoryStorage[] = [this.getHistoryStorage(peerId), this.getHistoryStorage(peerId, threadId)]
+      .filter(Boolean);
+
+      for(const storage of storages) {
+        storage.history.unshift(generatedMessage.id);
+      }
+
+      const [message] = this.saveMessages([generatedMessage]);
+
+      const storage = this.getHistoryMessagesStorage(peerId);
+
+      this.pendingByRandomId[randomId] = {peerId, tempId: generatedMessage.id, threadId, storage};
+
+      this.rootScope.dispatchEvent('history_append', {storageKey: storage.key, message});
+    } else {
+      const {tempId} = this.pendingByRandomId[randomId];
+
+      const message = this.getMessageByPeer(peerId, tempId);
+
+      if(message._ === 'message') {
+        message.message = action.text.text;
+        message.entities = action.text.entities;
+        message.totalEntities = undefined;
+      }
+
+      this.saveMessages([message]);
+
+      const storage = this.getHistoryMessagesStorage(peerId);
+
+      this.rootScope.dispatchEvent('message_edit', {message, storageKey: storage.key, peerId, mid: tempId});
+    }
+
+    // Allow only one typing message per peer in case of misuse by bot
+    for(const otherRandomId of existingRandomIds) {
+      if(otherRandomId === randomId) continue;
+      this.cancelPendingMessage(otherRandomId);
+      this.deleteBotforumTypingMessageByRandomId(peerId, otherRandomId);
+    }
+  }
+
+  private generateTypingBotforumMessage({peerId, threadId, action}: GenerateTypingBotforumMessageArgs) {
+    return {
+      _: 'message',
+      id: this.generateTempMessageId(peerId),
+      from_id: this.appPeersManager.getOutputPeer(peerId),
+      peer_id: this.appPeersManager.getOutputPeer(peerId),
+      pFlags: {
+        currentlyTyping: true
+      },
+      date: tsNow(true) + this.timeManager.getServerTimeOffset(),
+      message: action.text.text,
+      entities: action.text.entities,
+      random_id: '' + action.random_id,
+      reply_to: {
+        _: 'messageReplyHeader',
+        pFlags: {},
+        reply_to_top_id: threadId,
+        reply_to_msg_id: threadId
+      }
+    } satisfies Message.message;
+  }
+
+  public saveLogsMessage(peerId: PeerId, message: MyMessage) {
+    this.saveMessages([message], {storage: this.getLogsMessagesStorage(peerId)});
+    return message;
   }
 }
 

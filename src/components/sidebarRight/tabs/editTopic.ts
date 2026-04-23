@@ -4,24 +4,24 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import {attachClickEvent} from '../../../helpers/dom/clickEvent';
-import toggleDisability from '../../../helpers/dom/toggleDisability';
-import {makeMediaSize} from '../../../helpers/mediaSize';
-import copy from '../../../helpers/object/copy';
-import deepEqual from '../../../helpers/object/deepEqual';
-import {ForumTopic} from '../../../layer';
-import appImManager from '../../../lib/appManagers/appImManager';
-import {GENERAL_TOPIC_ID, TOPIC_COLORS} from '../../../lib/mtproto/mtproto_config';
-import getAbbreviation from '../../../lib/richTextProcessor/getAbbreviation';
-import ButtonIcon from '../../buttonIcon';
-import CheckboxField from '../../checkboxField';
-import EmojiTab from '../../emoticonsDropdown/tabs/emoji';
-import InputField from '../../inputField';
-import Row from '../../row';
-import SettingSection from '../../settingSection';
-import appSidebarLeft from '../../sidebarLeft';
-import SliderSuperTab from '../../sliderTab';
-import {wrapTopicIcon} from '../../wrappers/messageActionTextNewUnsafe';
+import {attachClickEvent} from '@helpers/dom/clickEvent';
+import toggleDisability from '@helpers/dom/toggleDisability';
+import {makeMediaSize} from '@helpers/mediaSize';
+import copy from '@helpers/object/copy';
+import deepEqual from '@helpers/object/deepEqual';
+import {ForumTopic} from '@layer';
+import appImManager from '@lib/appImManager';
+import {GENERAL_TOPIC_ID, TOPIC_COLORS} from '@appManagers/constants';
+import getAbbreviation from '@lib/richTextProcessor/getAbbreviation';
+import ButtonIcon from '@components/buttonIcon';
+import CheckboxField from '@components/checkboxField';
+import EmojiTab from '@components/emoticonsDropdown/tabs/emoji';
+import InputField from '@components/inputField';
+import Row from '@components/row';
+import SettingSection from '@components/settingSection';
+import appSidebarLeft from '@components/sidebarLeft';
+import SliderSuperTab from '@components/sliderTab';
+import {wrapTopicIcon} from '@components/wrappers/messageActionTextNewUnsafe';
 
 const size = 64;
 const mediaSize = makeMediaSize(size, size);
@@ -89,8 +89,8 @@ export default class AppEditTopicTab extends SliderSuperTab {
       attachClickEvent(confirmBtn, () => {
         const toggle = toggleDisability([confirmBtn], true);
         if(threadId) {
-          this.managers.appChatsManager.editForumTopic({
-            chatId,
+          this.managers.appMessagesManager.editForumTopic({
+            peerId,
             topicId: threadId,
             title: nameInputField.value,
             iconEmojiId: this.topic.icon_emoji_id || 0
@@ -101,8 +101,8 @@ export default class AppEditTopicTab extends SliderSuperTab {
             toggle();
           });
         } else {
-          this.managers.appChatsManager.createForumTopic({
-            chatId,
+          this.managers.appMessagesManager.createForumTopic({
+            peerId,
             iconColor: TOPIC_COLORS[this.colorIndex],
             iconEmojiId: this.topic.icon_emoji_id,
             title: nameInputField.value
@@ -194,8 +194,8 @@ export default class AppEditTopicTab extends SliderSuperTab {
       });
 
       this.listenerSetter.add(checkboxField.input)('change', () => {
-        const promise = this.managers.appChatsManager.editForumTopic({
-          chatId,
+        const promise = this.managers.appMessagesManager.editForumTopic({
+          peerId,
           topicId: threadId,
           hidden: !checkboxField.checked
         });

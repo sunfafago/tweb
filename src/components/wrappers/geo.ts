@@ -4,20 +4,21 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import assumeType from '../../helpers/assumeType';
-import getWebFileLocation from '../../helpers/getWebFileLocation';
-import liteMode from '../../helpers/liteMode';
-import makeGoogleMapsUrl from '../../helpers/makeGoogleMapsUrl';
-import mediaSizes from '../../helpers/mediaSizes';
-import {Middleware} from '../../helpers/middleware';
-import tsNow from '../../helpers/tsNow';
-import {GeoPoint, MessageMedia, Message} from '../../layer';
-import I18n, {i18n, LangPackKey, FormatterArguments} from '../../lib/langPack';
-import setBlankToAnchor from '../../lib/richTextProcessor/setBlankToAnchor';
-import wrapEmojiText from '../../lib/richTextProcessor/wrapEmojiText';
-import {avatarNew} from '../avatarNew';
-import ChatBubbles from '../chat/bubbles';
-import wrapPhoto from './photo';
+import assumeType from '@helpers/assumeType';
+import getWebFileLocation from '@helpers/getWebFileLocation';
+import liteMode from '@helpers/liteMode';
+import makeGoogleMapsUrl from '@helpers/makeGoogleMapsUrl';
+import mediaSizes from '@helpers/mediaSizes';
+import {Middleware} from '@helpers/middleware';
+import tsNow from '@helpers/tsNow';
+import {GeoPoint, MessageMedia, Message} from '@layer';
+import I18n, {i18n, LangPackKey, FormatterArguments} from '@lib/langPack';
+import setBlankToAnchor from '@lib/richTextProcessor/setBlankToAnchor';
+import wrapEmojiText from '@lib/richTextProcessor/wrapEmojiText';
+import {avatarNew} from '@components/avatarNew';
+import ChatBubbles from '@components/chat/bubbles';
+import GeoPin from '@components/geoPin';
+import wrapPhoto from '@components/wrappers/photo';
 
 export default function wrapGeo({
   messageMedia,
@@ -137,14 +138,7 @@ export default function wrapGeo({
 
       imageContainer.append(pin);
     } else {
-      imageContainer.innerHTML = `
-        <svg class="geo-pin" xmlns="http://www.w3.org/2000/svg" width="21.333" height="37.218" viewBox="0 0 20 34.892">
-          <g transform="translate(-965.773 -331.784) scale(1.18559)">
-            <path d="M817.112 282.971c-1.258 1.343-2.046 3.299-2.015 5.139.064 3.845 1.797 5.3 4.568 10.592.999 2.328 2.04 4.792 3.031 8.873.138.602.272 1.16.335 1.21.062.048.196-.513.334-1.115.99-4.081 2.033-6.543 3.031-8.871 2.771-5.292 4.504-6.748 4.568-10.592.031-1.84-.759-3.798-2.017-5.14-1.437-1.535-3.605-2.67-5.916-2.717-2.312-.048-4.481 1.087-5.919 2.621z" style="fill:#ea4336;stroke:#ea4336;stroke-width:1;"/>
-            <circle r="3.035" cy="288.253" cx="823.031" style="fill:#970a0a;stroke-width:0"/>
-          </g>
-        </svg>
-      `;
+      imageContainer.append(GeoPin());
     }
 
     wrapPhoto({
@@ -177,7 +171,12 @@ export default function wrapGeo({
   let liveExpiration = isLive ? (message.date + (messageMedia as MessageMedia.messageMediaGeoLive).period) * 1000 : undefined;
   const isLiveExpired = isLive && Date.now() >= liveExpiration;
 
-  let footer: HTMLElement, title: HTMLElement, address: HTMLElement, canHaveTail: boolean;
+  const ret = {
+    canHaveTail: undefined as boolean,
+    mediaRequiresMessageDiv: undefined as boolean
+  };
+
+  let footer: HTMLElement, title: HTMLElement, address: HTMLElement;
   if(isVenue || (isLive && !isLiveExpired)) {
     bubble.classList.remove('is-message-empty');
 
@@ -192,8 +191,9 @@ export default function wrapGeo({
 
     footer.append(title, address);
     messageDiv.append(footer);
+    ret.mediaRequiresMessageDiv = true;
   } else {
-    canHaveTail = false;
+    ret.canHaveTail = false;
   }
 
   if(isLive) {
@@ -311,5 +311,5 @@ export default function wrapGeo({
     address.append(timeSpan);
   }
 
-  return canHaveTail;
+  return ret;
 }

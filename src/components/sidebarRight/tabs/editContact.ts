@@ -4,27 +4,33 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import {SliderSuperTab} from '../../slider'
-import InputField from '../../inputField';
-import EditPeer from '../../editPeer';
-import Row, {CreateRowFromCheckboxField} from '../../row';
-import CheckboxField from '../../checkboxField';
-import Button from '../../button';
-import PeerTitle from '../../peerTitle';
-import rootScope from '../../../lib/rootScope';
-import PopupPeer from '../../popups/peer';
-import PopupElement, {addCancelButton} from '../../popups';
-import {i18n} from '../../../lib/langPack';
-import {attachClickEvent} from '../../../helpers/dom/clickEvent';
-import toggleDisability from '../../../helpers/dom/toggleDisability';
-import getPeerId from '../../../lib/appManagers/utils/peers/getPeerId';
-import formatUserPhone from '../../wrappers/formatUserPhone';
-import SettingSection from '../../settingSection';
-import wrapPeerTitle from '../../wrappers/peerTitle';
+import {SliderSuperTab} from '@components/slider'
+import InputField from '@components/inputField';
+import EditPeer from '@components/editPeer';
+import Row, {CreateRowFromCheckboxField} from '@components/row';
+import CheckboxField from '@components/checkboxField';
+import Button from '@components/button';
+import PeerTitle from '@components/peerTitle';
+import rootScope from '@lib/rootScope';
+import PopupPeer from '@components/popups/peer';
+import PopupElement, {addCancelButton} from '@components/popups';
+import {i18n} from '@lib/langPack';
+import {attachClickEvent} from '@helpers/dom/clickEvent';
+import toggleDisability from '@helpers/dom/toggleDisability';
+import getPeerId from '@appManagers/utils/peers/getPeerId';
+import formatUserPhone from '@components/wrappers/formatUserPhone';
+import SettingSection from '@components/settingSection';
+import wrapPeerTitle from '@components/wrappers/peerTitle';
+import {wrapEmojiTextWithEntities} from '@lib/richTextProcessor/wrapEmojiText';
+import EditFolderInput from '@components/sidebarLeft/tabs/editFolderInput';
+import {InputFieldEmoji} from '@components/inputFieldEmoji';
+import {toastNew} from '@components/toast';
+import showBirthdayPopup, {suggestUserBirthday} from '@components/popups/birthday';
 
 export default class AppEditContactTab extends SliderSuperTab {
   private nameInputField: InputField;
   private lastNameInputField: InputField;
+  private noteInputField: InputFieldEmoji;
   private editPeer: EditPeer;
   private sharePhoneCheckboxField: CheckboxField;
   public peerId: PeerId;
@@ -39,6 +45,8 @@ export default class AppEditContactTab extends SliderSuperTab {
     ]);
     const isNew = !isContact;
     this.setTitle(isNew ? 'AddContactTitle' : 'Edit');
+
+    let suggestBirthdayRow: Row | undefined;
 
     {
       const section = new SettingSection({noDelimiter: true});
@@ -73,6 +81,34 @@ export default class AppEditContactTab extends SliderSuperTab {
 
       inputWrapper.append(this.nameInputField.container, this.lastNameInputField.container);
       inputFields.push(this.nameInputField, this.lastNameInputField);
+
+      if(userId) {
+        const fullUser = await this.managers.appProfileManager.getCachedFullUser(userId);
+        this.noteInputField = new InputFieldEmoji({
+          label: 'ContactNoteRow',
+          name: 'contact-note',
+          maxLength: 128,
+          withLinebreaks: true
+        });
+        if(fullUser.note) {
+          this.noteInputField.setRichOriginalValue(fullUser.note);
+        }
+        inputFields.push(this.noteInputField);
+        inputWrapper.append(this.noteInputField.container);
+
+        if(!fullUser.birthday) {
+          suggestBirthdayRow = new Row({
+            title: i18n('SuggestBirthdayRow'),
+            icon: 'gift',
+            clickable: () => {
+              showBirthdayPopup({
+                suggestForPeer: peerId,
+                onSave: it => suggestUserBirthday(userId, it)
+              })
+            }
+          })
+        }
+      }
 
       this.editPeer = new EditPeer({
         peerId: peerId,
@@ -134,6 +170,10 @@ export default class AppEditContactTab extends SliderSuperTab {
           notificationsCheckboxField.checked = enabled;
 
           section.content.append(notificationsRow.container);
+
+          if(suggestBirthdayRow) {
+            section.content.append(suggestBirthdayRow.container);
+          }
         } else {
           const user = await this.managers.appUsersManager.getUser(userId);
 
@@ -205,16 +245,26 @@ export default class AppEditContactTab extends SliderSuperTab {
     attachClickEvent(this.editPeer.nextBtn, async() => {
       this.editPeer.nextBtn.disabled = true;
 
-      this.managers.appUsersManager.addContact(
-        userId,
-        this.nameInputField.value,
-        this.lastNameInputField.value,
-        (await this.managers.appUsersManager.getUser(userId)).phone,
-        this.sharePhoneCheckboxField?.checked
-      ).finally(() => {
-        this.editPeer.nextBtn.removeAttribute('disabled');
-        this.close();
-      });
+      try {
+        await this.managers.appUsersManager.addContact(
+          userId,
+          this.nameInputField.value,
+          this.lastNameInputField.value,
+          (await this.managers.appUsersManager.getUser(userId)).phone,
+          this.sharePhoneCheckboxField?.checked
+        )
+
+        if(this.noteInputField.isChanged()) {
+          await this.managers.appProfileManager.updateUserNote(userId, this.noteInputField.richValue);
+        }
+      } catch(error) {
+        console.error(error)
+        toastNew({langPackKey: 'Error.AnError'});
+        return
+      }
+
+      this.editPeer.nextBtn.removeAttribute('disabled');
+      this.close();
     }, {listenerSetter: this.listenerSetter});
   }
 }

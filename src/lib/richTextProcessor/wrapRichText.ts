@@ -4,36 +4,40 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import type {EMOJI_VERSION} from '../../environment/emojiVersionsSupport';
+import type {EMOJI_VERSION} from '@environment/emojiVersionsSupport';
 import {SITE_HASHTAGS} from '.';
-import {EmojiVersions} from '../../config/emoji';
-import IS_EMOJI_SUPPORTED from '../../environment/emojiSupport';
-import buildURLHash from '../../helpers/buildURLHash';
-import copy from '../../helpers/object/copy';
-import encodeEntities from '../../helpers/string/encodeEntities';
-import {MessageEntity} from '../../layer';
-import encodeSpoiler from './encodeSpoiler';
-import parseEntities from './parseEntities';
-import setBlankToAnchor from './setBlankToAnchor';
-import wrapUrl from './wrapUrl';
-import EMOJI_VERSIONS_SUPPORTED from '../../environment/emojiVersionsSupport';
-import {CLICK_EVENT_NAME} from '../../helpers/dom/clickEvent';
-import IS_CUSTOM_EMOJI_SUPPORTED from '../../environment/customEmojiSupport';
-import BOM from '../../helpers/string/bom';
-import wrapTelegramUrlToAnchor from './wrapTelegramUrlToAnchor';
-import {IS_FIREFOX} from '../../environment/userAgent';
-import CustomEmojiElement, {CustomEmojiElements} from '../customEmoji/element';
-import {CustomEmojiRendererElementOptions, CustomEmojiRendererElement} from '../customEmoji/renderer';
-import {setDirection} from '../../helpers/dom/setInnerHTML';
-import {i18n} from '../langPack';
-import Icon from '../../components/icon';
-import {CodeLanguageAliases, highlightCode} from '../../codeLanguages';
-import callbackify from '../../helpers/callbackify';
-import findIndexFrom from '../../helpers/array/findIndexFrom';
-import {observeResize} from '../../components/resizeObserver';
-import createElementFromMarkup from '../../helpers/createElementFromMarkup';
-import DotRenderer from '../../components/dotRenderer';
-import isMixedScriptUrl from '../../helpers/string/isMixedScriptUrl';
+import {EmojiVersions} from '@config/emoji';
+import IS_EMOJI_SUPPORTED from '@environment/emojiSupport';
+import buildURLHash from '@helpers/buildURLHash';
+import copy from '@helpers/object/copy';
+import encodeEntities from '@helpers/string/encodeEntities';
+import {MessageEntity} from '@layer';
+import encodeSpoiler from '@lib/richTextProcessor/encodeSpoiler';
+import parseEntities from '@lib/richTextProcessor/parseEntities';
+import setBlankToAnchor from '@lib/richTextProcessor/setBlankToAnchor';
+import wrapUrl from '@lib/richTextProcessor/wrapUrl';
+import EMOJI_VERSIONS_SUPPORTED from '@environment/emojiVersionsSupport';
+import {CLICK_EVENT_NAME} from '@helpers/dom/clickEvent';
+import IS_CUSTOM_EMOJI_SUPPORTED from '@environment/customEmojiSupport';
+import BOM from '@helpers/string/bom';
+import wrapTelegramUrlToAnchor from '@lib/richTextProcessor/wrapTelegramUrlToAnchor';
+import {IS_FIREFOX} from '@environment/userAgent';
+import CustomEmojiElement, {CustomEmojiElements} from '@lib/customEmoji/element';
+import {CustomEmojiRendererElementOptions, CustomEmojiRendererElement} from '@lib/customEmoji/renderer';
+import {setDirection} from '@helpers/dom/setInnerHTML';
+import I18n, {i18n} from '@lib/langPack';
+import Icon from '@components/icon';
+import {CodeLanguageAliases, highlightCode} from '@/codeLanguages';
+import callbackify from '@helpers/callbackify';
+import findIndexFrom from '@helpers/array/findIndexFrom';
+import {observeResize} from '@components/resizeObserver';
+import createElementFromMarkup from '@helpers/createElementFromMarkup';
+import DotRenderer from '@components/dotRenderer';
+import isMixedScriptUrl from '@helpers/string/isMixedScriptUrl';
+import {createRoot, createSignal, createEffect, onCleanup} from 'solid-js';
+import formatFormattedDate from '@helpers/date/formatFormattedDate';
+import formatRelativeTime from '@helpers/date/formatRelativeTime';
+import tsNow from '@helpers/tsNow';
 
 export type WrapRichTextOptions = Partial<{
   entities: MessageEntity[],
@@ -69,14 +73,16 @@ export type WrapRichTextOptions = Partial<{
   customWraps?: Set<HTMLElement>,
   ignoreNextIndex?: number,
   doubleLinebreak?: number
-  textColor?: string
+  textColor?: WrapSomethingOptions['textColor']
 }> & CustomEmojiRendererElementOptions;
 
-function createMarkupFormatting(formatting: string) {
-  const element = document.createElement('span');
-  element.style.fontFamily = 'markup-' + formatting;
+export const ENTITY_ELEMENT_MAP: WeakMap<HTMLElement, MessageEntity> = new WeakMap();
+
+function createMarkupFormatting(formatting: string, element = document.createElement('span')) {
+  const str = 'markup-' + formatting;
+  element.style.fontFamily = str;
   element.classList.add('is-markup');
-  element.dataset.markup = formatting;
+  element.dataset.markup = str;
   return element;
 }
 
@@ -349,6 +355,31 @@ export default function wrapRichText(text: string, options: WrapRichTextOptions 
         break;
       }
 
+      case 'messageEntitySubscript': {
+        element = document.createElement('sub');
+        break;
+      }
+
+      case 'messageEntitySuperscript': {
+        element = document.createElement('sup');
+        break;
+      }
+
+      case 'messageEntityAnchor': {
+        element = document.createElement('span');
+        element.id = entity.name;
+        break;
+      }
+
+      case 'messageEntityPhone': {
+        if(!(options.noLinks && !passEntities[entity._])) {
+          element = document.createElement('a');
+          element.classList.add('phone-url');
+          (element as HTMLAnchorElement).href = encodeEntities('tel:' + fullEntityText);
+        }
+        break;
+      }
+
       case 'messageEntityBotCommand': {
         // if(!(options.noLinks || options.noCommands || contextExternal)/*  && !entity.unsafe */) {
         if(!options.noLinks && passEntities[entity._]) {
@@ -390,6 +421,12 @@ export default function wrapRichText(text: string, options: WrapRichTextOptions 
         if(!set) customEmojis.set(docId, set = new Set());
         set.add(customEmojiElement);
         customEmojiElement.dataset.stickerEmoji = fullEntityText;
+
+        if(entity.w) {
+          customEmojiElement.classList.add('custom-emoji-custom-sized');
+          customEmojiElement.style.setProperty('--width', entity.w + 'px');
+          customEmojiElement.style.setProperty('--height', entity.h + 'px');
+        }
 
         if(options.wrappingDraft) {
           element = document.createElement('img');
@@ -518,7 +555,7 @@ export default function wrapRichText(text: string, options: WrapRichTextOptions 
           let masked = false;
           let onclick: string;
 
-          const wrapped = wrapUrl(url, true);
+          const wrapped = wrapUrl(url, (entity as MessageEntity.messageEntityTextUrl).safe);
           url = wrapped.url;
           onclick = wrapped.onclick;
 
@@ -550,7 +587,12 @@ export default function wrapRichText(text: string, options: WrapRichTextOptions 
           }
 
           const currentContext = !!onclick;
-          if(!onclick && masked && !currentContext && !options.passMaskedLinks) {
+          if(
+            !onclick &&
+            masked &&
+            !currentContext &&
+            !options.passMaskedLinks
+          ) {
             onclick = 'showMaskedAlert';
           }
 
@@ -579,7 +621,7 @@ export default function wrapRichText(text: string, options: WrapRichTextOptions 
       }
 
       case 'messageEntityEmail': {
-        if(!options.noLinks) {
+        if(!options.noLinks && !passEntities[entity._]) {
           element = document.createElement('a');
           (element as HTMLAnchorElement).href = encodeEntities('mailto:' + fullEntityText);
           setBlankToAnchor(element as HTMLAnchorElement);
@@ -694,6 +736,66 @@ export default function wrapRichText(text: string, options: WrapRichTextOptions 
         break;
       }
 
+      case 'messageEntityFormattedDate': {
+        if(options.noTextFormat) {
+          break;
+        }
+
+        element = document.createElement('span');
+        if(options.wrappingDraft) {
+          createMarkupFormatting('date', element);
+          element.dataset.date = '' + entity.date;
+        } else {
+          element.classList.add('formatted-date');
+          element.setAttribute('onclick', 'onFormattedDateClick(this, event)');
+        }
+
+        ENTITY_ELEMENT_MAP.set(element, entity);
+
+        if(Object.keys(entity.pFlags).length && !options.wrappingDraft) {
+          usedText = true;
+          element.dataset.originalText = fullEntityText;
+          const updateText = (text: string) => {
+            element.dataset.fakeText = text;
+            element.textContent = text;
+          };
+          if(entity.pFlags.relative) {
+            if(options.middleware) {
+              const dispose = createRoot((dispose) => {
+                const [now, setNow] = createSignal(tsNow(true));
+                let timerId: ReturnType<typeof setTimeout>;
+
+                const scheduleUpdate = (ms: number) => {
+                  clearTimeout(timerId);
+                  timerId = setTimeout(() => {
+                    setNow(tsNow(true));
+                  }, ms);
+                };
+
+                createEffect(() => {
+                  const result = formatRelativeTime(entity.date, now());
+                  updateText(I18n.format(result.key, true, result.args));
+                  scheduleUpdate(result.updateInterval);
+                });
+
+                onCleanup(() => clearTimeout(timerId));
+                return dispose;
+              });
+
+              options.middleware.onClean(dispose!);
+            } else {
+              const result = formatRelativeTime(entity.date, tsNow(true));
+              updateText(I18n.format(result.key, true, result.args));
+            }
+          } else {
+            // Static formatted date/time
+            updateText(formatFormattedDate(entity.date, entity.pFlags));
+          }
+        }
+
+        break;
+      }
+
       case 'messageEntityBlockquote': {
         if(options.noTextFormat) {
           break;
@@ -708,7 +810,7 @@ export default function wrapRichText(text: string, options: WrapRichTextOptions 
           }
         } else {
           element = document.createElement('blockquote');
-          element.classList.add('quote');
+          element.classList.add('quote', 'quote-block');
 
           // * ? because of layer migration
           if(entity.pFlags?.collapsed/*  || true */) {
@@ -855,9 +957,9 @@ export default function wrapRichText(text: string, options: WrapRichTextOptions 
       fragment.prepend(renderer);
     }
 
-    if(options.textColor) {
-      renderer.setTextColor(options.textColor);
-    }
+    // if(options.textColor) {
+    //   renderer.setTextColor(options.textColor);
+    // }
 
     const loadPromise = renderer.add({
       addCustomEmojis: customEmojis,

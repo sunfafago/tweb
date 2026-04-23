@@ -4,29 +4,10 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
+@use "sass:string";
 @use "sass:math";
-
-$chat-helper-size: 45px;
-$chat-input-box-shadow: 0px 1px 8px 1px rgb(0 0 0 / 12%);
-
-$input-transition-time: .2s;
-$input-half-transition-time: math.div($input-transition-time, 2);
-$background-transition-time: 0.05s;
-$background-transition-total-time: #{$input-transition-time - $background-transition-time};
-
-$bubble-margin: .125rem;
-$bubble-margin-big: .375rem;
-$bubble-overflow: math.max(math.div($bubble-margin-big, 8), .0625rem);
-$bubble-overflow-big: math.div($bubble-margin-big, 2);
-$bubble-beside-button-width: 38px;
-$bubble-border-radius-medium: 5px;
-$bubble-border-radius-big: 15px;
-$message-padding-top: 4px;
-$message-padding-bottom: 5px;
-$message-padding-horizontal: 8px;
-$reply-padding-top: 8px;
-$reply-padding-horizontal: 8px;
-$time-margin-left: math.div($message-padding-horizontal, -2) + 1px;
+@use "../shared" as *;
+@use "chatVariables" as *;
 
 // #bubble-contextmenu {
 //   max-width: 14rem;
@@ -65,6 +46,10 @@ $time-margin-left: math.div($message-padding-horizontal, -2) + 1px;
 			width: var(--chat-input-size);
 			height: var(--chat-input-size);
 		}
+	}
+
+	&-empty-space {
+    padding-top: 12px;
 	}
 
 	/* @include respond-to(handhelds) {
@@ -466,6 +451,10 @@ $time-margin-left: math.div($message-padding-horizontal, -2) + 1px;
 
         .btn-send {
           transform: scale(0);
+        }
+
+        .btn-send-stars-badge {
+          opacity: 0;
         }
       }
 
@@ -1272,6 +1261,10 @@ $time-margin-left: math.div($message-padding-horizontal, -2) + 1px;
       &-subtitle {
         color: var(--secondary-text-color) !important;
         height: 1.125rem;
+
+        .formatted-date {
+          color: inherit;
+        }
       }
 
       .peer-title {
@@ -1322,7 +1315,7 @@ $time-margin-left: math.div($message-padding-horizontal, -2) + 1px;
     max-height: calc(30rem - 2.5rem) !important; // 2.5rem - input helper (reply)
 
     @media only screen and (max-height: 30rem) {
-      max-height: unquote('max(36px, calc(100vh - 10rem))');
+      max-height: string.unquote('max(36px, calc(100vh - 10rem))');
     }
 
     @include respond-to(handhelds) {
@@ -1621,6 +1614,10 @@ $time-margin-left: math.div($message-padding-horizontal, -2) + 1px;
     margin: 0;
   }
 
+  .formatted-date {
+    cursor: text;
+  }
+
   @include animation-level(2) {
     transition: height $input-half-transition-time;
   }
@@ -1858,6 +1855,10 @@ $time-margin-left: math.div($message-padding-horizontal, -2) + 1px;
     max-width: 80%;
   }
 
+  &.no-input {
+    padding-bottom: 12px;
+  }
+
 	&.is-broadcast {
 		.bubble {
 			--max-width: 100%;
@@ -2035,4 +2036,16 @@ $time-margin-left: math.div($message-padding-horizontal, -2) + 1px;
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.reply.has-collectible {
+  padding-inline-end: 28px;
+}
+
+.reply-collectible {
+  width: 24px;
+  height: 24px;
+  position: absolute;
+  inset-inline-end: 4px;
+  top: 4px;
 }

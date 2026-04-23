@@ -4,34 +4,34 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import partition from '../../helpers/array/partition';
-import assumeType from '../../helpers/assumeType';
-import {formatDate} from '../../helpers/date';
-import htmlToDocumentFragment from '../../helpers/dom/htmlToDocumentFragment';
-import {getRestrictionReason} from '../../helpers/restrictions';
-import escapeRegExp from '../../helpers/string/escapeRegExp';
-import limitSymbols from '../../helpers/string/limitSymbols';
-import {Message, DocumentAttribute, DraftMessage} from '../../layer';
-import {MyDocument} from '../../lib/appManagers/appDocsManager';
-import {MyDraftMessage} from '../../lib/appManagers/appDraftsManager';
-import {MyMessage} from '../../lib/appManagers/appMessagesManager';
-import isMessageRestricted from '../../lib/appManagers/utils/messages/isMessageRestricted';
-import getPeerId from '../../lib/appManagers/utils/peers/getPeerId';
-import I18n, {LangPackKey, i18n, UNSUPPORTED_LANG_PACK_KEY, FormatterArguments} from '../../lib/langPack';
-import {SERVICE_PEER_ID, VERIFICATION_CODES_BOT_ID} from '../../lib/mtproto/mtproto_config';
-import parseEntities from '../../lib/richTextProcessor/parseEntities';
-import sortEntities from '../../lib/richTextProcessor/sortEntities';
-import wrapEmojiText from '../../lib/richTextProcessor/wrapEmojiText';
-import wrapPlainText from '../../lib/richTextProcessor/wrapPlainText';
-import wrapRichText, {WrapRichTextOptions} from '../../lib/richTextProcessor/wrapRichText';
-import wrapTextWithEntities from '../../lib/richTextProcessor/wrapTextWithEntities';
-import rootScope from '../../lib/rootScope';
-import {Modify} from '../../types';
-import Icon from '../icon';
-import TranslatableMessage from '../translatableMessage';
-import wrapMessageActionTextNew, {WrapMessageActionTextOptions} from './messageActionTextNew';
-import {wrapMessageGiveawayResults} from './messageActionTextNewUnsafe';
-import wrapPeerTitle from './peerTitle';
+import partition from '@helpers/array/partition';
+import assumeType from '@helpers/assumeType';
+import {formatDate} from '@helpers/date';
+import htmlToDocumentFragment from '@helpers/dom/htmlToDocumentFragment';
+import {getRestrictionReason} from '@helpers/restrictions';
+import escapeRegExp from '@helpers/string/escapeRegExp';
+import limitSymbols from '@helpers/string/limitSymbols';
+import {Message, DocumentAttribute, DraftMessage, MessageMedia, Document, Photo} from '@layer';
+import {MyDocument} from '@appManagers/appDocsManager';
+import {MyDraftMessage} from '@appManagers/appDraftsManager';
+import {MyMessage} from '@appManagers/appMessagesManager';
+import isMessageRestricted from '@appManagers/utils/messages/isMessageRestricted';
+import getPeerId from '@appManagers/utils/peers/getPeerId';
+import I18n, {LangPackKey, i18n, UNSUPPORTED_LANG_PACK_KEY, FormatterArguments} from '@lib/langPack';
+import {SERVICE_PEER_ID, VERIFICATION_CODES_BOT_ID} from '@appManagers/constants';
+import parseEntities from '@lib/richTextProcessor/parseEntities';
+import sortEntities from '@lib/richTextProcessor/sortEntities';
+import wrapEmojiText from '@lib/richTextProcessor/wrapEmojiText';
+import wrapPlainText from '@lib/richTextProcessor/wrapPlainText';
+import wrapRichText, {WrapRichTextOptions} from '@lib/richTextProcessor/wrapRichText';
+import wrapTextWithEntities from '@lib/richTextProcessor/wrapTextWithEntities';
+import rootScope from '@lib/rootScope';
+import {Modify} from '@types';
+import Icon from '@components/icon';
+import TranslatableMessage from '@components/translatableMessage';
+import wrapMessageActionTextNew, {WrapMessageActionTextOptions} from '@components/wrappers/messageActionTextNew';
+import {wrapMessageGiveawayResults} from '@components/wrappers/messageActionTextNewUnsafe';
+import wrapPeerTitle from '@components/wrappers/peerTitle';
 
 export type WrapMessageForReplyOptions = Modify<WrapMessageActionTextOptions, {
   message: MyMessage | MyDraftMessage
@@ -81,6 +81,7 @@ export default async function wrapMessageForReply<T extends WrapMessageForReplyO
   const getMyId = () => options.managers ? options.managers.rootScope.getMyId() : rootScope.myId;
 
   const isRestricted = isMessageRestricted(message as any);
+  const isSelfDestructingMedia = !!((message as Message.message).media as MessageMedia.messageMediaPhoto)?.ttl_seconds;
 
   const someRichTextOptions: WrapRichTextOptions = {
     ...options,
@@ -92,23 +93,23 @@ export default async function wrapMessageForReply<T extends WrapMessageForReplyO
   let entities = (message as Message.message).totalEntities ?? (message as DraftMessage.draftMessage).entities;
   if((message as Message.message).media && !isRestricted) {
     assumeType<Message.message>(message);
-    let usingFullGrouepd = true;
+    let usingFullGrouped = true;
     if(message.grouped_id) {
       if(usingMids) {
         const mids = await appMessagesManager.getMidsByMessage(message);
         if(usingMids.length === mids.length) {
           for(const mid of mids) {
             if(!usingMids.includes(mid)) {
-              usingFullGrouepd = false;
+              usingFullGrouped = false;
               break;
             }
           }
         } else {
-          usingFullGrouepd = false;
+          usingFullGrouped = false;
         }
       }
 
-      if(usingFullGrouepd) {
+      if(usingFullGrouped) {
         const groupedText = await appMessagesManager.getGroupedText(message.grouped_id);
         options.text = groupedText?.message || '';
         entities = groupedText?.totalEntities || [];
@@ -119,15 +120,33 @@ export default async function wrapMessageForReply<T extends WrapMessageForReplyO
         }
       }
     } else {
-      usingFullGrouepd = false;
+      usingFullGrouped = false;
+    }
+
+    async function addSelfDestructingMediaPart(
+      langPackKeyPart: 'Photo' | 'Video' | 'Voice' | 'Round',
+      media: Photo | Document
+    ) {
+      const {out} = (message as Message.message).pFlags;
+      addPart(
+        `SelfDestructingOnMobile.${langPackKeyPart}${!media ? '.Expired' : (out ? '.You' : '')}`,
+        undefined,
+        [!out && await wrapPeerTitle({peerId: (message as Message.message).fromId})]
+      );
+      options.text = '';
+      entities = [];
     }
 
     let i = 1;
-    if((!usingFullGrouepd && !withoutMediaType) || !options.text) {
+    if((!usingFullGrouped && !withoutMediaType) || !options.text || isSelfDestructingMedia) {
       const media = message.media;
       switch(media?._) {
         case 'messageMediaPhoto':
-          addPart('AttachPhoto');
+          if(isSelfDestructingMedia) {
+            await addSelfDestructingMediaPart('Photo', media.photo);
+          } else {
+            addPart('AttachPhoto');
+          }
           break;
         case 'messageMediaDice':
           addPart(undefined, plain ? media.emoticon : wrapEmojiText(media.emoticon));
@@ -166,14 +185,26 @@ export default async function wrapMessageForReply<T extends WrapMessageForReplyO
         case 'messageMediaDocument': {
           const document = media.document as MyDocument;
 
-          if(document.type === 'video') {
-            addPart('AttachVideo');
-          } else if(document.type === 'voice') {
-            addPart('AttachAudio');
+          if(document?.type === 'video' || media.pFlags.video) {
+            if(isSelfDestructingMedia) {
+              await addSelfDestructingMediaPart('Video', document);
+            } else {
+              addPart('AttachVideo');
+            }
+          } else if(document?.type === 'voice' || media.pFlags.voice) {
+            if(isSelfDestructingMedia) {
+              await addSelfDestructingMediaPart('Voice', document);
+            } else {
+              addPart('AttachAudio');
+            }
+          } else if(document?.type === 'round' || media.pFlags.round) {
+            if(isSelfDestructingMedia) {
+              await addSelfDestructingMediaPart('Round', document);
+            } else {
+              addPart('AttachRound');
+            }
           } else if(document.type === 'gif') {
             addPart('AttachGif');
-          } else if(document.type === 'round') {
-            addPart('AttachRound');
           } else if(document.type === 'sticker') {
             const i = parts.length;
             if(document.stickerEmojiRaw) {

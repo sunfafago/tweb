@@ -4,27 +4,27 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import forEachReverse from '../../../helpers/array/forEachReverse';
-import assumeType from '../../../helpers/assumeType';
-import createContextMenu from '../../../helpers/dom/createContextMenu';
-import positionElementByIndex from '../../../helpers/dom/positionElementByIndex';
-import Sortable from '../../../helpers/dom/sortable';
-import {joinDeepPath} from '../../../helpers/object/setDeepProperty';
-import {StickerSet, MessagesAllStickers} from '../../../layer';
-import {i18n, LangPackKey} from '../../../lib/langPack';
-import wrapEmojiText from '../../../lib/richTextProcessor/wrapEmojiText';
-import rootScope from '../../../lib/rootScope';
-import CheckboxField from '../../checkboxField';
-import LazyLoadQueue from '../../lazyLoadQueue';
-import PopupElement from '../../popups';
-import PopupStickers from '../../popups/stickers';
-import Row, {CreateRowFromCheckboxField} from '../../row';
-import SettingSection from '../../settingSection';
-import SliderSuperTab from '../../sliderTab';
-import wrapStickerSetThumb from '../../wrappers/stickerSetThumb';
-import wrapStickerToRow from '../../wrappers/stickerToRow';
-import AppQuickReactionTab from './quickReaction';
-
+import assumeType from '@helpers/assumeType';
+import createContextMenu from '@helpers/dom/createContextMenu';
+import positionElementByIndex from '@helpers/dom/positionElementByIndex';
+import Sortable from '@helpers/dom/sortable';
+import {joinDeepPath} from '@helpers/object/setDeepProperty';
+import {StickerSet, MessagesAllStickers} from '@layer';
+import {i18n, LangPackKey} from '@lib/langPack';
+import wrapEmojiText from '@lib/richTextProcessor/wrapEmojiText';
+import rootScope from '@lib/rootScope';
+import CheckboxField from '@components/checkboxField';
+import LazyLoadQueue from '@components/lazyLoadQueue';
+import PopupElement from '@components/popups';
+import PopupStickers from '@components/popups/stickers';
+import Row from '@components/row';
+import SettingSection from '@components/settingSection';
+import SliderSuperTab from '@components/sliderTab';
+import wrapStickerSetThumb from '@components/wrappers/stickerSetThumb';
+import wrapStickerToRow from '@components/wrappers/stickerToRow';
+import AppQuickReactionTab from '@components/sidebarLeft/tabs/quickReaction';
+import {useAppSettings} from '@stores/appSettings';
+import {getStickerSetInputById} from '@lib/appManagers/utils/stickers/getStickerSetInput';
 export default class AppStickersAndEmojiTab extends SliderSuperTab {
   public static getInitArgs() {
     return {
@@ -36,6 +36,7 @@ export default class AppStickersAndEmojiTab extends SliderSuperTab {
   public init(p: ReturnType<typeof AppStickersAndEmojiTab['getInitArgs']>) {
     this.container.classList.add('stickers-emoji-container');
     this.setTitle('StickersName');
+    const [appSettings, setAppSettings] = useAppSettings();
 
     const promises: Promise<any>[] = [];
 
@@ -50,23 +51,22 @@ export default class AppStickersAndEmojiTab extends SliderSuperTab {
         titleRightSecondary: true
       });
 
-      const map: {[k in typeof rootScope.settings.stickers.suggest]: LangPackKey} = {
+      const map: {[k in typeof appSettings.stickers.suggest]: LangPackKey} = {
         all: 'SuggestStickersAll',
         installed: 'SuggestStickersInstalled',
         none: 'SuggestStickersNone'
       };
 
       const setStickersSuggestDescription = () => {
-        suggestStickersRow.titleRight.replaceChildren(i18n(map[rootScope.settings.stickers.suggest]));
+        suggestStickersRow.titleRight.replaceChildren(i18n(map[appSettings.stickers.suggest]));
       };
 
       setStickersSuggestDescription();
 
-      const setStickersSuggest = (value: typeof rootScope.settings.stickers.suggest) => {
-        if(rootScope.settings.stickers.suggest === value) return;
-        rootScope.settings.stickers.suggest = value;
+      const setStickersSuggest = (value: typeof appSettings.stickers.suggest) => {
+        if(appSettings.stickers.suggest === value) return;
+        setAppSettings('stickers', 'suggest', value);
         setStickersSuggestDescription();
-        return this.managers.appStateManager.setByKey(joinDeepPath('settings', 'stickers', 'suggest'), value);
       };
 
       createContextMenu({
@@ -212,7 +212,7 @@ export default class AppStickersAndEmojiTab extends SliderSuperTab {
           subtitleLangArgs: [stickerSet.count],
           havePadding: true,
           clickable: () => {
-            PopupElement.createPopup(PopupStickers, {id: stickerSet.id, access_hash: stickerSet.access_hash}).show();
+            PopupElement.createPopup(PopupStickers, getStickerSetInputById(stickerSet)).show();
           },
           listenerSetter: this.listenerSetter
         });

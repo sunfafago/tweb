@@ -4,6 +4,8 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
+@use "../shared" as *;
+
 $inactive-opacity: .4;
 
 .media-viewer {
@@ -338,6 +340,11 @@ $inactive-opacity: .4;
         position: absolute;
         //z-index: -1;
       //}
+    }
+
+    img,
+    video {
+      dynamic-range-limit: no-limit;
     }
 
     .thumbnail-avatar {

@@ -4,15 +4,15 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import cryptoWorker from './cryptoMessagePort';
-import {AccountPassword, InputCheckPasswordSRP, PasswordKdfAlgo} from '../../layer';
-import addPadding from '../../helpers/bytes/addPadding';
-import bufferConcats from '../../helpers/bytes/bufferConcats';
-import bytesXor from '../../helpers/bytes/bytesXor';
-import convertToUint8Array from '../../helpers/bytes/convertToUint8Array';
+import cryptoWorker from '@lib/crypto/cryptoMessagePort';
+import {AccountPassword, InputCheckPasswordSRP, PasswordKdfAlgo} from '@layer';
+import addPadding from '@helpers/bytes/addPadding';
+import bufferConcats from '@helpers/bytes/bufferConcats';
+import bytesXor from '@helpers/bytes/bytesXor';
+import convertToUint8Array from '@helpers/bytes/convertToUint8Array';
 import bigInt from 'big-integer';
-import {bigIntFromBytes, bigIntToBytes} from '../../helpers/bigInt/bigIntConversion';
-import bytesToHex from '../../helpers/bytes/bytesToHex';
+import {bigIntFromBytes, bigIntToBytes} from '@helpers/bigInt/bigIntConversion';
+import bytesToHex from '@helpers/bytes/bytesToHex';
 
 export async function makePasswordHash(password: string, client_salt: Uint8Array, server_salt: Uint8Array) {
   // ! look into crypto_methods.test.ts
@@ -20,7 +20,7 @@ export async function makePasswordHash(password: string, client_salt: Uint8Array
   buffer = bufferConcats(server_salt, buffer, server_salt);
   buffer = await cryptoWorker.invokeCrypto('sha256', buffer);
 
-  let hash = await cryptoWorker.invokeCrypto('pbkdf2', new Uint8Array(buffer), client_salt, 100000);
+  let hash = await cryptoWorker.invokeCrypto('pbkdf2', new Uint8Array(buffer), client_salt as BufferSource, 100000);
   hash = bufferConcats(server_salt, hash, server_salt);
 
   buffer = await cryptoWorker.invokeCrypto('sha256', hash);

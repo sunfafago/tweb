@@ -4,8 +4,8 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import {getMiddleware} from '../../helpers/middleware';
-import AutocompleteHelper from './autocompleteHelper';
+import {getMiddleware} from '@helpers/middleware';
+import AutocompleteHelper from '@components/chat/autocompleteHelper';
 
 export default class AutocompleteHelperController {
   private helpers: Set<AutocompleteHelper> = new Set();
@@ -24,6 +24,11 @@ export default class AutocompleteHelperController {
     for(const helper of this.helpers) {
       helper.toggleListNavigation(enabled);
     }
+  }
+
+  public destroy() {
+    this.middleware.destroy();
+    this.hideOtherHelpers();
   }
 
   public getMiddleware() {

@@ -4,49 +4,50 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import type RLottiePlayer from '../../lib/rlottie/rlottiePlayer';
-import type {ThumbCache} from '../../lib/storages/thumbs';
-import type {MyDocument} from '../../lib/appManagers/appDocsManager';
-import IS_WEBP_SUPPORTED from '../../environment/webpSupport';
-import getPathFromBytes, {createSvgFromBytes} from '../../helpers/bytes/getPathFromBytes';
-import deferredPromise from '../../helpers/cancellablePromise';
-import computeLockColor from '../../helpers/computeLockColor';
-import cancelEvent from '../../helpers/dom/cancelEvent';
-import {attachClickEvent} from '../../helpers/dom/clickEvent';
-import createVideo from '../../helpers/dom/createVideo';
-import renderImageFromUrl, {renderImageFromUrlPromise} from '../../helpers/dom/renderImageFromUrl';
-import getImageFromStrippedThumb from '../../helpers/getImageFromStrippedThumb';
-import getPreviewURLFromThumb from '../../helpers/getPreviewURLFromThumb';
-import makeError from '../../helpers/makeError';
-import {makeMediaSize} from '../../helpers/mediaSize';
-import mediaSizes from '../../helpers/mediaSizes';
-import {Middleware} from '../../helpers/middleware';
-import {isSavingLottiePreview, saveLottiePreview} from '../../helpers/saveLottiePreview';
-import sequentialDom from '../../helpers/sequentialDom';
-import {DocumentAttribute, PhotoSize, VideoSize} from '../../layer';
-import appDownloadManager from '../../lib/appManagers/appDownloadManager';
-import {AppManagers} from '../../lib/appManagers/managers';
-import choosePhotoSize from '../../lib/appManagers/utils/photos/choosePhotoSize';
-import getStickerEffectThumb from '../../lib/appManagers/utils/stickers/getStickerEffectThumb';
-import lottieLoader from '../../lib/rlottie/lottieLoader';
-import rootScope from '../../lib/rootScope';
-import webpWorkerController from '../../lib/webp/webpWorkerController';
-import {Awaited} from '../../types';
-import {getEmojiToneIndex} from '../../vendor/emoji';
-import animationIntersector, {AnimationItemGroup} from '../animationIntersector';
-import LazyLoadQueue from '../lazyLoadQueue';
-import wrapStickerAnimation from './stickerAnimation';
-import framesCache from '../../helpers/framesCache';
-import liteMode, {LiteModeKey} from '../../helpers/liteMode';
-import Scrollable from '../scrollable';
-import apiManagerProxy from '../../lib/mtproto/mtprotoworker';
-import Icon from '../icon';
-import {SHOULD_HANDLE_VIDEO_LEAK, attachVideoLeakListeners, leakVideoFallbacks, onVideoLeak} from '../../helpers/dom/handleVideoLeak';
-import noop from '../../helpers/noop';
-import {IS_WEBM_SUPPORTED} from '../../environment/videoSupport';
-import toArray from '../../helpers/array/toArray';
-import {createEffect, createSignal, on, onCleanup, onMount, Ref} from 'solid-js';
-import createMiddleware from '../../helpers/solid/createMiddleware';
+import type RLottiePlayer from '@lib/rlottie/rlottiePlayer';
+import type {ThumbCache} from '@lib/storages/thumbs';
+import type {MyDocument} from '@appManagers/appDocsManager';
+import IS_WEBP_SUPPORTED from '@environment/webpSupport';
+import getPathFromBytes, {createSvgFromBytes} from '@helpers/bytes/getPathFromBytes';
+import deferredPromise from '@helpers/cancellablePromise';
+import computeLockColor from '@helpers/computeLockColor';
+import cancelEvent from '@helpers/dom/cancelEvent';
+import {attachClickEvent} from '@helpers/dom/clickEvent';
+import createVideo from '@helpers/dom/createVideo';
+import renderImageFromUrl, {renderImageFromUrlPromise} from '@helpers/dom/renderImageFromUrl';
+import getImageFromStrippedThumb from '@helpers/getImageFromStrippedThumb';
+import getPreviewURLFromThumb from '@helpers/getPreviewURLFromThumb';
+import makeError from '@helpers/makeError';
+import {makeMediaSize} from '@helpers/mediaSize';
+import mediaSizes from '@helpers/mediaSizes';
+import {Middleware} from '@helpers/middleware';
+import {isSavingLottiePreview, saveLottiePreview} from '@helpers/saveLottiePreview';
+import sequentialDom from '@helpers/sequentialDom';
+import {DocumentAttribute, PhotoSize, VideoSize} from '@layer';
+import appDownloadManager from '@lib/appDownloadManager';
+import {AppManagers} from '@lib/managers';
+import choosePhotoSize from '@appManagers/utils/photos/choosePhotoSize';
+import getStickerEffectThumb from '@appManagers/utils/stickers/getStickerEffectThumb';
+import lottieLoader from '@lib/rlottie/lottieLoader';
+import rootScope from '@lib/rootScope';
+import webpWorkerController from '@lib/webp/webpWorkerController';
+import {getEmojiToneIndex} from '@vendor/emoji';
+import animationIntersector, {AnimationItemGroup} from '@components/animationIntersector';
+import LazyLoadQueue from '@components/lazyLoadQueue';
+import wrapStickerAnimation from '@components/wrappers/stickerAnimation';
+import framesCache from '@helpers/framesCache';
+import liteMode, {LiteModeKey} from '@helpers/liteMode';
+import Scrollable from '@components/scrollable';
+import apiManagerProxy from '@lib/apiManagerProxy';
+import Icon from '@components/icon';
+import {SHOULD_HANDLE_VIDEO_LEAK, attachVideoLeakListeners, leakVideoFallbacks, onVideoLeak} from '@helpers/dom/handleVideoLeak';
+import noop from '@helpers/noop';
+import {IS_WEBM_SUPPORTED} from '@environment/videoSupport';
+import toArray from '@helpers/array/toArray';
+import {createEffect, createRoot, on, onCleanup, Ref, untrack} from 'solid-js';
+import createMiddleware from '@helpers/solid/createMiddleware';
+import StickerType from '@config/stickerType';
+import readValue from '@helpers/solid/readValue';
 
 // https://github.com/telegramdesktop/tdesktop/blob/master/Telegram/SourceFiles/history/view/media/history_view_sticker.cpp#L40
 export const STICKER_EFFECT_MULTIPLIER = 1 + 0.245 * 2;
@@ -83,7 +84,7 @@ const getThumbFromContainer = (container: HTMLElement) => {
   return element;
 };
 
-export default async function wrapSticker({doc, div, middleware, loadStickerMiddleware, lazyLoadQueue, exportLoad, group, play, onlyThumb, emoji, width, height, withThumb, loop, loadPromises, needFadeIn, needUpscale, skipRatio, static: asStatic, managers = rootScope.managers, fullThumb, isOut, noPremium, withLock, relativeEffect, loopEffect, isCustomEmoji, syncedVideo, liteModeKey, isEffect, textColor, scrollable, showPremiumInfo, useCache}: {
+export default async function wrapSticker({doc, div, middleware, loadStickerMiddleware, lazyLoadQueue, exportLoad, group, play, onlyThumb, emoji, width, height, withThumb, loop, loadPromises, needFadeIn, needUpscale, skipRatio, static: asStatic, managers = rootScope.managers, fullThumb, isOut, noPremium, withLock, relativeEffect, loopEffect, isCustomEmoji, syncedVideo, liteModeKey, isEffect, textColor, scrollable, showPremiumInfo, useCache, initFrame}: {
   doc: MyDocument,
   div: HTMLElement | HTMLElement[],
   middleware?: Middleware,
@@ -117,7 +118,8 @@ export default async function wrapSticker({doc, div, middleware, loadStickerMidd
   textColor?: WrapSomethingOptions['textColor'],
   scrollable?: Scrollable
   showPremiumInfo?: () => void,
-  useCache?: boolean
+  useCache?: boolean,
+  initFrame?: number
 }) {
   const options = arguments[0];
   div = toArray(div);
@@ -128,8 +130,8 @@ export default async function wrapSticker({doc, div, middleware, loadStickerMidd
     emoji = doc.stickerEmojiRaw;
   }
 
-  const stickerType = doc.sticker;
-  if(stickerType === 1 || (stickerType === 3 && !IS_WEBM_SUPPORTED)) {
+  const stickerType = doc.sticker ?? StickerType.Static;
+  if(stickerType === StickerType.Static || (stickerType === StickerType.WebM && !IS_WEBM_SUPPORTED)) {
     asStatic = true;
   }
 
@@ -141,7 +143,7 @@ export default async function wrapSticker({doc, div, middleware, loadStickerMidd
     height = size.height;
   }
 
-  if(stickerType === 2) {
+  if(stickerType === StickerType.Lottie) {
     // LottieLoader.loadLottie();
     lottieLoader.loadLottieWorkers();
   }
@@ -200,7 +202,7 @@ export default async function wrapSticker({doc, div, middleware, loadStickerMidd
     return cacheContext = apiManagerProxy.getCacheContext(doc, type);
   };
 
-  const isAnimated = !asStatic && (stickerType === 2 || stickerType === 3);
+  const isAnimated = !asStatic && (stickerType === StickerType.Lottie || stickerType === StickerType.WebM);
 
   const effectThumb = getStickerEffectThumb(doc);
   if(isOut !== undefined && effectThumb && !isOut) {
@@ -217,7 +219,7 @@ export default async function wrapSticker({doc, div, middleware, loadStickerMidd
     });
   }
 
-  if(asStatic && stickerType !== 1) {
+  if(asStatic && stickerType !== StickerType.Static) {
     const thumb = choosePhotoSize(doc, width, height, false) as PhotoSize.photoSize;
     getCacheContext(thumb.type);
   } else {
@@ -232,11 +234,11 @@ export default async function wrapSticker({doc, div, middleware, loadStickerMidd
   }
 
   const toneIndex = emoji && !isCustomEmoji ? getEmojiToneIndex(emoji) : -1;
-  const lottieCachedThumbToneIndex = toneIndex === -1 ? textColor ?? toneIndex : toneIndex;
+  const lottieCachedThumbToneIndex = toneIndex === -1 ? untrack(() => readValue(textColor)) ?? toneIndex : toneIndex;
   const downloaded = cacheContext.downloaded && !needFadeIn;
 
   const isThumbNeededForType = isAnimated;
-  const lottieCachedThumb = stickerType === 2 || stickerType === 3 ? apiManagerProxy.getStickerCachedThumb(doc.id, lottieCachedThumbToneIndex) : undefined;
+  const lottieCachedThumb = stickerType === StickerType.Lottie || stickerType === StickerType.WebM ? apiManagerProxy.getStickerCachedThumb(doc.id, lottieCachedThumbToneIndex) : undefined;
 
   const ret = {
     render: undefined as typeof loadPromise,
@@ -247,15 +249,18 @@ export default async function wrapSticker({doc, div, middleware, loadStickerMidd
   };
   let loadThumbPromise = deferredPromise<void>();
   let haveThumbCached = false;
-  if((
-    doc.thumbs?.length ||
+  if(
+    (
+      doc.thumbs?.length ||
       lottieCachedThumb
-  ) &&
-    isEmptyContainer(div[0]) && (
-    !downloaded ||
+    ) &&
+    (
+      !downloaded ||
       isThumbNeededForType ||
       onlyThumb
-  ) && withThumb !== false/*  && doc.thumbs[0]._ !== 'photoSizeEmpty' */
+    ) &&
+    withThumb !== false &&
+    isEmptyContainer(div[0])/*  && doc.thumbs[0]._ !== 'photoSizeEmpty' */
   ) {
     let thumb = lottieCachedThumb || doc.thumbs[0];
 
@@ -357,7 +362,7 @@ export default async function wrapSticker({doc, div, middleware, loadStickerMidd
           }).catch(() => loadThumbPromise.resolve());
         }
       }
-    } else if(((stickerType === 2 && toneIndex <= 0) || stickerType === 3) && (withThumb || onlyThumb)) {
+    } else if(((stickerType === StickerType.Lottie && toneIndex <= 0) || stickerType === StickerType.WebM) && (withThumb || onlyThumb)) {
       const load = async() => {
         if(!isEmptyContainer((div as HTMLElement[])[0]) || (middleware && !middleware())) {
           loadThumbPromise.resolve();
@@ -422,7 +427,7 @@ export default async function wrapSticker({doc, div, middleware, loadStickerMidd
       throw middlewareError;
     }
 
-    if(stickerType === 2 && !asStatic) {
+    if(stickerType === StickerType.Lottie && !asStatic) {
       const blob = await appDownloadManager.downloadMedia({media: doc, queueId: lazyLoadQueue?.queueId, thumb: fullThumb});
       if(middleware && !middleware()) {
         throw middlewareError;
@@ -443,8 +448,25 @@ export default async function wrapSticker({doc, div, middleware, loadStickerMidd
         middleware: loadStickerMiddleware ?? middleware,
         group,
         liteModeKey: liteModeKey || undefined,
-        textColor: !isCustomEmoji ? textColor : undefined
+        textColor: !isCustomEmoji ? readValue(textColor) : undefined,
+        initFrame
       });
+
+      if(typeof(textColor) === 'function') {
+        createRoot((dispose) => {
+          middleware.onClean(dispose);
+          createEffect(
+            on(
+              textColor,
+              () => {
+                animation.setColor(readValue(textColor), true);
+              },
+              {
+                defer: true
+              }
+            ));
+        });
+      }
 
       // const deferred = deferredPromise<void>();
 
@@ -516,7 +538,7 @@ export default async function wrapSticker({doc, div, middleware, loadStickerMidd
 
       // return deferred;
       // await new Promise((resolve) => setTimeout(resolve, 5e3));
-    } else if(asStatic || stickerType === 3) {
+    } else if(asStatic || stickerType === StickerType.WebM) {
       const isSingleVideo = isAnimated && syncedVideo;
       const cacheName = isSingleVideo ? framesCache.generateName('' + doc.id, 0, 0, undefined, undefined) : undefined;
 
@@ -712,7 +734,7 @@ export default async function wrapSticker({doc, div, middleware, loadStickerMidd
         if(cacheContext.url) r();
         else {
           let promise: Promise<any>;
-          if(stickerType !== 1 && asStatic) {
+          if(stickerType !== StickerType.Static && asStatic) {
             const thumb = choosePhotoSize(doc, width, height, false) as PhotoSize.photoSize;
             // promise = managers.appDocsManager.getThumbURL(doc, thumb).promise
             promise = appDownloadManager.downloadMediaURL({media: doc, thumb, queueId: lazyLoadQueue?.queueId});
@@ -751,7 +773,7 @@ export default async function wrapSticker({doc, div, middleware, loadStickerMidd
     loadPromises?.push(loadThumbPromise);
   }
 
-  if(stickerType === 2 && effectThumb && isOut !== undefined && !noPremium) {
+  if(stickerType === StickerType.Lottie && effectThumb && isOut !== undefined && !noPremium) {
     attachStickerEffectHandler({
       container: div[0],
       doc,

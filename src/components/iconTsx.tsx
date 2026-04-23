@@ -1,11 +1,11 @@
 import {JSX, splitProps} from 'solid-js';
-import classNames from '../helpers/string/classNames';
-import {getIconContent} from './icon';
+import classNames from '@helpers/string/classNames';
+import {getIconContent} from '@components/icon';
 
-export const IconTsx = (props: {icon: Icon} & JSX.HTMLAttributes<HTMLSpanElement>) => {
-  const [, rest] = splitProps(props, ['icon']);
+export const IconTsx = (inProps: {icon: Icon} & JSX.HTMLAttributes<HTMLSpanElement>) => {
+  const [props, rest] = splitProps(inProps, ['icon', 'class']);
   return (
-    <span {...rest} class={classNames('tgico', props.class)}>
+    <span class={classNames('tgico', props.class)} {...rest}>
       {getIconContent(props.icon)}
     </span>
   );

@@ -9,28 +9,28 @@
  * https://github.com/zhukov/webogram/blob/master/LICENSE
  */
 
-import filterUnique from '../../helpers/array/filterUnique';
-import indexOfAndSplice from '../../helpers/array/indexOfAndSplice';
-import deferredPromise, {CancellablePromise} from '../../helpers/cancellablePromise';
-import cleanSearchText, {ProcessSearchTextOptions, processSearchText} from '../../helpers/cleanSearchText';
-import cleanUsername from '../../helpers/cleanUsername';
-import tsNow from '../../helpers/tsNow';
-import isObject from '../../helpers/object/isObject';
-import safeReplaceObject from '../../helpers/object/safeReplaceObject';
-import {AccountEmojiStatuses, Chat, ContactsResolvedPeer, EmojiStatus, InputContact, InputGeoPoint, InputMedia, InputPeer, InputUser, User as MTUser, RequirementToContact, UserProfilePhoto, UserStatus} from '../../layer';
-import parseEntities from '../richTextProcessor/parseEntities';
-import wrapUrl from '../richTextProcessor/wrapUrl';
-import SearchIndex from '../searchIndex';
-import {AppManager} from './manager';
-import getPeerId from './utils/peers/getPeerId';
-import canSendToUser from './utils/users/canSendToUser';
-import {AppStoragesManager} from './appStoragesManager';
-import deepEqual from '../../helpers/object/deepEqual';
-import getPeerActiveUsernames from './utils/peers/getPeerActiveUsernames';
-import callbackify from '../../helpers/callbackify';
-import {NULL_PEER_ID, TEST_NO_STORIES} from '../mtproto/mtproto_config';
-import MTProtoMessagePort from '../mtproto/mtprotoMessagePort';
-import pause from '../../helpers/schedulers/pause';
+import filterUnique from '@helpers/array/filterUnique';
+import indexOfAndSplice from '@helpers/array/indexOfAndSplice';
+import deferredPromise, {CancellablePromise} from '@helpers/cancellablePromise';
+import cleanSearchText, {ProcessSearchTextOptions, processSearchText} from '@helpers/cleanSearchText';
+import cleanUsername from '@helpers/cleanUsername';
+import tsNow from '@helpers/tsNow';
+import isObject from '@helpers/object/isObject';
+import safeReplaceObject from '@helpers/object/safeReplaceObject';
+import {AccountEmojiStatuses, Chat, ContactsResolvedPeer, EmojiStatus, InputContact, InputGeoPoint, InputMedia, InputPeer, InputUser, User as MTUser, RequirementToContact, UserProfilePhoto, UserStatus} from '@layer';
+import parseEntities from '@lib/richTextProcessor/parseEntities';
+import wrapUrl from '@lib/richTextProcessor/wrapUrl';
+import SearchIndex from '@lib/searchIndex';
+import {AppManager} from '@appManagers/manager';
+import getPeerId from '@appManagers/utils/peers/getPeerId';
+import canSendToUser from '@appManagers/utils/users/canSendToUser';
+import {AppStoragesManager} from '@appManagers/appStoragesManager';
+import deepEqual from '@helpers/object/deepEqual';
+import getPeerActiveUsernames from '@appManagers/utils/peers/getPeerActiveUsernames';
+import callbackify from '@helpers/callbackify';
+import {NULL_PEER_ID, TEST_NO_STORIES} from '@appManagers/constants';
+import MTProtoMessagePort from '@lib/mainWorker/mainMessagePort';
+import pause from '@helpers/schedulers/pause';
 
 export type User = MTUser.user;
 export type TopPeerType = 'correspondents' | 'bots_inline' | 'bots_app';
@@ -72,6 +72,19 @@ export class AppUsersManager extends AppManager {
     setInterval(this.updateUsersStatuses, 60000);
 
     this.rootScope.addEventListener('state_synchronized', this.updateUsersStatuses);
+
+    this.rootScope.addEventListener('peer_deleted', (peerId) => {
+      this.appStateManager.getState().then((state) => {
+        const recentSearch = state.recentSearch;
+        if(!recentSearch) return;
+        const idx = recentSearch.indexOf(peerId);
+        if(idx !== -1) {
+          recentSearch.splice(idx, 1);
+          this.peersStorage.releasePeer(peerId, 'recentSearch');
+          this.appStateManager.pushToState('recentSearch', recentSearch);
+        }
+      });
+    });
 
     this.apiUpdatesManager.addMultipleEventsListeners({
       updateUserStatus: (update) => {
@@ -650,11 +663,6 @@ export class AppUsersManager extends AppManager {
         this.rootScope.dispatchEvent('peer_title_edit', {peerId});
       }
 
-      // whitelisted domains
-      if(changedPremium) {
-        this.rootScope.dispatchEvent('peer_bio_edit', peerId);
-      }
-
       if(changedEmojiStatus && user.pFlags.self) {
         this.rootScope.dispatchEvent('emoji_status_change');
       }
@@ -753,25 +761,20 @@ export class AppUsersManager extends AppManager {
     });
   }
 
-  public async getUserPhone(id: UserId) {
-    const user = this.getUser(id);
-    if(!user?.phone) {
-      return;
-    }
-
-    const appConfig = await this.apiManager.getAppConfig();
-    return {
-      phone: user.phone,
-      isAnonymous: appConfig.fragment_prefixes.some((prefix) => user.phone.startsWith(prefix))
-    };
-  }
-
   public getSelf() {
     return this.getUser(this.userId);
   }
 
   public isBot(id: UserId) {
     return this.users[id] && !!this.users[id].pFlags.bot;
+  }
+
+  public isBotforum(id: UserId) {
+    return this.users[id] && !!this.users[id].pFlags.bot_forum_view;
+  }
+
+  public canManageBotforumTopics(id: UserId) {
+    return this.users[id] && !!this.users[id].pFlags.bot_forum_can_manage_topics;
   }
 
   public isAttachMenuBot(id: UserId) {
@@ -1238,7 +1241,9 @@ export class AppUsersManager extends AppManager {
       return empty;
     }
 
-    if('' + user.id === '' + this.getSelf().id) return empty;
+    if(user.pFlags.self) {
+      return empty;
+    }
 
     if(!user.send_paid_messages_stars && (!user.pFlags.contact_require_premium || this.rootScope.premium)) {
       return empty;
@@ -1246,10 +1251,12 @@ export class AppUsersManager extends AppManager {
 
     const userFull = this.appProfileManager.getCachedFullUser(userId);
     if(userFull) {
-      if(userFull.pFlags.contact_require_premium) {
+      if(userFull.pFlags.contact_require_premium && !this.rootScope.premium) {
         return {_: 'requirementToContactPremium'};
       } else if(userFull.send_paid_messages_stars) {
         return {_: 'requirementToContactPaidMessages', stars_amount: userFull.send_paid_messages_stars};
+      } else {
+        return empty;
       }
     }
 
@@ -1276,20 +1283,20 @@ export class AppUsersManager extends AppManager {
   }
 
   public updateCachedUserFullStarsAmount(userId: UserId, starsAmount: number) {
-    const userFull = this.appProfileManager.getCachedFullUser(userId);
-    if(!userFull) return;
-
-    userFull.send_paid_messages_stars = starsAmount;
+    this.appProfileManager.modifyCachedFullUser(userId, (userFull) => {
+      userFull.send_paid_messages_stars = starsAmount;
+    });
   }
 
   /**
    * The amount of stars necessary to be paid for every message if the target user had enabled it
    */
-  public async getStarsAmount(userId: UserId, forceFetch = false): Promise<number | undefined> {
-    const requirement = forceFetch ? await this.fetchRequirementToContact(userId) : await this.getRequirementToContact(userId);
-    const starsAmount = requirement?._ === 'requirementToContactPaidMessages' ? Number(requirement.stars_amount) : undefined;
-
-    return starsAmount;
+  public getStarsAmount(userId: UserId, forceFetch = false, onlyCached = false): MaybePromise<number | undefined> {
+    const requirementResult = forceFetch ? this.fetchRequirementToContact(userId) : this.getRequirementToContact(userId, onlyCached);
+    return callbackify(requirementResult, (requirement) => {
+      const starsAmount = requirement?._ === 'requirementToContactPaidMessages' ? Number(requirement.stars_amount) : undefined;
+      return starsAmount;
+    });
   }
 
   private getRequirementsToContact() {
@@ -1304,6 +1311,11 @@ export class AppUsersManager extends AppManager {
         id: userIds.map((userId) => this.getUserInput(userId))
       }).then((result) => {
         result.forEach((requirement, index) => {
+          // * not sure if it's needed, but just in case
+          if(requirement._ === 'requirementToContactPremium' && this.rootScope.premium) {
+            requirement = {_: 'requirementToContactEmpty'};
+          }
+
           const userId = userIds[index];
           const promise = this.requirementsToContactPromises.get(userId);
           promise.resolve(requirement);

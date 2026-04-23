@@ -1,14 +1,14 @@
 import {render} from 'solid-js/web';
-import PopupElement from '../popups';
+import PopupElement from '@components/popups';
 
-import './adminPopup.css';
+import '@components/rtmp/adminPopup.css';
 import {Show, createRoot, createSignal} from 'solid-js';
-import {toastNew} from '../toast';
-import ButtonMenuToggle from '../buttonMenuToggle';
-import {Ripple} from '../rippleTsx';
-import rtmpCallsController from '../../lib/calls/rtmpCallsController';
-import {RtmpData} from './rtmpData';
-import {i18n} from '../../lib/langPack';
+import {toastNew} from '@components/toast';
+import ButtonMenuToggle from '@components/buttonMenuToggle';
+import {Ripple} from '@components/rippleTsx';
+import {RtmpData} from '@components/rtmp/rtmpData';
+import {i18n} from '@lib/langPack';
+import appImManager from '@lib/appImManager';
 
 const cnPopup = (className = '') => `rtmp-popup${className}`;
 
@@ -112,9 +112,16 @@ export class RtmpStartStreamPopup extends PopupElement {
       this.props.onEndStream();
       return;
     }
-    const chatId = this.props.peerId.toChatId();
-    this.managers.appGroupCallsManager.createGroupCall(chatId, undefined, undefined, true).then(() => {
-      rtmpCallsController.joinCall(chatId);
+    const peerId = this.props.peerId;
+    const chatId = peerId.toChatId();
+    this.managers.appGroupCallsManager.createGroupCall(
+      chatId,
+      undefined,
+      undefined,
+      true
+    ).then(() => {
+      appImManager.joinLiveStream(peerId);
+      // rtmpCallsController.joinCall(chatId);
     });
   }
 

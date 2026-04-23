@@ -4,12 +4,12 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import copy from '../../helpers/object/copy';
-import {InputMedia, Message, MessageEntity, MessageMedia, Poll, PollResults} from '../../layer';
-import {logger, LogTypes} from '../logger';
-import parseMarkdown from '../richTextProcessor/parseMarkdown';
-import {AppManager} from './manager';
-import getServerMessageId from './utils/messageId/getServerMessageId';
+import copy from '@helpers/object/copy';
+import {InputMedia, Message, MessageEntity, MessageMedia, Poll, PollResults} from '@layer';
+import {LogTypes} from '@lib/logger';
+import parseMarkdown from '@lib/richTextProcessor/parseMarkdown';
+import {AppManager} from '@appManagers/manager';
+import getServerMessageId from '@appManagers/utils/messageId/getServerMessageId';
 
 type PollId = Poll['id'];
 
@@ -18,7 +18,11 @@ export class AppPollsManager extends AppManager {
   public results: {[id: PollId]: PollResults} = {};
   public pollToMessages: {[id: PollId]: Set<string>} = {};
 
-  private log = logger('POLLS', LogTypes.Error);
+  constructor() {
+    super();
+    this.name = 'POLLS';
+    this.logTypes = LogTypes.Error;
+  }
 
   protected after() {
     this.apiUpdatesManager.addMultipleEventsListeners({

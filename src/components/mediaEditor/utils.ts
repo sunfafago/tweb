@@ -1,15 +1,12 @@
+import {HistoryItem, MediaEditorState} from '@components/mediaEditor/context';
+import {FontInfo, FontKey, NumberPair, ResizableLayer, TextLayerInfo} from '@components/mediaEditor/types';
+import StickerType from '@config/stickerType';
+import {IS_FIREFOX} from '@environment/userAgent';
+import {hexaToHsla} from '@helpers/color';
+import {logger} from '@lib/logger';
 import {getOwner, runWithOwner} from 'solid-js';
 
-import BezierEasing from '../../vendor/bezierEasing';
-import {hexaToHsla} from '../../helpers/color';
-import {logger} from '../../lib/logger';
-
-import {FontInfo, FontKey, NumberPair, ResizableLayer} from './types';
-import {HistoryItem} from './context';
-import {IS_FIREFOX} from '../../environment/userAgent';
-
 export const log = logger('Media editor');
-
 
 export const delay = (timeout: number) => new Promise((resolve) => setTimeout(resolve, timeout));
 
@@ -42,14 +39,6 @@ export function getContrastColor(color: string) {
   return hexaToHsla(color).l < 80 ? '#ffffff' : '#000000';
 }
 
-export function lerp(min: number, max: number, progress: number) {
-  return min + (max - min) * progress;
-}
-
-export function lerpArray(min: number[], max: number[], progress: number) {
-  return min.map((start, index) => start + (max[index] - start) * progress);
-}
-
 
 // const isPureObject = (obj: any) => [Object.prototype, null].includes(Object.getPrototypeOf(obj));
 const isObject = (obj: any) => obj instanceof Object;
@@ -73,54 +62,6 @@ export function approximateDeepEqual(x: any, y: any): boolean {
 
 
   return false;
-}
-
-
-type AnimateValueOptions = {
-  easing?: (progress: number) => number;
-  onEnd?: () => void;
-};
-
-const defaultEasing = BezierEasing(0.42, 0.0, 0.58, 1.0);
-export const simpleEasing = BezierEasing(0.25, 0.1, 0.25, 1);
-
-export function animateValue<T extends number | number[]>(
-  start: T,
-  end: T,
-  duration: number,
-  callback: (value: T) => void,
-  {easing = defaultEasing, onEnd = () => {}}: AnimateValueOptions = {}
-) {
-  let startTime: number;
-  let canceled = false;
-
-  function animateFrame(currentTime: number) {
-    if(canceled) return;
-    if(!startTime) startTime = currentTime;
-
-    const elapsed = currentTime - startTime;
-    const progress = Math.min(elapsed / duration, 1);
-    const easedProgress = easing(progress);
-
-    if(start instanceof Array && end instanceof Array) {
-      const currentValues = start.map((startVal, index) => lerp(startVal, end[index], easedProgress));
-      callback(currentValues as T);
-    } else {
-      callback(lerp(start as number, end as number, easedProgress) as T);
-    }
-
-    if(progress < 1) {
-      requestAnimationFrame(animateFrame);
-    } else {
-      onEnd();
-    }
-  }
-
-  requestAnimationFrame(animateFrame);
-
-  return () => {
-    canceled = true;
-  };
 }
 
 export function processHistoryItem(item: HistoryItem, mediaState: any) {
@@ -184,7 +125,7 @@ export function snapToAvailableQuality(videoHeight: number) {
 export function checkIfHasAnimatedStickers(layers: ResizableLayer[]) {
   return !!layers.find((layer) => {
     const stickerType = layer.sticker?.sticker;
-    return stickerType === 2 || (!IS_FIREFOX && stickerType === 3);
+    return stickerType === StickerType.Lottie || (!IS_FIREFOX && stickerType === StickerType.WebM);
   });
 };
 
@@ -229,4 +170,18 @@ export const fontInfoMap: Record<FontKey, FontInfo> = {
     fontWeight: 400,
     baseline: 0.75
   }
+};
+
+export const textLayerInfoDefaults: TextLayerInfo = {
+  alignment: 'left',
+  style: 'outline',
+  color: '#ffffff',
+  font: 'roboto',
+  size: 40
+};
+
+export const brushDefaults: MediaEditorState['currentBrush'] = {
+  brush: 'pen',
+  color: '#fe4438',
+  size: 18
 };

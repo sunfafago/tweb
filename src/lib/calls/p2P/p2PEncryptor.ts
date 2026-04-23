@@ -9,9 +9,9 @@
  * https://github.com/evgeny-nadymov/telegram-react/blob/master/LICENSE
  */
 
-import bufferConcats from '../../../helpers/bytes/bufferConcats';
-import subtle from '../../crypto/subtle';
-import sha256 from '../../crypto/utils/sha256';
+import bufferConcats from '@helpers/bytes/bufferConcats';
+import subtle from '@lib/crypto/subtle';
+import sha256 from '@lib/crypto/utils/sha256';
 
 const kMaxIncomingPacketSize = 128 * 1024 * 1024;
 
@@ -95,7 +95,7 @@ export default class P2PEncryptor {
   private async aesProcessCtr(encryptedData: Uint8Array, dataSize: number, aesKeyIv: {key: Uint8Array, iv: Uint8Array}, encrypt = true) {
     const cryptoKey = await subtle.importKey(
       'raw',
-      aesKeyIv.key,
+      aesKeyIv.key as BufferSource,
       {name: 'AES-CTR'},
       false,
       [encrypt ? 'encrypt' : 'decrypt']
@@ -103,11 +103,11 @@ export default class P2PEncryptor {
 
     const buffer: ArrayBuffer = await subtle[encrypt ? 'encrypt' : 'decrypt']({
       name: 'AES-CTR',
-      counter: aesKeyIv.iv,
+      counter: aesKeyIv.iv as BufferSource,
       length: aesKeyIv.iv.length * 8
     },
     cryptoKey,
-    encryptedData
+    encryptedData as BufferSource
     );
 
     return new Uint8Array(buffer);

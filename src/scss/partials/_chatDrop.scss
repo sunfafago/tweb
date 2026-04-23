@@ -4,6 +4,8 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
+@use "../shared" as *;
+
 .drops-container {
   --padding: 0px;
   position: absolute !important;
@@ -122,5 +124,9 @@
 body.is-dragging {
   .page-chats {
     pointer-events: none;
+  }
+
+  #folders-container .chatlist-chat {
+    pointer-events: all;
   }
 }

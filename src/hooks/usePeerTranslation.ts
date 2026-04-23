@@ -1,19 +1,19 @@
-import {useFullPeer} from '../stores/fullPeers';
+import {useFullPeer} from '@stores/fullPeers';
 import {createEffect, createMemo} from 'solid-js';
-import usePeerLanguage from '../stores/peerLanguage';
-import useDynamicCachedValue from '../helpers/solid/useDynamicCachedValue';
-import I18n from '../lib/langPack';
-import usePremium from '../stores/premium';
-import {useAppSettings} from '../stores/appSettings';
-import {usePeer} from '../stores/peers';
-import {Chat} from '../layer';
-import {useAppState} from '../stores/appState';
+import usePeerLanguage from '@stores/peerLanguage';
+import useDynamicCachedValue from '@helpers/solid/useDynamicCachedValue';
+import I18n from '@lib/langPack';
+import usePremium from '@stores/premium';
+import {useAppSettings} from '@stores/appSettings';
+import {usePeer} from '@stores/peers';
+import {Chat} from '@layer';
+import {useAppState} from '@stores/appState';
 
 function _usePeerTranslation(peerId: PeerId) {
   const [appSettings, setAppSettings] = useAppSettings();
   const [appState] = useAppState();
 
-  const fullPeer = useFullPeer(() => peerId);
+  const fullPeer = useFullPeer(peerId);
   const peer = usePeer(() => peerId);
   const peerLanguage = usePeerLanguage(() => peerId, true);
   const isPremium = usePremium();
@@ -48,8 +48,9 @@ function _usePeerTranslation(peerId: PeerId) {
       return;
     }
 
+    const _fullPeer = fullPeer();
     if(
-      fullPeer().pFlags.translations_disabled ||
+      (!_fullPeer || _fullPeer.pFlags.translations_disabled) ||
       appSettings.translations.doNotTranslate.includes(peerLanguage())
     ) {
       return false;

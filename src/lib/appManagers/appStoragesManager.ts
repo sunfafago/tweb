@@ -4,29 +4,27 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import {getDatabaseState} from '../../config/databases/state';
-import {MAX_ACCOUNTS} from '../accounts/constants';
-import {logger} from '../logger';
-import AppStorage from '../storage';
-import {ResetStoragesPromise} from './appStateManager';
-import {AppManager} from './manager';
-import {ActiveAccountNumber} from '../accounts/types';
-import createStorages from './utils/storages/createStorages';
-import loadStorages from './utils/storages/loadStorages';
+import {getDatabaseState} from '@config/databases/state';
+import {MAX_ACCOUNTS} from '@lib/accounts/constants';
+import AppStorage from '@lib/storage';
+import {ResetStoragesPromise} from '@appManagers/appStateManager';
+import {AppManager} from '@appManagers/manager';
+import {ActiveAccountNumber} from '@lib/accounts/types';
+import createStorages from '@appManagers/utils/storages/createStorages';
+import loadStorages from '@appManagers/utils/storages/loadStorages';
 
 export class AppStoragesManager extends AppManager {
   private storages: ReturnType<typeof createStorages>;
   private resetStoragesPromise: ResetStoragesPromise;
   private loadStoragesPromise: ReturnType<typeof loadStorages>;
 
-  private log: ReturnType<typeof logger>;
   private _accountNumber: ActiveAccountNumber;
 
   constructor(accountNumber: ActiveAccountNumber, resetStoragesPromise: ResetStoragesPromise) {
     super();
 
     this.resetStoragesPromise = resetStoragesPromise;
-    this.log = logger('STORAGES');
+    this.name = 'STORAGES';
     this.storages = createStorages(accountNumber);
     this._accountNumber = accountNumber;
     // this.loadPromise = deferredPromise();

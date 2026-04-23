@@ -4,61 +4,67 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import SliderSuperTab, {SliderSuperTabEventable} from '../../sliderTab';
-import Row from '../../row';
-import {AccountPassword, Authorization, GlobalPrivacySettings, InputPrivacyKey, Updates, WebAuthorization} from '../../../layer';
-import AppPrivacyPhoneNumberTab from './privacy/phoneNumber';
-import AppTwoStepVerificationTab from './2fa';
-import AppTwoStepVerificationEnterPasswordTab from './2fa/enterPassword';
-import AppTwoStepVerificationEmailConfirmationTab from './2fa/emailConfirmation';
-import AppPrivacyLastSeenTab from './privacy/lastSeen';
-import AppPrivacyProfilePhotoTab from './privacy/profilePhoto';
-import AppPrivacyForwardMessagesTab from './privacy/forwardMessages';
-import AppPrivacyAddToGroupsTab from './privacy/addToGroups';
-import AppPrivacyCallsTab from './privacy/calls';
-import AppActiveSessionsTab from './activeSessions';
-import AppBlockedUsersTab from './blockedUsers';
-import rootScope from '../../../lib/rootScope';
-import {i18n, LangPackKey, _i18n} from '../../../lib/langPack';
-import replaceContent from '../../../helpers/dom/replaceContent';
-import CheckboxField from '../../checkboxField';
-import PopupPeer from '../../popups/peer';
-import Button from '../../button';
-import toggleDisability from '../../../helpers/dom/toggleDisability';
-import convertKeyToInputKey from '../../../helpers/string/convertKeyToInputKey';
-import getPrivacyRulesDetails from '../../../lib/appManagers/utils/privacy/getPrivacyRulesDetails';
-import PrivacyType from '../../../lib/appManagers/utils/privacy/privacyType';
-import confirmationPopup, {PopupConfirmationOptions} from '../../confirmationPopup';
-import noop from '../../../helpers/noop';
-import {hideToast, toastNew} from '../../toast';
-import AppPrivacyVoicesTab from './privacy/voices';
-import SettingSection from '../../settingSection';
-import AppActiveWebSessionsTab from './activeWebSessions';
-import PopupElement from '../../popups';
-import AppPrivacyAboutTab from './privacy/about';
-import PopupPremium from '../../popups/premium';
-import apiManagerProxy from '../../../lib/mtproto/mtprotoworker';
-import Icon from '../../icon';
-import {AppPrivacyMessagesTab} from '../../solidJsTabs';
-import {AppPasscodeEnterPasswordTab, AppPasscodeLockTab, providedTabs} from '../../solidJsTabs';
-import {joinDeepPath} from '../../../helpers/object/setDeepProperty';
-import {attachClickEvent} from '../../../helpers/dom/clickEvent';
-import {SensitiveContentSettings} from '../../../lib/appManagers/appPrivacyManager';
-import {AgeVerificationPopup} from '../../popups/ageVerification';
-import {clearSensitiveSpoilers} from '../../wrappers/mediaSpoiler';
+import SliderSuperTab, {SliderSuperTabEventable} from '@components/sliderTab';
+import Row from '@components/row';
+import {AccountPassword, GlobalPrivacySettings, InputPrivacyKey, Passkey, WebAuthorization} from '@layer';
+import AppPrivacyPhoneNumberTab from '@components/sidebarLeft/tabs/privacy/phoneNumber';
+import AppTwoStepVerificationTab from '@components/sidebarLeft/tabs/2fa';
+import AppTwoStepVerificationEnterPasswordTab from '@components/sidebarLeft/tabs/2fa/enterPassword';
+import AppTwoStepVerificationEmailConfirmationTab from '@components/sidebarLeft/tabs/2fa/emailConfirmation';
+import AppPrivacyLastSeenTab from '@components/sidebarLeft/tabs/privacy/lastSeen';
+import AppPrivacyProfilePhotoTab from '@components/sidebarLeft/tabs/privacy/profilePhoto';
+import AppPrivacyForwardMessagesTab from '@components/sidebarLeft/tabs/privacy/forwardMessages';
+import AppPrivacyAddToGroupsTab from '@components/sidebarLeft/tabs/privacy/addToGroups';
+import AppPrivacyCallsTab from '@components/sidebarLeft/tabs/privacy/calls';
+import AppBlockedUsersTab from '@components/sidebarLeft/tabs/blockedUsers';
+import rootScope from '@lib/rootScope';
+import {i18n, LangPackKey, _i18n} from '@lib/langPack';
+import replaceContent from '@helpers/dom/replaceContent';
+import CheckboxField from '@components/checkboxField';
+import PopupPeer from '@components/popups/peer';
+import Button from '@components/button';
+import toggleDisability from '@helpers/dom/toggleDisability';
+import convertKeyToInputKey from '@helpers/string/convertKeyToInputKey';
+import getPrivacyRulesDetails from '@appManagers/utils/privacy/getPrivacyRulesDetails';
+import PrivacyType from '@appManagers/utils/privacy/privacyType';
+import confirmationPopup, {PopupConfirmationOptions} from '@components/confirmationPopup';
+import noop from '@helpers/noop';
+import {toastNew} from '@components/toast';
+import AppPrivacyVoicesTab from '@components/sidebarLeft/tabs/privacy/voices';
+import SettingSection from '@components/settingSection';
+import AppActiveWebSessionsTab from '@components/sidebarLeft/tabs/activeWebSessions';
+import PopupElement from '@components/popups';
+import AppPrivacyAboutTab from '@components/sidebarLeft/tabs/privacy/about';
+import apiManagerProxy from '@lib/apiManagerProxy';
+import Icon from '@components/icon';
+import {AppPasscodeEnterPasswordTab, AppPasscodeLockTab, AppPasskeysTab, AppPrivacyMessagesTab} from '@components/solidJsTabs/tabs';
+import {joinDeepPath} from '@helpers/object/setDeepProperty';
+import {AgeVerificationPopup} from '@components/popups/ageVerification';
+import {clearSensitiveSpoilers} from '@components/wrappers/mediaSpoiler';
+import useContentSettings from '@stores/contentSettings';
+import AppPrivacyBirthdayTab from '@components/sidebarLeft/tabs/privacy/birthday';
+import AppPrivacySavedMusicTab from '@components/sidebarLeft/tabs/privacy/savedMusic';
+import ChangeLoginEmailTab from '@components/sidebarLeft/tabs/changeLoginEmail';
+import {wrapEmailPattern} from '@components/popups/emailSetup';
+import IS_WEB_AUTHN_SUPPORTED from '@environment/webAuthn';
+import {createStore, SetStoreFunction} from 'solid-js/store';
+import {createEffect, createRoot} from 'solid-js';
+import showPasskeyPopup from '@components/popups/passkey';
+import {AppMessagesAutoDeleteTab} from '@components/solidJsTabs/tabs';
+import {findExistingOrCreateCustomOption} from '@components/sidebarLeft/tabs/autoDeleteMessages/options';
 
 export default class AppPrivacyAndSecurityTab extends SliderSuperTabEventable {
-  private activeSessionsRow: Row;
-  private authorizations: Authorization.authorization[];
-
   private websitesRow: Row;
   private websites: WebAuthorization[];
+
+  private passkeyRow: Row;
+  private passkeys: Passkey[];
+  private setPasskeys: SetStoreFunction<Passkey[]>;
 
   public static getInitArgs(fromTab: SliderSuperTab) {
     return {
       appConfig: fromTab.managers.apiManager.getAppConfig(),
       globalPrivacy: fromTab.managers.appPrivacyManager.getGlobalPrivacySettings(),
-      contentSettings: fromTab.managers.appPrivacyManager.getSensitiveContentSettings(),
       webAuthorizations: fromTab.managers.appSeamlessLoginManager.getWebAuthorizations()
     };
   }
@@ -66,6 +72,7 @@ export default class AppPrivacyAndSecurityTab extends SliderSuperTabEventable {
   public async init(p: ReturnType<typeof AppPrivacyAndSecurityTab['getInitArgs']>) {
     this.container.classList.add('dont-u-dare-block-me');
     this.setTitle('PrivacySettings');
+    const contentSettings = useContentSettings();
 
     const SUBTITLE: LangPackKey = 'Loading';
     const promises: Promise<any>[] = [];
@@ -98,7 +105,7 @@ export default class AppPrivacyAndSecurityTab extends SliderSuperTabEventable {
             tab = this.slider.createTab(AppTwoStepVerificationEnterPasswordTab);
           } else if(passwordState.email_unconfirmed_pattern) {
             tab = this.slider.createTab(AppTwoStepVerificationEmailConfirmationTab);
-            tab.email = passwordState.email_unconfirmed_pattern;
+            tab.email = wrapEmailPattern(passwordState.email_unconfirmed_pattern);
             tab.length = 6;
             tab.isFirst = true;
             this.managers.passwordManager.resendPasswordEmail();
@@ -114,6 +121,46 @@ export default class AppPrivacyAndSecurityTab extends SliderSuperTabEventable {
 
       const twoFactorRow = new Row(twoFactorRowOptions);
       twoFactorRow.freezed = true;
+
+      const openPasskeysTab = () => {
+        this.slider.createTab(AppPasskeysTab).open({
+          passkeys: this.passkeys,
+          setPasskeys: this.setPasskeys
+        });
+      };
+
+      const passkeyRow = this.passkeyRow = new Row({
+        icon: 'faceid',
+        titleLangKey: 'Privacy.Passkeys',
+        subtitleLangKey: SUBTITLE,
+        clickable: () => {
+          if(this.passkeys.length) {
+            openPasskeysTab();
+            return;
+          }
+
+          showPasskeyPopup((passkey) => {
+            this.setPasskeys([passkey]);
+            openPasskeysTab();
+          });
+        },
+        listenerSetter: this.listenerSetter
+      });
+
+      this.updatePasskeys();
+
+      const emailRow = new Row({
+        titleLangKey: 'LoginEmail',
+        subtitle: SUBTITLE,
+        icon: 'email',
+        clickable: () => {
+          this.slider.createTab(ChangeLoginEmailTab).open({
+            isInitialSetup: passwordState.login_email_pattern.includes(' ')
+          });
+        },
+        listenerSetter: this.listenerSetter
+      });
+      emailRow.freezed = true;
 
       const passcodeLockRowOptions: ConstructorParameters<typeof Row>[0] = {
         icon: 'key',
@@ -142,22 +189,6 @@ export default class AppPrivacyAndSecurityTab extends SliderSuperTabEventable {
       const passcodeLockRow = new Row(passcodeLockRowOptions);
       passcodeLockRow.freezed = true;
 
-      const activeSessionsRow = this.activeSessionsRow = new Row({
-        icon: 'activesessions',
-        titleLangKey: 'SessionsTitle',
-        subtitleLangKey: SUBTITLE,
-        clickable: () => {
-          const tab = this.slider.createTab(AppActiveSessionsTab);
-          tab.authorizations = this.authorizations;
-          tab.eventListener.addEventListener('destroy', () => {
-            this.updateActiveSessions();
-          }, {once: true});
-          tab.open();
-        },
-        listenerSetter: this.listenerSetter
-      });
-      activeSessionsRow.freezed = true;
-
       const websitesRow = this.websitesRow = new Row({
         icon: 'mention',
         titleLangKey: 'OtherWebSessions',
@@ -173,7 +204,36 @@ export default class AppPrivacyAndSecurityTab extends SliderSuperTabEventable {
       });
       websitesRow.freezed = true;
 
-      section.content.append(blockedUsersRow.container, passcodeLockRow.container, twoFactorRow.container, activeSessionsRow.container, websitesRow.container);
+      let autoDeletePeriod: number;
+
+      const autoDeleteMessagesRowOptions: ConstructorParameters<typeof Row>[0] = {
+        icon: 'auto_delete_circle_clock',
+        titleLangKey: 'AutoDeleteMessages',
+        subtitleLangKey: SUBTITLE,
+        clickable: () => {
+          if(isNaN(autoDeletePeriod)) return;
+          this.slider.createTab(AppMessagesAutoDeleteTab).open({
+            period: autoDeletePeriod,
+            onSaved: (period) => {
+              autoDeletePeriod = period;
+              updateAutoDeleteRow();
+            }
+          });
+        },
+        listenerSetter: this.listenerSetter
+      };
+
+      const autoDeleteMessagesRow = new Row(autoDeleteMessagesRowOptions);
+      autoDeleteMessagesRow.freezed = true;
+
+      section.content.append(
+        blockedUsersRow.container,
+        websitesRow.container,
+        autoDeleteMessagesRow.container,
+        passcodeLockRow.container,
+        twoFactorRow.container,
+        passkeyRow.container
+      );
       this.scrollable.append(section.container);
 
       const setBlockedCount = (count: number) => {
@@ -208,6 +268,12 @@ export default class AppPrivacyAndSecurityTab extends SliderSuperTabEventable {
         replaceContent(twoFactorRow.subtitle, i18n(state.pFlags.has_password ? 'PrivacyAndSecurity.Item.On' : 'PrivacyAndSecurity.Item.Off'));
         twoFactorRow.freezed = false;
 
+        if(state.login_email_pattern) {
+          replaceContent(emailRow.subtitle, wrapEmailPattern(state.login_email_pattern));
+          emailRow.freezed = false;
+          twoFactorRow.container.after(emailRow.container);
+        }
+
         // console.log('password state', state);
       });
 
@@ -225,8 +291,22 @@ export default class AppPrivacyAndSecurityTab extends SliderSuperTabEventable {
           setPasscodeEnabledState(value);
       });
 
-      this.updateActiveSessions();
       promises.push(this.updateActiveWebsites(p.webAuthorizations));
+
+
+      function updateAutoDeleteRow() {
+        autoDeleteMessagesRow.subtitle.replaceChildren(
+          !autoDeletePeriod ?
+            i18n('Off') :
+            findExistingOrCreateCustomOption(autoDeletePeriod).label()
+        );
+      }
+
+      (async() => {
+        autoDeletePeriod = await this.managers.appPrivacyManager.getDefaultAutoDeletePeriod();
+        updateAutoDeleteRow();
+        autoDeleteMessagesRow.freezed = false;
+      })();
     }
 
     {
@@ -313,6 +393,24 @@ export default class AppPrivacyAndSecurityTab extends SliderSuperTabEventable {
         subtitleLangKey: SUBTITLE,
         clickable: () => {
           this.slider.createTab(AppPrivacyAddToGroupsTab).open();
+        },
+        listenerSetter: this.listenerSetter
+      });
+
+      const birthdayRow = rowsByKeys['inputPrivacyKeyBirthday'] = new Row({
+        titleLangKey: 'Privacy.BirthdayRow',
+        subtitleLangKey: SUBTITLE,
+        clickable: () => {
+          this.slider.createTab(AppPrivacyBirthdayTab).open();
+        },
+        listenerSetter: this.listenerSetter
+      });
+
+      const savedMusicRow = rowsByKeys['inputPrivacyKeySavedMusic'] = new Row({
+        titleLangKey: 'Privacy.SavedMusicRow',
+        subtitleLangKey: SUBTITLE,
+        clickable: () => {
+          this.slider.createTab(AppPrivacySavedMusicTab).open();
         },
         listenerSetter: this.listenerSetter
       });
@@ -407,7 +505,9 @@ export default class AppPrivacyAndSecurityTab extends SliderSuperTabEventable {
         linkAccountRow,
         groupChatsAddRow,
         voicesRow,
-        messagesRow
+        messagesRow,
+        birthdayRow,
+        savedMusicRow
       ].filter(Boolean).map((row) => row.container));
       this.scrollable.append(section.container);
 
@@ -477,8 +577,6 @@ export default class AppPrivacyAndSecurityTab extends SliderSuperTabEventable {
         checkboxField
       });
 
-      let contentSettings: SensitiveContentSettings;
-
       let pendingChange = false;
       checkboxField.input.addEventListener('change', (evt) => {
         const newEnabled = checkboxField.checked;
@@ -487,12 +585,12 @@ export default class AppPrivacyAndSecurityTab extends SliderSuperTabEventable {
           return;
         }
 
-        if(newEnabled && contentSettings.needAgeVerification && !contentSettings.ageVerified) {
+        if(newEnabled && contentSettings.needAgeVerification() && !contentSettings.ageVerified()) {
           checkboxField.input.checked = false;
           AgeVerificationPopup.create().then((verified) => {
             if(verified) {
               checkboxField.setValueSilently(true);
-              clearSensitiveSpoilers()
+              clearSensitiveSpoilers();
             }
           })
           return;
@@ -503,7 +601,7 @@ export default class AppPrivacyAndSecurityTab extends SliderSuperTabEventable {
         this.managers.appPrivacyManager.setContentSettings({
           sensitive_enabled: newEnabled
         }).catch(() => {
-          toastNew({langPackKey: 'Error.AnError'})
+          toastNew({langPackKey: 'Error.AnError'});
           checkboxField.setValueSilently(!newEnabled);
         }).finally(() => {
           pendingChange = false;
@@ -512,17 +610,10 @@ export default class AppPrivacyAndSecurityTab extends SliderSuperTabEventable {
 
       section.content.append(row.container);
 
-      const promise = p.contentSettings.then((settings) => {
-        if(!settings.sensitiveCanChange) {
-          return;
-        }
-
-        contentSettings = settings;
-        checkboxField.setValueSilently(settings.sensitiveEnabled);
+      if(contentSettings.sensitiveCanChange()) {
+        checkboxField.setValueSilently(contentSettings.sensitiveEnabled());
         section.container.classList.remove('hide');
-      });
-
-      promises.push(promise);
+      }
 
       this.scrollable.append(section.container);
     }
@@ -625,14 +716,6 @@ export default class AppPrivacyAndSecurityTab extends SliderSuperTabEventable {
     return Promise.all(promises);
   }
 
-  public updateActiveSessions() {
-    return this.managers.apiManager.invokeApi('account.getAuthorizations').then((auths) => {
-      this.activeSessionsRow.freezed = false;
-      this.authorizations = auths.authorizations;
-      _i18n(this.activeSessionsRow.subtitle, 'Privacy.Devices', [this.authorizations.length]);
-    });
-  }
-
   public updateActiveWebsites(promise = this.managers.appSeamlessLoginManager.getWebAuthorizations()) {
     return promise.then((authorizations) => {
       this.websitesRow.freezed = false;
@@ -641,6 +724,26 @@ export default class AppPrivacyAndSecurityTab extends SliderSuperTabEventable {
       this.websitesRow.container.classList.toggle('hide', !this.websites.length);
     });
   }
-}
 
-providedTabs.AppPrivacyAndSecurityTab = AppPrivacyAndSecurityTab;
+  public updatePasskeys() {
+    this.passkeyRow.freezed = true;
+    return Promise.all([
+      this.managers.apiManager.getAppConfig(),
+      this.managers.appAccountManager.getPasskeys()
+    ]).then(([appConfig, passkeys]) => {
+      this.passkeyRow.freezed = false;
+      [this.passkeys, this.setPasskeys] = createStore(passkeys.passkeys);
+
+      createRoot((dispose) => {
+        this.middlewareHelper.onDestroy(dispose);
+        createEffect(() => {
+          _i18n(this.passkeyRow.subtitle, 'Passkeys', [this.passkeys.length]);
+          this.passkeyRow.container.classList.toggle(
+            'hide',
+            !this.passkeys.length && (!appConfig.settings_display_passkeys || !IS_WEB_AUTHN_SUPPORTED)
+          );
+        });
+      });
+    });
+  }
+}

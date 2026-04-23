@@ -4,11 +4,12 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import Scrollable from '../components/scrollable';
-import {MOUNT_CLASS_TO} from '../config/debug';
-import {IS_SAFARI} from '../environment/userAgent';
-import getVisibleRect from './dom/getVisibleRect';
-import {fastRaf} from './schedulers';
+import type Scrollable from '@components/scrollable';
+import type {ScrollableContextValue} from '@components/scrollable2';
+import {MOUNT_CLASS_TO} from '@config/debug';
+import {IS_SAFARI} from '@environment/userAgent';
+import getVisibleRect from '@helpers/dom/getVisibleRect';
+import {fastRaf} from '@helpers/schedulers';
 
 // let USE_REFLOW = false;
 // if(IS_SAFARI) {
@@ -25,6 +26,7 @@ export default class ScrollSaver {
   private scrollHeight: number;
   private scrollHeightMinusTop: number;
   private scrollTop: number;
+  private scrolledToEnd: boolean;
   private clientHeight: number;
   private elements: {element: HTMLElement, rect: DOMRect}[];
 
@@ -34,7 +36,7 @@ export default class ScrollSaver {
    * @param reverse true means top
    */
   constructor(
-    private scrollable: Scrollable,
+    private scrollable: Scrollable | ScrollableContextValue,
     private query: string,
     private reverse: boolean
   ) {
@@ -111,7 +113,7 @@ export default class ScrollSaver {
     this.scrollTop = scrollTop;
     this.clientHeight = clientHeight;
     this.scrollHeightMinusTop = this.reverse ? scrollHeight - scrollTop : scrollTop;
-
+    this.scrolledToEnd = scrollHeight - Math.ceil(scrollTop + clientHeight) <= 1;
     // this.chatInner.style.paddingTop = padding + 'px';
     /* if(reverse) {
       previousScrollHeightMinusTop = this.scrollable.scrollHeight - scrollTop;
@@ -146,11 +148,15 @@ export default class ScrollSaver {
     this.onRestore(useReflow);
   }
 
+  private getAnchor() {
+    return this.elements[this.reverse ? 0 : this.elements.length - 1];
+  }
+
   public restore(useReflow?: boolean) {
     const {scrollPosition: scrollTop, scrollSize: scrollHeight} = this.scrollable;
     this.scrollHeight = scrollHeight;
 
-    if(!this.elements.length) { // maybe all messages have been deleted or adding first message
+    if(!this.elements.length && this.query) { // maybe all messages have been deleted or adding first message
       // this._restore(useReflow);
       this.setScrollTop(this.reverse ? scrollHeight : 0, useReflow); // fix scrolling to first new message
       return;
@@ -164,11 +170,11 @@ export default class ScrollSaver {
     //     break;
     //   }
     // }
-    anchor = this.elements[this.elements.length - 1];
+    anchor = this.getAnchor();
 
     if(!anchor?.element?.parentElement) { // try to find new anchor
       this.findAndSetElements();
-      anchor = this.elements[this.elements.length - 1];
+      anchor = this.getAnchor();
 
       if(!anchor) { // fallback to old method if smth is really strange
         this._restore(useReflow);
@@ -178,7 +184,41 @@ export default class ScrollSaver {
 
     const {element, rect} = anchor;
     const newRect = element.getBoundingClientRect();
-    const diff = newRect.bottom - rect.bottom;
+    const containerRect = this.container.getBoundingClientRect();
+    const isOverflowingTop = rect.top < containerRect.top;
+    const isOverflowingBottom = rect.bottom > containerRect.bottom;
+    let positionKey: 'top' | 'bottom' = this.reverse ? 'top' : 'bottom';
+    if( // * stick to one of the visible edges
+      this.reverse ?
+        isOverflowingTop && !isOverflowingBottom :
+        isOverflowingBottom && !isOverflowingTop
+    ) {
+      positionKey = this.reverse ? 'bottom' : 'top';
+    }
+    const newPosition = newRect[positionKey];
+    let position = rect[positionKey];
+    const modifiedHeight = rect.height - newRect.height;
+    if(isOverflowingTop && isOverflowingBottom && modifiedHeight > 0) { // * large quote collapsing
+      position = containerRect[positionKey];
+      // position = newRect[positionKey] - containerRect[positionKey];
+      // position = (position + rect.height / 2) - (containerRect.height / 2);
+    }
+    if(
+      newPosition === position &&
+      // newRect.bottom === rect.bottom &&
+      !this.scrolledToEnd
+      /*  && modifiedHeight >= 0 */
+    ) {
+      // console.log('no need to scroll', rect, newRect);
+      return; // no need to scroll
+    }
+
+    const posDiff = newPosition - position;
+    const diff = posDiff/*  + (modifiedHeight > 0 ? modifiedHeight : -modifiedHeight) *//*  * (this.reverse ? -1 : 1) */;
+    // console.log(rect, posDiff, diff, newRect);
+    if(!Math.abs(diff)) {
+      return;
+    }
     this.setScrollTop(scrollTop + diff, useReflow);
     // if(diff) debugger;
     // console.warn('scroll restore', rect, diff, newRect);

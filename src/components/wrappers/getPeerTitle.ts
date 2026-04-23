@@ -4,14 +4,14 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import _limitSymbols from '../../helpers/string/limitSymbols';
-import {Chat} from '../../layer';
-import {AppManagers} from '../../lib/appManagers/managers';
-import getPeerActiveUsernames from '../../lib/appManagers/utils/peers/getPeerActiveUsernames';
-import I18n from '../../lib/langPack';
-import apiManagerProxy from '../../lib/mtproto/mtprotoworker';
-import wrapEmojiText from '../../lib/richTextProcessor/wrapEmojiText';
-import rootScope from '../../lib/rootScope';
+import _limitSymbols from '@helpers/string/limitSymbols';
+import {Chat} from '@layer';
+import {AppManagers} from '@lib/managers';
+import getPeerActiveUsernames from '@appManagers/utils/peers/getPeerActiveUsernames';
+import I18n from '@lib/langPack';
+import apiManagerProxy from '@lib/apiManagerProxy';
+import wrapEmojiText from '@lib/richTextProcessor/wrapEmojiText';
+import rootScope from '@lib/rootScope';
 
 type GetPeerTitleOptions = {
   peerId: PeerId,
@@ -53,7 +53,10 @@ export default async function getPeerTitle(options: GetPeerTitleOptions): Promis
   if(peerId.isUser()) {
     const user = useManagers ? await managers.appUsersManager.getUser(peerId.toUserId()) : apiManagerProxy.getUser(peerId.toUserId());
     if(user) {
-      if(username) {
+      if(user.pFlags?.bot_forum_view && threadId) {
+        const topic = await managers.dialogsStorage.getForumTopic(peerId, threadId);
+        title = topic?.title || '';
+      } else if(username) {
         const username = getPeerActiveUsernames(user)[0] || '';
         if(username) title = '@' + username;
       } else {

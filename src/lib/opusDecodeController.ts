@@ -4,13 +4,13 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import {MOUNT_CLASS_TO} from '../config/debug';
-import IS_OPUS_SUPPORTED from '../environment/opusSupport';
-import {IS_SAFARI} from '../environment/userAgent';
-import {Modify} from '../types';
-import {logger, LogTypes} from './logger';
-import apiManagerProxy from './mtproto/mtprotoworker';
-import type {ConvertWebPTask} from './webp/webpWorkerController';
+import {MOUNT_CLASS_TO} from '@config/debug';
+import IS_OPUS_SUPPORTED from '@environment/opusSupport';
+import {IS_SAFARI} from '@environment/userAgent';
+import {Modify} from '@types';
+import {logger, LogTypes} from '@lib/logger';
+import apiManagerProxy from '@lib/apiManagerProxy';
+import type {ConvertWebPTask} from '@lib/webp/webpWorkerController';
 
 type Result = {
   bytes: Uint8Array,
@@ -176,7 +176,7 @@ export class OpusDecodeController {
 
   public async decode(typedArray: Uint8Array, withWaveform = false) {
     return this.pushDecodeTask(typedArray, withWaveform).then(async(result) => {
-      const dataBlob = new Blob([result.bytes], {type: 'audio/wav'});
+      const dataBlob = new Blob([result.bytes as BlobPart], {type: 'audio/wav'});
       return {url: await apiManagerProxy.invoke('createObjectURL', dataBlob), waveform: result.waveform};
     });
   }

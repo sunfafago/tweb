@@ -1,26 +1,27 @@
 import {createRoot, createSignal, getOwner, runWithOwner} from 'solid-js';
-import {animate} from '../../../helpers/animation';
-import deferredPromise, {CancellablePromise} from '../../../helpers/cancellablePromise';
-import ListenerSetter from '../../../helpers/listenerSetter';
-import {MediaSize} from '../../../helpers/mediaSize';
-import noop from '../../../helpers/noop';
-import clamp from '../../../helpers/number/clamp';
-import {logger} from '../../../lib/logger';
-import {useMediaEditorContext} from '../context';
-import {supportsAudioEncoding} from '../support';
-import {delay, snapToViewport} from '../utils';
-import {RenderingPayload} from '../webgl/initWebGL';
-import calcCodecAndBitrate, {BITRATE_TARGET_FPS} from './calcCodecAndBitrate';
-import {FRAMES_PER_SECOND, STICKER_SIZE} from './constants';
-import {MediaEditorFinalResultPayload} from './createFinalResult';
-import drawStickerLayer from './drawStickerLayer';
-import drawTextLayer from './drawTextLayer';
-import {generateVideoPreview} from './generateVideoPreview';
-import {ScaledLayersAndLines} from './getScaledLayersAndLines';
-import ImageStickerFrameByFrameRenderer from './imageStickerFrameByFrameRenderer';
-import LottieStickerFrameByFrameRenderer from './lottieStickerFrameByFrameRenderer';
-import {StickerFrameByFrameRenderer} from './types';
-import VideoStickerFrameByFrameRenderer from './videoStickerFrameByFrameRenderer';
+import {animate} from '@helpers/animation';
+import deferredPromise, {CancellablePromise} from '@helpers/cancellablePromise';
+import ListenerSetter from '@helpers/listenerSetter';
+import {MediaSize} from '@helpers/mediaSize';
+import noop from '@helpers/noop';
+import clamp from '@helpers/number/clamp';
+import {logger} from '@lib/logger';
+import {useMediaEditorContext} from '@components/mediaEditor/context';
+import {supportsAudioEncoding} from '@components/mediaEditor/support';
+import {delay, snapToViewport} from '@components/mediaEditor/utils';
+import {RenderingPayload} from '@components/mediaEditor/webgl/initWebGL';
+import calcCodecAndBitrate, {BITRATE_TARGET_FPS} from '@components/mediaEditor/finalRender/calcCodecAndBitrate';
+import {FRAMES_PER_SECOND, STICKER_SIZE} from '@components/mediaEditor/finalRender/constants';
+import {MediaEditorFinalResultPayload} from '@components/mediaEditor/finalRender/createFinalResult';
+import drawStickerLayer from '@components/mediaEditor/finalRender/drawStickerLayer';
+import drawTextLayer from '@components/mediaEditor/finalRender/drawTextLayer';
+import {generateVideoPreview} from '@components/mediaEditor/finalRender/generateVideoPreview';
+import {ScaledLayersAndLines} from '@components/mediaEditor/finalRender/getScaledLayersAndLines';
+import ImageStickerFrameByFrameRenderer from '@components/mediaEditor/finalRender/imageStickerFrameByFrameRenderer';
+import LottieStickerFrameByFrameRenderer from '@components/mediaEditor/finalRender/lottieStickerFrameByFrameRenderer';
+import {StickerFrameByFrameRenderer} from '@components/mediaEditor/finalRender/types';
+import VideoStickerFrameByFrameRenderer from '@components/mediaEditor/finalRender/videoStickerFrameByFrameRenderer';
+import StickerType from '@config/stickerType';
 
 
 type Args = {
@@ -62,7 +63,8 @@ export default async function renderToActualVideo({
   const {
     editorState: {pixelRatio},
     mediaState: {videoCropStart, videoCropLength, videoMuted, videoThumbnailPosition},
-    mediaBlob
+    getMediaBlob,
+    dontCreatePreview
   } = context;
 
   const {media: {video}} = renderingPayload;
@@ -115,9 +117,9 @@ export default async function renderToActualVideo({
   async function initMuxerAndEncoder() {
     const {Muxer, ArrayBufferTarget} = await import('mp4-muxer');
 
-    let audioBuffer: AudioBuffer;
+    let audioBuffer: AudioBuffer, mediaBlob: Blob;
 
-    if(!videoMuted && await supportsAudioEncoding()) try {
+    if(!videoMuted && await supportsAudioEncoding() && (mediaBlob = await getMediaBlob())) try {
       audioBuffer = await extractAudioFragment(mediaBlob, startTime, endTime);
     } catch{}
 
@@ -163,9 +165,9 @@ export default async function renderToActualVideo({
         const stickerType = layer.sticker?.sticker;
         let renderer: StickerFrameByFrameRenderer;
 
-        if(stickerType === 1) renderer = new ImageStickerFrameByFrameRenderer();
-        if(stickerType === 2) renderer = new LottieStickerFrameByFrameRenderer();
-        if(stickerType === 3) renderer = new VideoStickerFrameByFrameRenderer();
+        if(stickerType === StickerType.Static) renderer = new ImageStickerFrameByFrameRenderer();
+        if(stickerType === StickerType.Lottie) renderer = new LottieStickerFrameByFrameRenderer();
+        if(stickerType === StickerType.WebM) renderer = new VideoStickerFrameByFrameRenderer();
         if(!renderer) return;
 
         renderers.set(layer.id, renderer);
@@ -311,7 +313,7 @@ export default async function renderToActualVideo({
 
   setProgress(0);
 
-  const preview = await runWithOwner(owner, () => generateVideoPreview({scaledWidth, scaledHeight}));
+  const preview = dontCreatePreview ? undefined : await runWithOwner(owner, () => generateVideoPreview({scaledWidth, scaledHeight}));
 
   const resultPromise = new Promise<MediaEditorFinalResultPayload>(async(resolve, reject) => {
     const firstFrameSeekDeferred = deferredPromise<void>();

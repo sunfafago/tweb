@@ -1,8 +1,6 @@
-import {createSignal, onCleanup, Accessor, createEffect, on} from 'solid-js';
-
-import {simpleEasing} from '../../components/mediaEditor/utils';
-
-import {animate} from '../animation';
+import {Accessor, createEffect, createSignal, on, onCleanup} from 'solid-js';
+import {simpleEasing} from '@helpers/animateValue';
+import {animate} from '@helpers/animation';
 
 
 export default function createAnimatedValue(value: Accessor<number>, time: number, easing = simpleEasing, shouldAnimate: Accessor<boolean> = () => true) {

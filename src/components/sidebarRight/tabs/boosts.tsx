@@ -4,46 +4,44 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import {Boost, PremiumBoostsStatus, PrepaidGiveaway} from '../../../layer';
-import {LangPackKey, i18n, joinElementsWith} from '../../../lib/langPack';
-import Section from '../../section';
-import {SliderSuperTabEventable} from '../../sliderTab';
-import {Accessor, createMemo, createRoot, createSignal, For, JSX, onCleanup} from 'solid-js';
+import {Boost, PremiumBoostsStatus, PrepaidGiveaway} from '@layer';
+import {LangPackKey, i18n, joinElementsWith} from '@lib/langPack';
+import Section from '@components/section';
+import {SliderSuperTabEventable} from '@components/sliderTab';
+import {Accessor, createMemo, createRoot, createSignal, For, JSX, onCleanup, Show} from 'solid-js';
 import {render} from 'solid-js/web';
-import Row from '../../row';
-import {avatarNew, AvatarNew} from '../../avatarNew';
-import LimitLine from '../../limit';
-import {LoadableList, StatisticsOverviewItems, createLoadableList, createMoreButton, makeAbsStats} from './statistics';
-import PopupBoostsViaGifts, {BoostsBadge} from '../../popups/boostsViaGifts';
-import Button from '../../button';
-import {attachClickEvent} from '../../../helpers/dom/clickEvent';
-import PopupElement from '../../popups';
-import {InviteLink} from '../../sidebarLeft/tabs/sharedFolder';
-import {MTAppConfig} from '../../../lib/mtproto/appConfig';
-import {horizontalMenu} from '../../horizontalMenu';
-import classNames from '../../../helpers/string/classNames';
-import {formatFullSentTime} from '../../../helpers/date';
-import wrapPeerTitle from '../../wrappers/peerTitle';
-import Icon from '../../icon';
-import toggleDisability from '../../../helpers/dom/toggleDisability';
-import findUpClassName from '../../../helpers/dom/findUpClassName';
-import rootScope from '../../../lib/rootScope';
-import PopupGiftLink from '../../popups/giftLink';
-import {toastNew} from '../../toast';
-import ListenerSetter from '../../../helpers/listenerSetter';
-import indexOfAndSplice from '../../../helpers/array/indexOfAndSplice';
-import appImManager from '../../../lib/appManagers/appImManager';
-import PopupPayment from '../../popups/payment';
-import formatStarsAmount from '../../../lib/appManagers/utils/payments/formatStarsAmount';
+import Row from '@components/row';
+import {avatarNew, AvatarNew} from '@components/avatarNew';
+import LimitLine from '@components/limit';
+import {LoadableList, StatisticsOverviewItems, createLoadableList, MoreButton, makeAbsStats} from '@components/sidebarRight/tabs/statistics';
+import PopupBoostsViaGifts, {BoostsBadge} from '@components/popups/boostsViaGifts';
+import Button from '@components/button';
+import {attachClickEvent} from '@helpers/dom/clickEvent';
+import PopupElement from '@components/popups';
+import {InviteLink} from '@components/sidebarLeft/tabs/sharedFolder';
+import {horizontalMenu} from '@components/horizontalMenu';
+import classNames from '@helpers/string/classNames';
+import {formatFullSentTime} from '@helpers/date';
+import wrapPeerTitle from '@components/wrappers/peerTitle';
+import Icon from '@components/icon';
+import toggleDisability from '@helpers/dom/toggleDisability';
+import findUpClassName from '@helpers/dom/findUpClassName';
+import rootScope from '@lib/rootScope';
+import PopupGiftLink from '@components/popups/giftLink';
+import {toastNew} from '@components/toast';
+import ListenerSetter from '@helpers/listenerSetter';
+import indexOfAndSplice from '@helpers/array/indexOfAndSplice';
+import appImManager from '@lib/appImManager';
+import PopupPayment from '@components/popups/payment';
+import formatStarsAmount from '@appManagers/utils/payments/formatStarsAmount';
+import PopupBoost from '@components/popups/boost';
 
 const getColorByMonths = (months: number) => {
   return months === 12 ? 'red' : (months === 3 ? 'green' : 'blue');
 };
 
-const getBoostMonths = (from: number, to: number) => {
-  const days = (to - from) / 86400;
-  return Math.round(days / 30);
-};
+const getBoostsDays = (from: number, to: number) => Math.round((to - from) / 86400);
+const getBoostMonths = (from: number, to: number) => Math.round(getBoostsDays(from, to) / 30);
 
 export const CPrepaidGiveaway = (props: {
   giveaway: PrepaidGiveaway,
@@ -156,6 +154,7 @@ export function Tabs(props: {
 
 export default class AppBoostsTab extends SliderSuperTabEventable {
   private peerId: PeerId;
+  private isBroadcast: boolean;
   private targets: Map<HTMLElement, Boost>;
   private canCreateGiveaway: boolean;
 
@@ -203,6 +202,11 @@ export default class AppBoostsTab extends SliderSuperTabEventable {
       PopupElement.createPopup(PopupBoostsViaGifts, this.peerId);
     }, {listenerSetter: this.listenerSetter});
 
+    const boostButton = Button('btn-primary btn-transparent primary', {icon: 'boost', text: this.isBroadcast ? 'BoostChannel' : 'BoostGroup'});
+    attachClickEvent(boostButton, () => {
+      PopupElement.createPopup(PopupBoost, this.peerId);
+    }, {listenerSetter: this.listenerSetter});
+
     const noBoostersHint = i18n('NoBoostersHint');
     noBoostersHint.classList.add('boosts-no-boosters');
 
@@ -231,21 +235,16 @@ export default class AppBoostsTab extends SliderSuperTabEventable {
         <div
           class={classNames('boosts-users-content', !props.list.count && 'is-empty', props.hide && 'hide')}
         >
-          {props.list.count ? (
-            <>
-              {props.list.rendered}
-              {props.list.loadMore && createMoreButton(
-                props.list.count - props.list.rendered.length,
-                (button) => {
-                  const toggle = toggleDisability(button, true);
-                  const promise = props.list.loadMore();
-                  promise.finally(() => toggle());
-                },
-                this.listenerSetter,
-                props.moreKey
-              )}
-            </>
-          ) : noBoostersHint}
+          <Show when={props.list.count} fallback={noBoostersHint}>
+            {props.list.rendered}
+            <Show when={!!props.list.loadMore}>
+              <MoreButton
+                count={props.list.count - props.list.rendered.length}
+                callback={() => props.list.loadMore()}
+                key={props.moreKey}
+              />
+            </Show>
+          </Show>
         </div>
       );
     };
@@ -351,7 +350,7 @@ export default class AppBoostsTab extends SliderSuperTabEventable {
                   _: 'payments.checkedGiftCode',
                   chats: [],
                   date: boost.date,
-                  months: getBoostMonths(boost.date, boost.expires),
+                  days: getBoostsDays(boost.date, boost.expires),
                   pFlags: {via_giveaway: boost.pFlags.giveaway || undefined},
                   users: [],
                   from_id: await this.managers.appPeersManager.getOutputPeer(this.peerId),
@@ -374,11 +373,10 @@ export default class AppBoostsTab extends SliderSuperTabEventable {
         <Section name="LinkForBoosting" caption="BoostingShareThisLink">
           {inviteLink.container}
         </Section>
-        {this.canCreateGiveaway && (
-          <Section caption="BoostingGetMoreBoosts">
-            {boostsViaGiftsButton}
-          </Section>
-        )}
+        <Section caption={this.canCreateGiveaway ? 'BoostingGetMoreBoosts' : undefined}>
+          {boostButton}
+          {this.canCreateGiveaway && boostsViaGiftsButton}
+        </Section>
       </>
     );
 
@@ -484,6 +482,7 @@ export default class AppBoostsTab extends SliderSuperTabEventable {
     this.container.classList.add('boosts-container');
 
     this.peerId = peerId;
+    this.isBroadcast = await this.managers.appPeersManager.isBroadcast(peerId);
     this.targets = new Map();
 
     this.setTitle('Boosts');

@@ -1,13 +1,14 @@
 import {Component, createEffect, createMemo, createSelector, createSignal, For, JSX, onCleanup, onMount} from 'solid-js';
 import {Portal} from 'solid-js/web';
 import {Transition} from 'solid-transition-group';
+import {animateValue, simpleEasing} from '@helpers/animateValue';
+import {keepMe} from '@helpers/keepMe';
+import ListenerSetter from '@helpers/listenerSetter';
+import ripple from '@components/ripple';
+import styles from '@components/sidebarLeft/tabs/passcodeLock/inlineSelect.module.scss';
 
-import ListenerSetter from '../../../../helpers/listenerSetter';
+keepMe(ripple);
 
-import ripple from '../../../ripple'; ripple; // keep
-import {animateValue, simpleEasing} from '../../../mediaEditor/utils';
-
-import styles from './inlineSelect.module.scss';
 
 const InlineSelect: Component<{
   isOpen?: boolean;

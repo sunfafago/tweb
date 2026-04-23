@@ -1,14 +1,16 @@
-import type ListenerSetter from './helpers/listenerSetter';
-import type {Middleware, MiddlewareHelper} from './helpers/middleware';
-import type {Chat, Document, Message, User} from './layer';
-import type {MediaSize} from './helpers/mediaSize';
-import type {AnimationItemGroup} from './components/animationIntersector';
-import type LazyLoadQueue from './components/lazyLoadQueue';
-import type {AppManagers} from './lib/appManagers/managers';
-import type {CustomProperty} from './helpers/dom/customProperties';
-import type Icons from './icons';
-import type {CancellablePromise} from './helpers/cancellablePromise';
-import type Languages from './lib/tinyld/languages';
+import type ListenerSetter from '@helpers/listenerSetter';
+import type {Middleware, MiddlewareHelper} from '@helpers/middleware';
+import type {Chat, Document, Message, User} from '@layer';
+import type {MediaSize} from '@helpers/mediaSize';
+import type {AnimationItemGroup} from '@components/animationIntersector';
+import type LazyLoadQueue from '@components/lazyLoadQueue';
+import type {AppManagers} from '@lib/managers';
+import type {CustomProperty} from '@helpers/dom/customProperties';
+import type Icons from '@/icons';
+import type {CancellablePromise} from '@helpers/cancellablePromise';
+import type Languages from '@lib/tinyld/languages';
+import type {ValueOrGetter} from '@helpers/solid/readValue';
+import type {MTAppConfig as AppConfig} from '@/appConfig';
 
 declare global {
   interface AddEventListenerOptions extends EventListenerOptions {
@@ -56,6 +58,48 @@ declare global {
     actions?: NotificationAction[];
   }
 
+  // * remove these types when navigation api is stable
+
+  interface NavigationEntry {
+    key: string;
+    url: string;
+    getState(): any;
+    sameDocument: boolean;
+    index: number;
+  }
+
+  interface NavigationOptions {
+    state: any;
+    history: 'push' | 'replace';
+  }
+
+  interface NavigationEvent extends Event {
+    navigationType: 'push' | 'replace' | 'reload' | 'traverse';
+    destination: NavigationEntry;
+    sameDocument: boolean;
+    intercept(options?: {
+      handler?: () => void,
+      focusReset?: 'after-transition' | 'manual',
+      scroll?: 'after-transition' | 'manual'
+    }): void;
+    scroll(): void;
+  }
+
+  interface Navigation {
+    entries(): NavigationEntry[];
+    currentEntry: NavigationEntry;
+    navigate(url: string | URL, options: NavigationOptions): void;
+    traverseTo(key: string): void;
+    updateCurrentEntry(options: NavigationEntryOptions): void;
+    addEventListener(type: 'navigate', listener: (event: NavigationEvent) => void): void;
+    removeEventListener(type: 'navigate', listener: (event: NavigationEvent) => void): void;
+    back(): void;
+  }
+
+  declare const navigation: Navigation;
+
+  // * until here
+
   // typescript is lack of types
   interface Selection {
     modify(alter: 'move' | 'extend', direction: 'forward' | 'backward' | 'left' | 'right', granularity: 'character' | 'word' | 'sentence' | 'line' | 'paragraph' | 'lineboundary' | 'sentenceboundary' | 'paragraphboundary' | 'documentboundary'): void;
@@ -71,6 +115,7 @@ declare global {
   type DocId = Document.document['id'];
   type Long = string | number;
   type MTLong = string;
+  type MTAppConfig = AppConfig;
 
   type AppEmoji = {emoji: string, docId?: DocId};
   type Icon = keyof typeof Icons;
@@ -78,13 +123,13 @@ declare global {
     'translations' | 'animated_emoji' | 'more_upload' | 'emoji_status' | 'profile_badge' |
     'advanced_chat_management' | 'no_ads' | 'app_icons' | 'infinite_reactions' |
     'animated_userpics' | 'premium_stickers' | 'peer_colors' | 'wallpapers' |
-    'saved_tags' | 'last_seen' | 'message_privacy';
+    'saved_tags' | 'last_seen' | 'message_privacy' | 'pm_noforwards';
 
   type MTMimeType = 'video/quicktime' | 'image/gif' | 'image/jpeg' | 'application/pdf' |
     'video/mp4' | 'image/webp' | 'audio/mpeg' | 'audio/ogg' | 'application/octet-stream' |
     'application/x-tgsticker' | 'video/webm' | 'image/svg+xml' | 'image/png' | 'application/json' |
     'application/x-tgwallpattern' | 'audio/wav' | 'image/avif' | 'image/jxl' | 'image/bmp' |
-    'application/x-mpegurl';
+    'application/x-mpegurl' | 'application/x-tgstoryboard' | 'application/x-tgstoryboardmap';
 
   type MTFileExtension = 'mov' | 'gif' | 'pdf' | 'jpg' | 'jpeg' | 'wav' |
     'tgv' | 'tgs' | 'svg' | 'mp4' | 'webm' | 'webp' | 'mp3' | 'ogg' | 'json' |
@@ -92,13 +137,15 @@ declare global {
 
   type ApiFileManagerError = 'DOWNLOAD_CANCELED' | 'UPLOAD_CANCELED' | 'FILE_TOO_BIG' | 'REFERENCE_IS_NOT_REFRESHED';
   type StorageError = 'STORAGE_OFFLINE' | 'NO_ENTRY_FOUND' | 'IDB_CREATE_TIMEOUT';
-  type ReferenceError = 'NO_NEW_CONTEXT';
+  type ReferenceError = 'NO_NEW_CONTEXT' | 'NO_CONTEXT';
   type NetworkerError = 'NETWORK_BAD_RESPONSE' | 'NETWORK_BAD_REQUEST';
   type FiltersError = 'PINNED_DIALOGS_TOO_MUCH';
+  type RLottieError = 'FRAME_OUT_OF_RANGE' | 'ITEM_DESTROYED' | 'FILE_INVALID';
 
   type LocalFileError = ApiFileManagerError | ReferenceError | StorageError;
-  type LocalErrorType = LocalFileError | NetworkerError | FiltersError |
-    'UNKNOWN' | 'NO_DOC' | 'MIDDLEWARE' | 'PORT_DISCONNECTED' | 'NO_AUTO_DOWNLOAD' | 'CHAT_PRIVATE' | 'NO_WASM' | 'CANCELED';
+  type LocalErrorType = LocalFileError | NetworkerError | FiltersError | RLottieError |
+    'UNKNOWN' | 'NO_DOC' | 'MIDDLEWARE' | 'PORT_DISCONNECTED' | 'NO_AUTO_DOWNLOAD' | 'CHAT_PRIVATE' | 'NO_WASM' |
+    'CANCELED' | 'TIMEOUT' | 'TAB_ALREADY_OPEN';
 
   type ServerErrorType = 'FILE_REFERENCE_EXPIRED' | 'SESSION_REVOKED' | 'AUTH_KEY_DUPLICATED' |
     'SESSION_PASSWORD_NEEDED' | 'CONNECTION_NOT_INITED' | 'ERROR_EMPTY' | 'MTPROTO_CLUSTER_INVALID' |
@@ -123,7 +170,11 @@ declare global {
     'ADDRESS_STREET_LINE1_INVALID' | 'ADDRESS_STREET_LINE2_INVALID' | 'ADDRESS_COUNTRY_INVALID' |
     'ADDRESS_CITY_INVALID' | 'ADDRESS_STATE_INVALID' | 'ADDRESS_POSTCODE_INVALID' |
     'REQ_INFO_NAME_INVALID' | 'REQ_INFO_EMAIL_INVALID' | 'REQ_INFO_PHONE_INVALID' |
-    'FILE_REFERENCE_INVALID' | 'USER_NOT_MUTUAL_CONTACT' | 'FROZEN_METHOD_INVALID';
+    'FILE_REFERENCE_INVALID' | 'USER_NOT_MUTUAL_CONTACT' | 'FROZEN_METHOD_INVALID' |
+    'EMAIL_INVALID' | 'EMAIL_NOT_ALLOWED' | 'EMAIL_VERIFY_EXPIRED' | 'CODE_INVALID' |
+    'PASSWORD_RECOVERY_NA' | '2FA_RECENT_CONFIRM' | `2FA_CONFIRM_WAIT_${number}` |
+    'PASSKEY_CREDENTIAL_NOT_FOUND' | 'SUMMARY_FLOOD_PREMIUM' | 'AUTH_TOKEN_EXPIRED' |
+    'CHANNELS_TOO_MUCH' | 'BOOSTS_REQUIRED';
 
   type ErrorType = LocalErrorType | ServerErrorType;
 
@@ -153,7 +204,7 @@ declare global {
     lazyLoadQueue?: LazyLoadQueue | false,
     middleware?: Middleware,
     customEmojiSize?: MediaSize,
-    textColor?: CustomProperty,
+    textColor?: ValueOrGetter<CustomProperty>,
     animationGroup?: AnimationItemGroup,
     managers?: AppManagers
   };

@@ -4,111 +4,109 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import appImManager from '../../lib/appManagers/appImManager';
-import rootScope from '../../lib/rootScope';
-import {SearchGroup} from '../appSearch';
-import Scrollable, {ScrollableX} from '../scrollable';
-import InputSearch from '../inputSearch';
-import SidebarSlider, {SliderSuperTab} from '../slider';
-import TransitionSlider from '../transition';
-import AppNewGroupTab from './tabs/newGroup';
-import AppSearchSuper from '../appSearchSuper.';
-import {DateData, fillTipDates} from '../../helpers/date';
-import {MOUNT_CLASS_TO} from '../../config/debug';
-import AppSettingsTab from './tabs/settings';
-import AppNewChannelTab from './tabs/newChannel';
-import AppContactsTab from './tabs/contacts';
-import AppArchivedTab from './tabs/archivedTab';
-import AppAddMembersTab from './tabs/addMembers';
-import I18n, {i18n} from '../../lib/langPack';
-import ButtonMenu, {ButtonMenuItemOptions, ButtonMenuItemOptionsVerifiable} from '../buttonMenu';
-import {IS_APPLE, IS_MOBILE_SAFARI} from '../../environment/userAgent';
-import appNavigationController, {NavigationItem} from '../appNavigationController';
-import findUpClassName from '../../helpers/dom/findUpClassName';
-import findUpTag from '../../helpers/dom/findUpTag';
-import App from '../../config/app';
-import ButtonMenuToggle from '../buttonMenuToggle';
-import sessionStorage from '../../lib/sessionStorage';
-import {attachClickEvent, CLICK_EVENT_NAME, simulateClickEvent} from '../../helpers/dom/clickEvent';
-import ButtonIcon from '../buttonIcon';
-import confirmationPopup from '../confirmationPopup';
-import type SortedUserList from '../sortedUserList';
-import Button, {ButtonOptions, replaceButtonIcon} from '../button';
-import noop from '../../helpers/noop';
-import ripple from '../ripple';
-import indexOfAndSplice from '../../helpers/array/indexOfAndSplice';
-import formatNumber from '../../helpers/number/formatNumber';
-import {AppManagers} from '../../lib/appManagers/managers';
-import themeController from '../../helpers/themeController';
-import contextMenuController from '../../helpers/contextMenuController';
-import appDialogsManager, {DIALOG_LIST_ELEMENT_TAG} from '../../lib/appManagers/appDialogsManager';
-import apiManagerProxy from '../../lib/mtproto/mtprotoworker';
-import SettingSection, {SettingSectionOptions} from '../settingSection';
-import {FOLDER_ID_ARCHIVE, TEST_NO_STORIES} from '../../lib/mtproto/mtproto_config';
-import mediaSizes from '../../helpers/mediaSizes';
-import {doubleRaf, fastRaf} from '../../helpers/schedulers';
-import {getInstallPrompt} from '../../helpers/dom/installPrompt';
-import liteMode from '../../helpers/liteMode';
-import AppPowerSavingTab from './tabs/powerSaving';
-import AppMyStoriesTab from './tabs/myStories';
-import {joinDeepPath} from '../../helpers/object/setDeepProperty';
-import Icon, {getIconContent} from '../icon';
-import AppSelectPeers from '../appSelectPeers';
-import setBadgeContent from '../../helpers/setBadgeContent';
-import createBadge from '../../helpers/createBadge';
-import {MyDocument} from '../../lib/appManagers/appDocsManager';
-import getAttachMenuBotIcon from '../../lib/appManagers/utils/attachMenuBots/getAttachMenuBotIcon';
-import wrapEmojiText from '../../lib/richTextProcessor/wrapEmojiText';
-import flatten from '../../helpers/array/flatten';
-import EmojiTab from '../emoticonsDropdown/tabs/emoji';
-import {EmoticonsDropdown} from '../emoticonsDropdown';
-import cloneDOMRect from '../../helpers/dom/cloneDOMRect';
-import {AccountEmojiStatuses, AttachMenuBot, EmojiStatus, User} from '../../layer';
-import filterUnique from '../../helpers/array/filterUnique';
-import {Middleware, MiddlewareHelper} from '../../helpers/middleware';
-import wrapEmojiStatus from '../wrappers/emojiStatus';
-import {makeMediaSize} from '../../helpers/mediaSize';
-import ReactionElement from '../chat/reaction';
-import setBlankToAnchor from '../../lib/richTextProcessor/setBlankToAnchor';
-import AccountController from '../../lib/accounts/accountController';
-import {ActiveAccountNumber} from '../../lib/accounts/types';
-import {MAX_ACCOUNTS, MAX_ACCOUNTS_FREE} from '../../lib/accounts/constants';
-import {getCurrentAccount} from '../../lib/accounts/getCurrentAccount';
-import {createProxiedManagersForAccount} from '../../lib/appManagers/getProxiedManagers';
-import limitSymbols from '../../helpers/string/limitSymbols';
-import attachFloatingButtonMenu from '../floatingButtonMenu';
-import filterAsync from '../../helpers/array/filterAsync';
-import pause from '../../helpers/schedulers/pause';
-import AccountsLimitPopup from './accountsLimitPopup';
-import {changeAccount} from '../../lib/accounts/changeAccount';
-import {UiNotificationsManager} from '../../lib/appManagers/uiNotificationsManager';
-import {FoldersSidebarControls, renderFoldersSidebarContent} from './foldersSidebarContent';
-import SolidJSHotReloadGuardProvider from '../../lib/solidjs/hotReloadGuardProvider';
-import SwipeHandler, {getEvent} from '../swipeHandler';
-import clamp from '../../helpers/number/clamp';
-import {animateValue} from '../mediaEditor/utils';
-import throttle from '../../helpers/schedulers/throttle';
-import AppChatFoldersTab from './tabs/chatFolders';
-import {SliderSuperTabConstructable} from '../sliderTab';
-import SettingsSliderPopup from './settingsSliderPopup';
-import AppEditFolderTab from './tabs/editFolder';
-import {addShortcutListener} from '../../helpers/shortcutListener';
-import tsNow from '../../helpers/tsNow';
-import {toastNew} from '../toast';
-import DeferredIsUsingPasscode from '../../lib/passcode/deferredIsUsingPasscode';
-import EncryptionKeyStore from '../../lib/passcode/keyStore';
-import createLockButton from './lockButton';
-import {MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, SIDEBAR_COLLAPSE_FACTOR} from './constants';
-import createSubmenuTrigger from '../createSubmenuTrigger';
-import ChatTypeMenu from '../chatTypeMenu';
-import {RequestHistoryOptions} from '../../lib/appManagers/appMessagesManager';
-import EmptySearchPlaceholder from '../emptySearchPlaceholder';
-import useHasFoldersSidebar, {useIsSidebarCollapsed} from '../../stores/foldersSidebar';
+import appImManager from '@lib/appImManager';
+import rootScope from '@lib/rootScope';
+import {SearchGroup} from '@components/appSearch';
+import Scrollable, {ScrollableX} from '@components/scrollable';
+import InputSearch from '@components/inputSearch';
+import SidebarSlider, {SliderSuperTab} from '@components/slider';
+import TransitionSlider from '@components/transition';
+import AppNewGroupTab from '@components/sidebarLeft/tabs/newGroup';
+import AppSearchSuper, {SearchSuperMediaType} from '@components/appSearchSuper';
+import {DateData, fillTipDates} from '@helpers/date';
+import {MOUNT_CLASS_TO} from '@config/debug';
+import AppSettingsTab from '@components/sidebarLeft/tabs/settings';
+import AppNewChannelTab from '@components/sidebarLeft/tabs/newChannel';
+import AppContactsTab from '@components/sidebarLeft/tabs/contacts';
+import AppArchivedTab from '@components/sidebarLeft/tabs/archivedTab';
+import createNewGroupTab from '@components/sidebarLeft/tabs/createNewGroupTab';
+import I18n, {i18n} from '@lib/langPack';
+import ButtonMenu, {ButtonMenuItemOptions, ButtonMenuItemOptionsVerifiable} from '@components/buttonMenu';
+import {IS_APPLE, IS_MOBILE_SAFARI} from '@environment/userAgent';
+import appNavigationController, {NavigationItem} from '@components/appNavigationController';
+import findUpClassName from '@helpers/dom/findUpClassName';
+import findUpTag from '@helpers/dom/findUpTag';
+import App from '@config/app';
+import ButtonMenuToggle from '@components/buttonMenuToggle';
+import sessionStorage from '@lib/sessionStorage';
+import {attachClickEvent, CLICK_EVENT_NAME, simulateClickEvent} from '@helpers/dom/clickEvent';
+import ButtonIcon from '@components/buttonIcon';
+import confirmationPopup from '@components/confirmationPopup';
+import type SortedUserList from '@components/sortedUserList';
+import Button, {ButtonOptions, replaceButtonIcon} from '@components/button';
+import noop from '@helpers/noop';
+import ripple from '@components/ripple';
+import indexOfAndSplice from '@helpers/array/indexOfAndSplice';
+import formatNumber from '@helpers/number/formatNumber';
+import {AppManagers} from '@lib/managers';
+import themeController from '@helpers/themeController';
+import contextMenuController from '@helpers/contextMenuController';
+import appDialogsManager, {DIALOG_LIST_ELEMENT_TAG} from '@lib/appDialogsManager';
+import apiManagerProxy from '@lib/apiManagerProxy';
+import SettingSection, {SettingSectionOptions} from '@components/settingSection';
+import {FOLDER_ID_ARCHIVE, TEST_NO_STORIES} from '@appManagers/constants';
+import mediaSizes from '@helpers/mediaSizes';
+import {doubleRaf, fastRaf} from '@helpers/schedulers';
+import {getInstallPrompt} from '@helpers/dom/installPrompt';
+import liteMode from '@helpers/liteMode';
+import AppPowerSavingTab from '@components/sidebarLeft/tabs/powerSaving';
+import AppMyStoriesTab from '@components/sidebarLeft/tabs/myStories';
+import Icon from '@components/icon';
+import AppSelectPeers from '@components/appSelectPeers';
+import setBadgeContent from '@helpers/setBadgeContent';
+import createBadge from '@helpers/createBadge';
+import {MyDocument} from '@appManagers/appDocsManager';
+import getAttachMenuBotIcon from '@appManagers/utils/attachMenuBots/getAttachMenuBotIcon';
+import wrapEmojiText from '@lib/richTextProcessor/wrapEmojiText';
+import flatten from '@helpers/array/flatten';
+import {AttachMenuBot, EmojiStatus, User} from '@layer';
+import {Middleware, MiddlewareHelper} from '@helpers/middleware';
+import wrapEmojiStatus from '@components/wrappers/emojiStatus';
+import {makeMediaSize} from '@helpers/mediaSize';
+import ReactionElement from '@components/chat/reaction';
+import setBlankToAnchor from '@lib/richTextProcessor/setBlankToAnchor';
+import AccountController from '@lib/accounts/accountController';
+import {ActiveAccountNumber} from '@lib/accounts/types';
+import {MAX_ACCOUNTS, MAX_ACCOUNTS_FREE} from '@lib/accounts/constants';
+import {getCurrentAccount} from '@lib/accounts/getCurrentAccount';
+import {createProxiedManagersForAccount} from '@lib/getProxiedManagers';
+import limitSymbols from '@helpers/string/limitSymbols';
+import filterAsync from '@helpers/array/filterAsync';
+import pause from '@helpers/schedulers/pause';
+import AccountsLimitPopup from '@components/sidebarLeft/accountsLimitPopup';
+import {changeAccount} from '@lib/accounts/changeAccount';
+import uiNotificationsManager from '@lib/uiNotificationsManager';
+import {FoldersSidebarControls, renderFoldersSidebarContent} from '@components/sidebarLeft/foldersSidebarContent';
+import SolidJSHotReloadGuardProvider from '@lib/solidjs/hotReloadGuardProvider';
+import SwipeHandler, {getEvent} from '@components/swipeHandler';
+import clamp from '@helpers/number/clamp';
+import throttle from '@helpers/schedulers/throttle';
+import AppChatFoldersTab from '@components/sidebarLeft/tabs/chatFolders';
+import {SliderSuperTabConstructable} from '@components/sliderTab';
+import SettingsSliderPopup from '@components/sidebarLeft/settingsSliderPopup';
+import AppEditFolderTab from '@components/sidebarLeft/tabs/editFolder';
+import {addShortcutListener} from '@helpers/shortcutListener';
+import tsNow from '@helpers/tsNow';
+import {toastNew} from '@components/toast';
+import DeferredIsUsingPasscode from '@lib/passcode/deferredIsUsingPasscode';
+import EncryptionKeyStore from '@lib/passcode/keyStore';
+import createLockButton from '@components/sidebarLeft/lockButton';
+import {MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, SIDEBAR_COLLAPSE_FACTOR} from '@components/sidebarLeft/constants';
+import createSubmenuTrigger, {CreateSubmenuArgs} from '@components/createSubmenuTrigger';
+import ChatTypeMenu from '@components/chatTypeMenu';
+import {RequestHistoryOptions} from '@appManagers/appMessagesManager';
+import EmptySearchPlaceholder from '@components/emptySearchPlaceholder';
+import useHasFoldersSidebar, {useIsSidebarCollapsed} from '@stores/foldersSidebar';
+import isObject from '@helpers/object/isObject';
+import {useAppSettings} from '@stores/appSettings';
+import {openEmojiStatusPicker} from '@components/sidebarLeft/emojiStatusPicker';
+import {animateValue} from '@helpers/animateValue';
 
 export const LEFT_COLUMN_ACTIVE_CLASSNAME = 'is-left-column-shown';
 
 type SearchInitResult = {
   open: (focus?: boolean) => void;
+  openWithPeerId: (peerId: PeerId) => void;
   close: () => void;
 }
 
@@ -127,7 +125,7 @@ export class AppSidebarLeft extends SidebarSlider {
   private newBtnMenu: HTMLElement;
 
   private searchGroups: {[k in 'contacts' | 'globalContacts' | 'messages' | 'people' | 'recent']: SearchGroup} = {} as any;
-  private searchSuper: AppSearchSuper;
+  public searchSuper: AppSearchSuper;
   private searchInitResult: SearchInitResult;
   private isSearchActive = false;
   private searchTriggerWhenCollapsed: HTMLElement;
@@ -151,7 +149,7 @@ export class AppSidebarLeft extends SidebarSlider {
     // this._selectTab(0); // make first tab as default
 
     this.chatListContainer = document.getElementById('chatlist-container');
-    this.inputSearch = new InputSearch();
+    this.inputSearch = new InputSearch({oldStyle: true});
     (this.inputSearch.input as HTMLInputElement).placeholder = ' ';
     const sidebarHeader = this.sidebarEl.querySelector('.item-main .sidebar-header');
     sidebarHeader.append(this.inputSearch.container);
@@ -177,7 +175,7 @@ export class AppSidebarLeft extends SidebarSlider {
     });
 
     rootScope.addEventListener('notification_count_update', async() => {
-      const notificationsCount = await UiNotificationsManager.getNotificationsCountForAllAccounts();
+      const notificationsCount = await uiNotificationsManager.getNotificationsCountForAllAccounts();
       const count = Object.entries(notificationsCount).reduce(
         (prev, [accountNumber, count]) =>
           prev +
@@ -207,7 +205,7 @@ export class AppSidebarLeft extends SidebarSlider {
         return;
       }
 
-      location.reload();
+      appNavigationController.reload();
     });
 
     sidebarHeader.nextElementSibling.append(this.updateBtn);
@@ -232,96 +230,13 @@ export class AppSidebarLeft extends SidebarSlider {
     const lockButton = createLockButton();
 
     attachClickEvent(statusBtnIcon, () => {
-      const emojiTab = new EmojiTab({
-        noRegularEmoji: true,
-        managers: rootScope.managers,
-        mainSets: () => {
-          const defaultStatuses = this.managers.appStickersManager.getLocalStickerSet('inputStickerSetEmojiDefaultStatuses')
-          .then((stickerSet) => {
-            return stickerSet.documents.map((doc) => doc.id);
-          });
-
-          const convertEmojiStatuses = (emojiStatuses: AccountEmojiStatuses) => {
-            return (emojiStatuses as AccountEmojiStatuses.accountEmojiStatuses)
-            .statuses
-            .map((status) => (status as EmojiStatus.emojiStatus).document_id)
-            .filter(Boolean);
-          };
-
-          return [
-            Promise.all([
-              defaultStatuses,
-              this.managers.appUsersManager.getRecentEmojiStatuses().then(convertEmojiStatuses),
-              this.managers.appUsersManager.getDefaultEmojiStatuses().then(convertEmojiStatuses),
-              this.managers.appEmojiManager.getRecentEmojis('custom')
-            ]).then((arrays) => {
-              return filterUnique(flatten(arrays));
-            })
-          ];
-        },
-        onClick: async(emoji) => {
-          emoticonsDropdown.hideAndDestroy();
-
-          const noStatus = getIconContent('star') === emoji.emoji;
-          let emojiStatus: EmojiStatus;
-          if(noStatus) {
-            emojiStatus = {
-              _: 'emojiStatusEmpty'
-            };
-          } else {
-            emojiStatus = {
-              _: 'emojiStatus',
-              document_id: emoji.docId
-            };
-
-            fireOnNew = true;
-          }
-
-          this.managers.appUsersManager.updateEmojiStatus(emojiStatus);
-        },
-        canHaveEmojiTimer: true
-      });
-
-      const emoticonsDropdown = new EmoticonsDropdown({
-        tabsToRender: [emojiTab],
-        customParentElement: document.body,
-        getOpenPosition: () => {
-          const rect = statusBtnIcon.getBoundingClientRect();
-          const cloned = cloneDOMRect(rect);
-          cloned.left = rect.left + rect.width / 2;
-          cloned.top = rect.top + rect.height / 2;
-          return cloned;
+      openEmojiStatusPicker({
+        managers: this.managers,
+        anchorElement: statusBtnIcon,
+        onChosen: () => {
+          fireOnNew = true
         }
-      });
-
-      const textColor = 'primary-color';
-
-      emoticonsDropdown.setTextColor(textColor);
-
-      emoticonsDropdown.addEventListener('closed', () => {
-        emoticonsDropdown.hideAndDestroy();
-      });
-
-      emoticonsDropdown.onButtonClick();
-
-      emojiTab.initPromise.then(() => {
-        const emojiElement = Icon('star', 'super-emoji-premium-icon');
-        emojiElement.style.color = `var(--${textColor})`;
-
-        const category = emojiTab.getCustomCategory();
-
-        emojiTab.addEmojiToCategory({
-          category,
-          element: emojiElement,
-          batch: false,
-          prepend: true
-          // active: !iconEmojiId
-        });
-
-        // if(iconEmojiId) {
-        //   emojiTab.setActive({docId: iconEmojiId, emoji: ''});
-        // }
-      });
+      })
     });
 
     const wrapStatus = async(middleware: Middleware) => {
@@ -371,7 +286,6 @@ export class AppSidebarLeft extends SidebarSlider {
       if(isPremium) {
         await wrapStatus((statusMiddlewareHelper = middleware.create()).get());
         if(!middleware()) return;
-        sidebarHeader.append(statusBtnIcon);
         toggleRightButtons(true, await DeferredIsUsingPasscode.isUsingPasscode());
 
         const onEmojiStatusChange = () => {
@@ -400,6 +314,8 @@ export class AppSidebarLeft extends SidebarSlider {
 
       if(isUsingPasscode) sidebarHeader.append(lockButton.element);
       else lockButton.element.remove();
+
+      sidebarHeader.classList.toggle('is-input-the-last-child', !isPremium && !isUsingPasscode);
     };
 
     appImManager.addEventListener('premium_toggle', onPremium);
@@ -413,7 +329,7 @@ export class AppSidebarLeft extends SidebarSlider {
 
     this.initNavigation();
 
-    apiManagerProxy.getState().then((state) => {
+    {
       const CHECK_UPDATE_INTERVAL = 1800e3;
       const checkUpdateInterval = setInterval(() => {
         fetch('version', {cache: 'no-cache'})
@@ -430,7 +346,7 @@ export class AppSidebarLeft extends SidebarSlider {
         })
         .catch(noop);
       }, CHECK_UPDATE_INTERVAL);
-    });
+    }
 
     this.onResize = () => {
       const rect = this.rect = this.tabsContainer.getBoundingClientRect();
@@ -516,17 +432,14 @@ export class AppSidebarLeft extends SidebarSlider {
   }
 
   public hasSomethingOpenInside() {
-    return this.hasTabsInNavigation() || this.isSearchActive || !!appDialogsManager.forumTab || appDialogsManager.hasMonoforumOpen();
+    return this.hasTabsInNavigation() || this.isSearchActive || !!appDialogsManager.forumTab;
   }
 
   public closeEverythingInside() {
     this.closeSearch();
     appDialogsManager.toggleForumTab();
 
-    const hadOpenedDrawer = appDialogsManager.closeMonoforumDrawers();
-    const hadTabs = this.closeAllTabs();
-
-    return hadTabs || hadOpenedDrawer;
+    return this.closeAllTabs();
   }
 
   private isAnimatingCollapse = false;
@@ -537,7 +450,7 @@ export class AppSidebarLeft extends SidebarSlider {
 
     this.sidebarEl.classList.toggle('has-open-tabs', isFloating);
     this.sidebarEl.classList.toggle('has-real-tabs', this.hasTabsInNavigation());
-    this.sidebarEl.classList.toggle('has-forum-open', !!appDialogsManager.forumTab || appDialogsManager.hasMonoforumOpen());
+    this.sidebarEl.classList.toggle('has-forum-open', !!appDialogsManager.forumTab);
 
     const sidebarPlaceholder = document.querySelector('.sidebar-left-placeholder');
 
@@ -582,7 +495,7 @@ export class AppSidebarLeft extends SidebarSlider {
           );
         }
       });
-      if(!appDialogsManager.hasMonoforumOpen() && !appDialogsManager.forumTab)
+      if(!appDialogsManager.forumTab)
         appDialogsManager.xd?.toggleAvatarUnreadBadges(false, undefined);
     } else {
       const [hasFoldersSidebar] = useHasFoldersSidebar();
@@ -699,11 +612,9 @@ export class AppSidebarLeft extends SidebarSlider {
     })
   }
 
-  public createToolsMenu(mountTo?: HTMLElement, closeBefore?: boolean) {
+  public createToolsMenu(mountTo?: HTMLElement) {
     const closeTabsBefore = async(clb: () => void) => {
-      if(closeBefore) {
-        this.closeEverythingInside() && await pause(200);
-      }
+      this.closeEverythingInside() && await pause(200);
 
       clb();
     }
@@ -712,9 +623,7 @@ export class AppSidebarLeft extends SidebarSlider {
       icon: 'archive',
       text: 'ArchivedChats',
       onClick: () => {
-        closeTabsBefore(() => {
-          this.createTab(AppArchivedTab).open();
-        });
+        this.openArchiveTab();
       },
       verify: async() => {
         const folder = await this.managers.dialogsStorage.getFolderDialogs(FOLDER_ID_ARCHIVE, false);
@@ -730,50 +639,27 @@ export class AppSidebarLeft extends SidebarSlider {
     };
 
     const moreSubmenu = createSubmenuTrigger({
-      text: 'MultiAccount.More',
-      icon: 'more'
-    }, () => this.createMoreSubmenu(moreSubmenu, closeTabsBefore));
+      options: {
+        text: 'MultiAccount.More',
+        icon: 'more'
+      },
+      createSubmenu: (args) => this.createMoreSubmenu(args, closeTabsBefore)
+    });
 
     const newSubmenu = createSubmenuTrigger({
-      text: 'CreateANew',
-      icon: 'edit',
-      verify: () => this.isCollapsed(),
-      separator: true
-    }, () => this.createNewChatsSubmenu());
+      options: {
+        text: 'CreateANew',
+        icon: 'edit',
+        verify: () => this.isCollapsed(),
+        separator: true
+      },
+      createSubmenu: () => this.createNewChatsSubmenu()
+    });
 
     const menuButtons: (ButtonMenuItemOptions & {verify?: () => boolean | Promise<boolean>})[] = [{
       icon: 'plus',
       text: 'MultiAccount.AddAccount',
-      onClick: async(e) => {
-        const totalAccounts = await AccountController.getTotalAccounts();
-        if(totalAccounts >= MAX_ACCOUNTS) return;
-
-        const hasSomeonePremium = await apiManagerProxy.hasSomeonePremium();
-
-        if(totalAccounts === MAX_ACCOUNTS_FREE && !hasSomeonePremium) {
-          new AccountsLimitPopup().show();
-          return;
-        }
-
-        localStorage.setItem('previous-account', getCurrentAccount() + '');
-        const isUsingPasscode = await DeferredIsUsingPasscode.isUsingPasscode();
-        const openTabs = apiManagerProxy.getOpenTabsCount();
-
-        const newTab = e.ctrlKey || e.metaKey || (openTabs <= 1 && isUsingPasscode);
-        if(!newTab) {
-          appImManager.goOffline();
-
-          localStorage.setItem('should-animate-auth', 'true');
-
-          const chatsPageEl = document.querySelector('.page-chats');
-          chatsPageEl.classList.add('main-screen-exit');
-          await doubleRaf();
-          chatsPageEl.classList.add('main-screen-exiting');
-          await pause(200);
-        }
-
-        changeAccount((totalAccounts + 1) as ActiveAccountNumber, newTab);
-      },
+      onClick: this.addAccount,
       verify: async() => {
         const totalAccounts = await AccountController.getTotalAccounts();
         return totalAccounts < MAX_ACCOUNTS;
@@ -821,7 +707,11 @@ export class AppSidebarLeft extends SidebarSlider {
       buttons: filteredButtons,
       container: mountTo,
       onOpenBefore: async() => {
-        const attachMenuBots = await this.managers.appAttachMenuBotsManager.getAttachMenuBots().catch(() => [] as AttachMenuBot[]);
+        const emptyAttachMenuBots: AttachMenuBot[] = [];
+        const attachMenuBots = await Promise.race([
+          pause(30).then(() => emptyAttachMenuBots),
+          this.managers.appAttachMenuBotsManager.getAttachMenuBots().catch(() => emptyAttachMenuBots)
+        ]);
         const buttons = filteredButtonsSliced.slice();
         const attachMenuBotsButtons = attachMenuBots.filter((attachMenuBot) => {
           return attachMenuBot.pFlags.show_in_side_menu;
@@ -844,7 +734,11 @@ export class AppSidebarLeft extends SidebarSlider {
           return button;
         });
 
-        function wrapUserName(user: User.user) {
+        function wrapUserName(user: User.user | PeerId) {
+          if(!isObject(user)) {
+            return '' + user;
+          }
+
           let name = user.first_name;
           if(user.last_name) name += ' ' + user.last_name;
 
@@ -859,7 +753,7 @@ export class AppSidebarLeft extends SidebarSlider {
 
         const [totalAccounts, notificationsCount] = await Promise.all([
           AccountController.getTotalAccounts(),
-          UiNotificationsManager.getNotificationsCountForAllAccounts()
+          uiNotificationsManager.getNotificationsCountForAllAccounts()
         ]);
         const accountButtons: typeof buttons = [];
         for(let i = 1; i <= totalAccounts; i++) {
@@ -882,11 +776,11 @@ export class AppSidebarLeft extends SidebarSlider {
           } else {
             const otherManagers = createProxiedManagersForAccount(accountNumber);
             const accountData = await AccountController.get(accountNumber);
-            const peerId = accountData?.userId?.toPeerId();
+            const peerId = accountData.userId?.toPeerId();
             const user = await otherManagers.appUsersManager.getSelf();
 
             const content = document.createElement('span');
-            content.append(wrapUserName(user));
+            content.append(wrapUserName(user || peerId));
 
             if(notificationsCount[accountNumber]) {
               const badge = createBadge('span', 20, 'primary');
@@ -953,22 +847,21 @@ export class AppSidebarLeft extends SidebarSlider {
 
 
   private async createMoreSubmenu(
-    submenu: ReturnType<typeof createSubmenuTrigger>,
+    {middleware}: CreateSubmenuArgs,
     closeTabsBefore: (clb: () => void) => void
   ) {
-    const isDarkModeEnabled = () => themeController.getTheme().name === 'night';
     const toggleTheme = () => {
       const item = btns[0].element;
       const icon = item.querySelector('.tgico');
       const rect = icon.getBoundingClientRect();
-      themeController.switchTheme(isDarkModeEnabled() ? 'day' : 'night', {
+      themeController.switchTheme(undefined, {
         x: rect.left + rect.width / 2,
         y: rect.top + rect.height / 2
       });
     };
 
     const darkModeText = document.createElement('span');
-    darkModeText.append(i18n(isDarkModeEnabled() ? 'DisableDarkMode': 'EnableDarkMode'));
+    darkModeText.append(i18n(themeController.isNight() ? 'DisableDarkMode': 'EnableDarkMode'));
     const animationsText = document.createElement('span');
 
     const btns: ButtonMenuItemOptionsVerifiable[] = [{
@@ -1000,7 +893,7 @@ export class AppSidebarLeft extends SidebarSlider {
           sessionStorage.set({kz_version: 'Z'}),
           sessionStorage.delete('tgme_sync')
         ]).then(() => {
-          location.href = 'https://web.telegram.org/a/';
+          appNavigationController.navigateToUrl('https://web.telegram.org/a/');
         });
       },
       separator: App.isMainDomain,
@@ -1047,10 +940,8 @@ export class AppSidebarLeft extends SidebarSlider {
 
     async function toggleAnimations() {
       updateAnimationsToggleButton(!(await hasAnimations()));
-      rootScope.managers.appStateManager.setByKey(
-        joinDeepPath('settings', 'liteMode', 'animations'),
-        await hasAnimations() // The value is already reversed
-      );
+      const [, setAppSettings] = useAppSettings();
+      await setAppSettings('liteMode', 'animations', await hasAnimations());
     }
 
     async function updateAnimationsToggleButton(enabled: boolean) {
@@ -1082,6 +973,8 @@ export class AppSidebarLeft extends SidebarSlider {
 
     initAnimationsToggleIcon();
 
+    if(!middleware()) return;
+
     return menu;
   }
 
@@ -1095,13 +988,7 @@ export class AppSidebarLeft extends SidebarSlider {
 
     const onNewGroupClick = () => {
       closeTabsBefore(() => {
-        this.createTab(AppAddMembersTab).open({
-          type: 'chat',
-          skippable: true,
-          takeOut: (peerIds) => this.createTab(AppNewGroupTab).open({peerIds}),
-          title: 'GroupAddMembers',
-          placeholder: 'SendMessageTo'
-        });
+        createNewGroupTab(this);
       });
     };
 
@@ -1151,7 +1038,7 @@ export class AppSidebarLeft extends SidebarSlider {
     });
   }
 
-  private initSearch() {
+  public initSearch() {
     if(this.searchInitResult) return this.searchInitResult;
 
     const searchContainer = this.sidebarEl.querySelector('#search-container') as HTMLDivElement;
@@ -1207,6 +1094,9 @@ export class AppSidebarLeft extends SidebarSlider {
         name: 'MiniApps.AppsSearch',
         type: 'apps'
       }, {
+        name: 'PostsSearch.TabName',
+        type: 'posts'
+      }, {
         inputFilter: 'inputMessagesFilterPhotoVideo',
         name: 'SharedMediaTab2',
         type: 'media'
@@ -1235,8 +1125,17 @@ export class AppSidebarLeft extends SidebarSlider {
       managers: this.managers
     });
 
-    searchSuper.onChangeTab = () => {
+    let prevTab: SearchSuperMediaType
+    searchSuper.onChangeTab = (tab) => {
+      if(prevTab === 'posts') {
+        simulateClickEvent(this.inputSearch.clearBtn);
+      }
+
+      prevTab = tab.type;
       searchSuper.searchContext.chatType = 'all';
+      if(tab.type === 'posts') {
+        searchSuper.globalPostsSearch?.setQuery(this.inputSearch.value);
+      }
     };
 
     this.watchChannelsTabVisibility();
@@ -1371,6 +1270,11 @@ export class AppSidebarLeft extends SidebarSlider {
     };
 
     const updateSearchQuery = ({search: value, chatType}: UpdateSearchQueryArgs) => {
+      if(searchSuper.mediaTab.type === 'posts') {
+        searchSuper.globalPostsSearch?.setQuery(value);
+        return
+      }
+
       // spot input
       searchSuper.cleanupHTML();
       searchSuper.setQuery({
@@ -1535,6 +1439,26 @@ export class AppSidebarLeft extends SidebarSlider {
         onFocus();
         focus && this.inputSearch.input.focus();
       },
+      openWithPeerId: (peerId: PeerId) => {
+        onFocus();
+        this.inputSearch.input.focus();
+
+        selectedPeerId = peerId;
+
+        this.inputSearch.onChange(this.inputSearch.value = '');
+
+        const element = renderEntity(peerId);
+        this.inputSearch.container.append(element);
+
+        element.addEventListener('click', () => {
+          unselectEntity(element);
+        });
+
+        pickedElements.push(element);
+        fastRaf(() => {
+          updatePicked();
+        });
+      },
       close: () => {
         close();
       }
@@ -1587,6 +1511,43 @@ export class AppSidebarLeft extends SidebarSlider {
     this.closeEverythingInside() && await pause(200);
     clb();
   }
+
+  public openArchiveTab() {
+    this.closeTabsBefore(() => {
+      this.createTab(AppArchivedTab).open();
+    });
+  }
+
+  public addAccount = async(e: MouseEvent | TouchEvent) => {
+    const totalAccounts = await AccountController.getTotalAccounts();
+    if(totalAccounts >= MAX_ACCOUNTS) return;
+
+    const hasSomeonePremium = await apiManagerProxy.hasSomeonePremium();
+
+    if(totalAccounts === MAX_ACCOUNTS_FREE && !hasSomeonePremium) {
+      new AccountsLimitPopup().show();
+      return;
+    }
+
+    localStorage.setItem('previous-account', getCurrentAccount() + '');
+    const isUsingPasscode = await DeferredIsUsingPasscode.isUsingPasscode();
+    const openTabs = apiManagerProxy.getOpenTabsCount();
+
+    const newTab = e.ctrlKey || e.metaKey || (openTabs <= 1 && isUsingPasscode);
+    if(!newTab) {
+      appImManager.goOffline();
+
+      localStorage.setItem('should-animate-auth', 'true');
+
+      const chatsPageEl = document.querySelector('.page-chats');
+      chatsPageEl.classList.add('main-screen-exit');
+      await doubleRaf();
+      chatsPageEl.classList.add('main-screen-exiting');
+      await pause(200);
+    }
+
+    changeAccount((totalAccounts + 1) as ActiveAccountNumber, newTab);
+  };
 }
 
 export class SettingChatListSection extends SettingSection {

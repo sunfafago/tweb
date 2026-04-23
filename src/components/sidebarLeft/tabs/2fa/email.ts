@@ -4,21 +4,26 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import {AccountPassword} from '../../../../layer';
-import Button from '../../../button';
-import {SliderSuperTab} from '../../../slider';
-import InputField from '../../../inputField';
-import {putPreloader} from '../../../putPreloader';
-import AppTwoStepVerificationSetTab from './passwordSet';
-import AppTwoStepVerificationEmailConfirmationTab from './emailConfirmation';
-import PopupPeer from '../../../popups/peer';
-import cancelEvent from '../../../../helpers/dom/cancelEvent';
-import {canFocus} from '../../../../helpers/dom/canFocus';
-import {attachClickEvent} from '../../../../helpers/dom/clickEvent';
-import matchEmail from '../../../../lib/richTextProcessor/matchEmail';
-import wrapStickerEmoji from '../../../wrappers/stickerEmoji';
-import SettingSection from '../../../settingSection';
-import PopupElement from '../../../popups';
+import {AccountPassword} from '@layer';
+import Button from '@components/button';
+import {SliderSuperTab} from '@components/slider';
+import InputField from '@components/inputField';
+import {putPreloader} from '@components/putPreloader';
+import AppTwoStepVerificationSetTab from '@components/sidebarLeft/tabs/2fa/passwordSet';
+import AppTwoStepVerificationEmailConfirmationTab from '@components/sidebarLeft/tabs/2fa/emailConfirmation';
+import PopupPeer from '@components/popups/peer';
+import cancelEvent from '@helpers/dom/cancelEvent';
+import {canFocus} from '@helpers/dom/canFocus';
+import {attachClickEvent} from '@helpers/dom/clickEvent';
+import matchEmail from '@lib/richTextProcessor/matchEmail';
+import SettingSection from '@components/settingSection';
+import PopupElement from '@components/popups';
+import lottieLoader from '@lib/rlottie/lottieLoader';
+
+
+type ConstructorArgs = {
+  justSetPasssword?: boolean;
+};
 
 export default class AppTwoStepVerificationEmailTab extends SliderSuperTab {
   public inputField: InputField;
@@ -28,7 +33,7 @@ export default class AppTwoStepVerificationEmailTab extends SliderSuperTab {
   public hint: string;
   public isFirst = false;
 
-  public init() {
+  public init({justSetPasssword = false}: ConstructorArgs = {}) {
     this.container.classList.add('two-step-verification', 'two-step-verification-email');
     this.setTitle('RecoveryEmailTitle');
 
@@ -37,15 +42,16 @@ export default class AppTwoStepVerificationEmailTab extends SliderSuperTab {
       noDelimiter: true
     });
 
-    const emoji = '💌';
     const stickerContainer = document.createElement('div');
+    stickerContainer.classList.add('media-sticker-wrapper');
 
-    wrapStickerEmoji({
-      div: stickerContainer,
+    lottieLoader.loadAnimationAsAsset({
+      container: stickerContainer,
       width: 160,
       height: 160,
-      emoji
-    });
+      loop: false,
+      autoplay: true
+    }, 'LoveLetter');
 
     section.content.append(stickerContainer);
 
@@ -75,7 +81,7 @@ export default class AppTwoStepVerificationEmailTab extends SliderSuperTab {
     const btnSkip = Button('btn-primary btn-secondary btn-primary-transparent primary', {text: 'YourEmailSkip'});
 
     const goNext = () => {
-      this.slider.createTab(AppTwoStepVerificationSetTab).open();
+      this.slider.createTab(AppTwoStepVerificationSetTab).open({messageFor: justSetPasssword ? 'password' : 'email'});
     };
 
     const onContinueClick = () => {
@@ -104,7 +110,7 @@ export default class AppTwoStepVerificationEmailTab extends SliderSuperTab {
           tab.state = this.state;
           tab.email = email;
           tab.length = symbols;
-          tab.open();
+          tab.open({justSetPasssword});
         } else {
           console.log('password set error', err);
         }

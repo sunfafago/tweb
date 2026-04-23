@@ -4,32 +4,32 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import type {Message, StickerSet, Update, NotifyPeer, PeerNotifySettings, PollResults, Poll, WebPage, GroupCall, GroupCallParticipant, ReactionCount, MessagePeerReaction, PhoneCall, Config, Reaction, AttachMenuBot, PeerSettings, StoryItem, PeerStories, SavedDialog, SavedReactionTag, InputSavedStarGift, LangPackDifference, StarsAmount} from '../layer';
-import type {Dialog, ForumTopic, MessagesStorageKey, MyMessage} from './appManagers/appMessagesManager';
-import type {MyDialogFilter} from './storages/filters';
-import type {AnyDialog, Folder} from './storages/dialogs';
-import type {UserTyping} from './appManagers/appProfileManager';
-import type {MyDraftMessage} from './appManagers/appDraftsManager';
-import type {ConnectionStatusChange} from './mtproto/connectionStatus';
-import type {GroupCallId} from './appManagers/appGroupCallsManager';
-import type {AppManagers} from './appManagers/managers';
-import type {StateSettings} from '../config/state';
-import type {Progress} from './appManagers/appDownloadManager';
-import type {CallId} from './appManagers/appCallsManager';
-import type {MyDocument} from './appManagers/appDocsManager';
-import type {MTAppConfig} from './mtproto/appConfig';
-import type StoriesCacheType from './appManagers/utils/stories/cacheType';
-import type {StoriesListPosition} from './appManagers/appStoriesManager';
-import type {ArgumentTypes} from '../types';
-import type {RtmpCallInstance} from './calls/rtmpCallsController';
-import {NULL_PEER_ID, UserAuth} from './mtproto/mtproto_config';
-import EventListenerBase, {EventListenerListeners} from '../helpers/eventListenerBase';
-import {MOUNT_CLASS_TO} from '../config/debug';
-import MTProtoMessagePort from './mtproto/mtprotoMessagePort';
-import {ActiveAccountNumber} from './accounts/types';
-import type {ApiManager} from './mtproto/apiManager';
-import {SensitiveContentSettings} from './appManagers/appPrivacyManager';
-import type {MonoforumDialog} from './storages/monoforumDialogs';
+import type {Message, StickerSet, Update, NotifyPeer, PeerNotifySettings, PollResults, Poll, WebPage, GroupCall, GroupCallParticipant, ReactionCount, MessagePeerReaction, PhoneCall, Config, Reaction, AttachMenuBot, PeerSettings, StoryItem, PeerStories, SavedDialog, SavedReactionTag, InputSavedStarGift, LangPackDifference, StarsAmount, MessageEntity, HelpPromoData, StoriesStealthMode, StoryAlbum} from '@layer';
+import type {Dialog, ForumTopic, MessagesStorageKey, MyMessage} from '@appManagers/appMessagesManager';
+import type {MyDialogFilter} from '@lib/storages/filters';
+import type {AnyDialog, Folder} from '@lib/storages/dialogs';
+import type {UserTyping} from '@appManagers/appProfileManager';
+import type {MyDraftMessage} from '@appManagers/appDraftsManager';
+import type {ConnectionStatusChange} from '@lib/mtproto/connectionStatus';
+import type {GroupCallId} from '@appManagers/appGroupCallsManager';
+import type {AppManagers} from '@lib/managers';
+import type {StateSettings} from '@config/state';
+import type {Progress} from '@lib/appDownloadManager';
+import type {CallId} from '@appManagers/appCallsManager';
+import type {MyDocument} from '@appManagers/appDocsManager';
+import type StoriesCacheType from '@appManagers/utils/stories/cacheType';
+import type {StoriesListPosition} from '@appManagers/appStoriesManager';
+import type {ArgumentTypes} from '@types';
+import type {RtmpCallInstance} from '@lib/calls/rtmpCallsController';
+import type {ApiManager} from '@appManagers/apiManager';
+import type {MonoforumDialog} from '@lib/storages/monoforumDialogs';
+import type {MyStarGift} from '@appManagers/appGiftsManager';
+import type {MyPromoData} from '@appManagers/appPromoManager';
+import type {ActiveAccountNumber} from '@lib/accounts/types';
+import {NULL_PEER_ID, UserAuth} from '@appManagers/constants';
+import EventListenerBase, {EventListenerListeners} from '@helpers/eventListenerBase';
+import {MOUNT_CLASS_TO} from '@config/debug';
+import MTProtoMessagePort from '@lib/mainWorker/mainMessagePort';
 
 export type BroadcastEvents = {
   'chat_full_update': ChatId,
@@ -54,7 +54,6 @@ export type BroadcastEvents = {
   'peer_typings': {peerId: PeerId, threadId?: number, typings: UserTyping[]},
   'peer_block': {peerId: PeerId, blocked?: boolean, blockedMyStoriesFrom?: boolean},
   'peer_title_edit': {peerId: PeerId, threadId?: number},
-  'peer_bio_edit': PeerId,
   'peer_deleted': PeerId, // left chat, deleted user dialog, left channel
   'peer_full_update': PeerId,
   'peer_settings': {peerId: PeerId, settings: PeerSettings},
@@ -82,15 +81,15 @@ export type BroadcastEvents = {
   // 'dialog_order': {dialog: Dialog, pos: number},
   'dialogs_multiupdate': Map<PeerId, {dialog?: Dialog, topics?: Map<number, ForumTopic>, saved?: Map<PeerId, SavedDialog>}>,
 
-  'history_append': {storageKey: MessagesStorageKey, message: Message.message},
-  'history_update': {storageKey: MessagesStorageKey, message: MyMessage, sequential?: boolean},
+
+  'history_append': {storageKey: MessagesStorageKey, message: MyMessage},
+  'history_update': {storageKey: MessagesStorageKey, message: MyMessage, tempId?: number, sequential?: boolean},
   'history_reply_markup': {peerId: PeerId},
   'history_multiappend': MyMessage,
   // 'history_delete': {peerId: PeerId, msgs: Map<number, {savedPeerId?: PeerId}>},
   'history_delete': {peerId: PeerId, msgs: Set<number>},
   'history_forbidden': PeerId,
   'history_reload': PeerId,
-  'history_count': {historyKey: string, count: number},
   'history_delete_key': {historyKey: string, mid: number},
   // 'history_request': void,
 
@@ -113,6 +112,10 @@ export type BroadcastEvents = {
   'stories_read': {peerId: PeerId, maxReadId: number},
   'stories_downloaded': {peerId: PeerId, ids: number[]},
   'stories_position': {peerId: PeerId, position: StoriesListPosition},
+  'stories_stealth_mode': StoriesStealthMode,
+  'story_album_created': {peerId: PeerId, albumId: number, albums: StoryAlbum[]},
+  'story_album_updated': {peerId: PeerId, albumId: number, addStories?: StoryItem.storyItem[], deleteStories?: number[], albums: StoryAlbum[]},
+  'story_album_deleted': {peerId: PeerId, albumId: number, albums: StoryAlbum[]},
 
   'replies_updated': Message.message,
   'replies_short_update': Message.message,
@@ -155,7 +158,7 @@ export type BroadcastEvents = {
   'notify_peer_type_settings': {key: Exclude<NotifyPeer['_'], 'notifyPeer'>, settings: PeerNotifySettings},
 
   'notification_reset': string,
-  'notification_cancel': string,
+  'notification_cancel': `msg_${ActiveAccountNumber}_${PeerId}_${number}`,
 
   'notification_count_update': void,
 
@@ -218,27 +221,32 @@ export type BroadcastEvents = {
   'chat_background_set': void,
 
   'toggle_using_passcode': boolean,
-  'toggle_locked': boolean,
 
   'star_gift_update': {
     input: InputSavedStarGift,
     resalePrice?: StarsAmount[],
     unsaved?: boolean,
     converted?: boolean,
-    wearing?: boolean
+    wearing?: boolean,
+    addCollectionId?: number,
+    removeCollectionId?: number
   },
-  'my_pinned_stargifts': {gifts: InputSavedStarGift[]},
+  'pinned_stargifts': {peerId: PeerId, gifts: InputSavedStarGift[]},
   'star_gift_list_update': {peerId: PeerId},
+  'star_gift_upgrade': {gift: MyStarGift, savedId?: Long, fromMsgId?: number},
 
   'insufficent_stars_for_message': {messageCount: number, requestId: number, invokeApiArgs: Parameters<ApiManager['invokeApi']>, reservedStars?: number};
 
   'fulfill_repaid_message': {requestId: number},
 
-  'sensitive_content_settings': SensitiveContentSettings,
-
   'monoforum_dialogs_update': {dialogs: MonoforumDialog[]},
   'monoforum_dialogs_drop': {parentPeerId: PeerId, ids: PeerId[]},
   'monoforum_draft_update': {dialog: MonoforumDialog},
+
+  'botforum_pending_topic_created': {peerId: PeerId, tempId: number, newId?: number},
+  'promo_data_update': MyPromoData,
+
+  'auto_delete_period_update': {peerId: PeerId, period: number},
 };
 
 export type BroadcastEventsListeners = {

@@ -4,17 +4,22 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import InputField from '../../inputField';
-import {SliderSuperTab} from '../../slider';
-import EditPeer from '../../editPeer';
-import {UsernameInputField} from '../../usernameInputField';
-import {i18n, i18n_, LangPackKey} from '../../../lib/langPack';
-import {attachClickEvent} from '../../../helpers/dom/clickEvent';
-import rootScope from '../../../lib/rootScope';
-import setBlankToAnchor from '../../../lib/richTextProcessor/setBlankToAnchor';
-import getPeerEditableUsername from '../../../lib/appManagers/utils/peers/getPeerEditableUsername';
-import SettingSection, {generateSection} from '../../settingSection';
-import UsernamesSection from '../../usernamesSection';
+import InputField from '@components/inputField';
+import {SliderSuperTab} from '@components/slider';
+import EditPeer from '@components/editPeer';
+import {UsernameInputField} from '@components/usernameInputField';
+import {i18n, i18n_, LangPackKey} from '@lib/langPack';
+import {attachClickEvent} from '@helpers/dom/clickEvent';
+import rootScope from '@lib/rootScope';
+import setBlankToAnchor from '@lib/richTextProcessor/setBlankToAnchor';
+import getPeerEditableUsername from '@appManagers/utils/peers/getPeerEditableUsername';
+import SettingSection, {generateSection} from '@components/settingSection';
+import UsernamesSection from '@components/usernamesSection';
+import Row from '@components/row';
+import showBirthdayPopup, {saveMyBirthday} from '@components/popups/birthday';
+import {getHeavyAnimationPromise} from '@hooks/useHeavyAnimationCheck';
+import placeCaretAtEnd from '@helpers/dom/placeCaretAtEnd';
+import shake from '@helpers/dom/shake';
 
 // TODO: аватарка не поменяется в этой вкладке после изменения почему-то (если поставить в другом клиенте, и потом тут проверить, для этого ещё вышел в чатлист)
 
@@ -44,6 +49,7 @@ export function purchaseUsernameCaption() {
 }
 
 export default class AppEditProfileTab extends SliderSuperTab {
+  public static noSame = true;
   private firstNameInputField: InputField;
   private lastNameInputField: InputField;
   private bioInputField: InputField;
@@ -62,7 +68,7 @@ export default class AppEditProfileTab extends SliderSuperTab {
     };
   }
 
-  public async init(p: ReturnType<typeof AppEditProfileTab['getInitArgs']> = AppEditProfileTab.getInitArgs()) {
+  public async init(p: ReturnType<typeof AppEditProfileTab['getInitArgs']> = AppEditProfileTab.getInitArgs(), focusOn?: string) {
     this.container.classList.add('edit-profile-container');
     this.setTitle('EditAccount.Title');
 
@@ -113,6 +119,26 @@ export default class AppEditProfileTab extends SliderSuperTab {
       this.content.append(this.editPeer.nextBtn);
 
       section.append(this.editPeer.avatarEdit.container, inputWrapper);
+
+      if(!userFull.birthday) {
+        const addBirthdayRow = new Row({
+          title: i18n('EditProfile.AddBirthdayRow'),
+          icon: 'gift',
+          clickable: () => {
+            showBirthdayPopup({
+              onSave: async(date) => {
+                if(await saveMyBirthday(date)) {
+                  addBirthdayRow.container.remove();
+                  return true;
+                }
+                return false;
+              }
+            })
+          }
+        })
+
+        section.append(addBirthdayRow.container);
+      }
     }
 
     {
@@ -216,6 +242,23 @@ export default class AppEditProfileTab extends SliderSuperTab {
 
     // this.setProfileUrl();
     this.editPeer.handleChange();
+  }
+
+  public focus(on: string) {
+    getHeavyAnimationPromise().then(() => {
+      const focusMap: {[key: string]: InputField} = {
+        'first-name': this.firstNameInputField,
+        'last-name': this.lastNameInputField,
+        'username': this.usernameInputField,
+        'bio': this.bioInputField
+      };
+
+      if(focusMap[on]) {
+        placeCaretAtEnd(focusMap[on].input);
+      } else if(on === 'set-photo') {
+        shake(this.editPeer.avatarElem.node);
+      }
+    });
   }
 
   // private setProfileUrl() {

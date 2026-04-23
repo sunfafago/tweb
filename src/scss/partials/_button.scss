@@ -4,6 +4,8 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
+@use "../shared" as *;
+
 $btn-menu-z-index: 4;
 
 .btn,
@@ -340,6 +342,7 @@ $btn-menu-z-index: 4;
     &.btn-menu-search {
       @include hover-background-effect(transparent);
       cursor: default !important;
+      margin-top: .3125rem;
     }
 
     &-icon {
@@ -374,8 +377,14 @@ $btn-menu-z-index: 4;
         width: inherit;
         height: inherit;
       }
+    }
 
-      
+    &.with-subtitle {
+      height: 44px;
+    }
+
+    &.with-subtitle &-icon {
+      margin-top: .5rem;
     }
 
     &-input {
@@ -485,8 +494,6 @@ $btn-menu-z-index: 4;
       // --icon-margin: .5rem;
       font-size: .75rem;
     }
-
-
     .submenu-label {
       display: flex;
       justify-content: space-between;
@@ -630,6 +637,7 @@ $btn-menu-z-index: 4;
     padding: 0;
     margin: .3125rem 0;
     display: block !important;
+    pointer-events: none;
 
     margin-left: auto;
     margin-right: auto;
@@ -906,7 +914,7 @@ $btn-menu-z-index: 4;
   }
 
   &-select {
-    padding-bottom: 0;
+    padding-block: 0;
 
     &-text-faded {
       opacity: 0.3;

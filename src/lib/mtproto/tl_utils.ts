@@ -9,21 +9,21 @@
  * https://github.com/zhukov/webogram/blob/master/LICENSE
  */
 
-import Schema, {MTProtoConstructor, MTProtoMethod} from './schema';
-import {JSONValue} from '../../layer';
-import {MOUNT_CLASS_TO} from '../../config/debug';
-import bytesToHex from '../../helpers/bytes/bytesToHex';
-import isObject from '../../helpers/object/isObject';
-import gzipUncompress from '../../helpers/gzipUncompress';
+import Schema, {MTProtoConstructor, MTProtoMethod} from '@lib/mtproto/schema';
+import {JSONValue} from '@layer';
+import {MOUNT_CLASS_TO} from '@config/debug';
+import bytesToHex from '@helpers/bytes/bytesToHex';
+import isObject from '@helpers/object/isObject';
+import gzipUncompress from '@helpers/gzipUncompress';
 import bigInt from 'big-integer';
-import ulongFromInts from '../../helpers/long/ulongFromInts';
-import {safeBigInt} from '../../helpers/bigInt/bigIntConstants';
-import {bigIntToSigned, bigIntToUnsigned} from '../../helpers/bigInt/bigIntConversion';
+import ulongFromInts from '@helpers/long/ulongFromInts';
+import {safeBigInt} from '@helpers/bigInt/bigIntConstants';
+import {bigIntToSigned, bigIntToUnsigned} from '@helpers/bigInt/bigIntConversion';
 
 const boolFalse = +Schema.API.constructors.find((c) => c.predicate === 'boolFalse').id;
 const boolTrue = +Schema.API.constructors.find((c) => c.predicate === 'boolTrue').id;
 const vector = +Schema.API.constructors.find((c) => c.predicate === 'vector').id;
-const gzipPacked = +Schema.MTProto.constructors.find((c) => c.predicate === 'gzip_packed').id;
+export const gzipPacked = +Schema.MTProto.constructors.find((c) => c.predicate === 'gzip_packed').id;
 
 // * using slice to have a new buffer, otherwise the buffer will be copied to main thread
 const sliceMethod: 'slice' | 'subarray' = 'slice'; // subarray
@@ -98,7 +98,7 @@ class TLSerialization {
   }
 
   public checkLength(needBytes: number) {
-    if(this.offset + needBytes < this.maxLength) {
+    if((this.offset + needBytes) < this.maxLength) {
       return;
     }
 
@@ -143,6 +143,9 @@ class TLSerialization {
     this.writeInt(iHigh, (field || '') + ':long[high]');
   }
 
+  /**
+   * @param sLong should be big-endian
+   */
   public storeLong(sLong: Array<number> | string | number, field?: string) {
     if(Array.isArray(sLong)) {
       if(sLong.length === 2) {
@@ -231,6 +234,9 @@ class TLSerialization {
     }
   }
 
+  /**
+   * @param bytes should be little-endian
+   */
   public storeIntBytes(bytes: ArrayBuffer | Uint8Array | number[], bits: number, field?: string) {
     if(bytes instanceof ArrayBuffer) {
       bytes = new Uint8Array(bytes);
@@ -281,6 +287,8 @@ class TLSerialization {
 
   public storeObject(obj: any, type: string, field?: string) {
     switch(type) {
+      case '!X':
+        return obj(this);
       case '#':
         obj ||= 0;
       case 'int':
@@ -359,7 +367,8 @@ class TLSerialization {
     for(const param of constructorData.params) {
       let type = param.type;
 
-      if(type.indexOf('?') !== -1) {
+      const isOptional = type.indexOf('?') !== -1;
+      if(isOptional) {
         const condType = type.split('?');
         const fieldBit = condType[0].split('.');
 
@@ -378,6 +387,9 @@ class TLSerialization {
       const isFlagHandler = type === '#';
       if(isFlagHandler) {
         (flagsHandler ??= {})[param.name] = {flags: 0};
+      } else if(!isOptional && obj[param.name] === undefined) {
+        console.error('Param ' + param.name + ' is undefined', constructorData, obj);
+        // throw new Error('Param ' + param.name + ' is undefined');
       }
 
       const result = this.storeObject(
@@ -417,7 +429,7 @@ class TLDeserialization<FetchLongAs extends Long> {
       this.intView = new Int32Array(buffer);
       this.byteView = new Uint8Array(this.buffer);
     } else {
-      this.buffer = buffer.buffer;
+      this.buffer = buffer.buffer as ArrayBuffer;
       this.intView = new Int32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4);
       this.byteView = buffer;
     }
@@ -466,7 +478,10 @@ class TLDeserialization<FetchLongAs extends Long> {
     return doubleView[0];
   }
 
-  // ! it should've been signed
+  /**
+   * ! it should've been signed
+   * @returns value in big-endian order
+   */
   public fetchLong(field?: string): FetchLongAs {
     const iLow = this.readInt((field || '') + ':long[low]');
     const iHigh = this.readInt((field || '') + ':long[high]');
@@ -499,15 +514,7 @@ class TLDeserialization<FetchLongAs extends Long> {
     return this.fetchObject('Object', field);
   }
 
-  public fetchString(field?: string): string {
-    let len = this.byteView[this.offset++];
-
-    if(len === 254) {
-      len = this.byteView[this.offset++] |
-        (this.byteView[this.offset++] << 8) |
-        (this.byteView[this.offset++] << 16);
-    }
-
+  public fetchStringWithLength(len: number, field?: string) {
     let sUTF8 = '';
     for(let i = 0; i < len; ++i) {
       sUTF8 += String.fromCharCode(this.byteView[this.offset++]);
@@ -528,6 +535,18 @@ class TLDeserialization<FetchLongAs extends Long> {
     this.debug && console.log('<<<', s, (field || '') + ':string');
 
     return s;
+  }
+
+  public fetchString(field?: string): string {
+    let len = this.byteView[this.offset++];
+
+    if(len === 254) {
+      len = this.byteView[this.offset++] |
+        (this.byteView[this.offset++] << 8) |
+        (this.byteView[this.offset++] << 16);
+    }
+
+    return this.fetchStringWithLength(len, field);
   }
 
   public fetchBytes(field?: string) {
@@ -552,6 +571,9 @@ class TLDeserialization<FetchLongAs extends Long> {
     return bytes;
   }
 
+  /**
+   * @returns bytes in little-endian order
+   */
   public fetchIntBytes(bits: number, typed: true, field?: string): Uint8Array;
   public fetchIntBytes(bits: number, typed?: false, field?: string): number[];
   public fetchIntBytes(bits: number, typed: boolean = true, field?: string) {
@@ -578,7 +600,7 @@ class TLDeserialization<FetchLongAs extends Long> {
 
   public fetchRawBytes(len: number | false, typed: true, field: string): Uint8Array;
   public fetchRawBytes(len: number | false, typed: false, field: string): number[];
-  public fetchRawBytes(len: number | false, typed: boolean = true, field: string) {
+  public fetchRawBytes(len: number | false, typed: boolean = true, field: string): Uint8Array | number[] {
     if(len === false) {
       len = this.readInt((field || '') + '_length');
       if(len > this.byteView.byteLength) {
@@ -667,7 +689,7 @@ class TLDeserialization<FetchLongAs extends Long> {
 
       if(constructorCmp === gzipPacked) { // Gzip packed
         const compressed = this.fetchBytes(field + '[packed_string]');
-        const uncompressed = gzipUncompress(compressed) as Uint8Array;
+        const uncompressed = gzipUncompress(compressed as unknown as ArrayBuffer) as Uint8Array;
         const newDeserializer = new TLDeserialization(uncompressed); // rpc_result is packed here
 
         return newDeserializer.fetchObject(type, field);

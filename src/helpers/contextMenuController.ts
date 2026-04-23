@@ -4,11 +4,12 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import IS_TOUCH_SUPPORTED from '../environment/touchSupport';
-import mediaSizes from './mediaSizes';
-import OverlayClickHandler from './overlayClickHandler';
-import overlayCounter from './overlayCounter';
-import pause from './schedulers/pause';
+import IS_TOUCH_SUPPORTED from '@environment/touchSupport';
+import findUpClassName from '@helpers/dom/findUpClassName';
+import mediaSizes from '@helpers/mediaSizes';
+import OverlayClickHandler from '@helpers/overlayClickHandler';
+import overlayCounter from '@helpers/overlayCounter';
+import pause from '@helpers/schedulers/pause';
 
 type AdditionalMenuItem = {
   level: number,
@@ -77,18 +78,27 @@ class ContextMenuController extends OverlayClickHandler {
   protected closeAndRemoveMenu(item: AdditionalMenuItem) {
     item.close();
     const idx = this.additionalMenus.indexOf(item);
-    if(idx > -1) this.additionalMenus.splice(idx, 1);
+    if(idx > -1) {
+      for(let i = idx + 1; i < this.additionalMenus.length; i++) {
+        this.additionalMenus[i].close();
+      }
+      this.additionalMenus.splice(idx);
+    }
   }
 
   public closeMenusByLevel(level: number) {
-    this.additionalMenus.filter((menu) => menu.level === level).forEach((item) => {
+    this.additionalMenus.filter((menu) => menu.level >= level).forEach((item) => {
       item.close();
-      const idx = this.additionalMenus.indexOf(item);
-      if(idx > -1) this.additionalMenus.splice(idx, 1);
     });
+
+    this.additionalMenus = this.additionalMenus.filter((menu) => menu.level < level);
   }
 
-  public close() {
+  public close(e?: MouseEvent | TouchEvent) {
+    if(e && (e.target as HTMLElement).classList.contains('btn-menu')) {
+      return;
+    }
+
     if(this.element) {
       const {parentElement} = this.element;
       this.element.classList.remove('active');
@@ -140,6 +150,8 @@ class ContextMenuController extends OverlayClickHandler {
   }
 
   public addAdditionalMenu(element: HTMLElement, triggerElement: HTMLElement, level: number, onClose?: () => void) {
+    if(!this.element) return;
+
     this.closeMenusByLevel(level);
 
     this.additionalMenus.push({

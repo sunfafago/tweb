@@ -1,46 +1,42 @@
 import {createStore, unwrap} from 'solid-js/store';
-import {StarGiftCollection} from '../../layer';
+import {StarGiftCollection} from '@layer';
 import {batch, onMount} from 'solid-js';
-import {MyStarGift} from '../../lib/appManagers/appGiftsManager';
-import rootScope from '../../lib/rootScope';
-import {createListenerSetter} from '../stories/viewer';
-import {updateStarGift} from '../../lib/appManagers/utils/gifts/updateStarGift';
-import {inputStarGiftEquals} from '../../lib/appManagers/utils/gifts/inputStarGiftEquals';
-import untrackActions from '../../helpers/solid/untrackActions';
-import setBooleanFlag from '../../helpers/object/setBooleanFlag';
+import {MyStarGift} from '@appManagers/appGiftsManager';
+import rootScope from '@lib/rootScope';
+import {createListenerSetter} from '@components/stories/viewer';
+import {updateStarGift} from '@appManagers/utils/gifts/updateStarGift';
+import {inputStarGiftEquals} from '@appManagers/utils/gifts/inputStarGiftEquals';
+import untrackActions from '@helpers/solid/untrackActions';
+import setBooleanFlag from '@helpers/object/setBooleanFlag';
+import {getCanManagePeerGifts} from '@components/stargifts/canManageGifts';
 
 export const ALL_COLLECTIONS_ID = -1
 
-export interface StarGiftsProfileStore {
+interface StarGiftsFilters {
+  sort?: 'date' | 'value'
+  chosenCollection?: number
+  unlimited?: boolean
+  limited?: boolean
+  upgradable?: boolean
+  unique?: boolean
+  displayed?: boolean
+  hidden?: boolean
+}
+
+export interface StarGiftsProfileStore extends Required<StarGiftsFilters> {
   items: MyStarGift[]
   collections: StarGiftCollection[] | undefined
   loading: boolean
   loaded: boolean
-  chosenCollection: number
-  sort: 'date' | 'value'
-  unlimited: boolean
-  limited: boolean
-  upgradable: boolean
-  unique: boolean
-  displayed: boolean
-  hidden: boolean
+  canManageGifts: boolean
   hasCollections: boolean
 }
 
 export interface StarGiftsProfileActions {
   loadNext: (reload?: boolean) => Promise<void>
-  setFilters: (filters: {
-    sort?: 'date' | 'value'
-    chosenCollection?: number
-    unlimited?: boolean
-    limited?: boolean
-    upgradable?: boolean
-    unique?: boolean
-    displayed?: boolean
-    hidden?: boolean
-  }) => void
+  setFilters: (filters: StarGiftsFilters) => void
   deleteCollection: (collectionId: number) => void
-  handleSwipe: (xDiff: number) => boolean
+  handleSwipe: (xDiff: number, setCollectionOverride?: (collectionId: number) => void) => boolean
   updateCollection: (collection: StarGiftCollection, options?: {
     switch: boolean
     reload: boolean
@@ -50,6 +46,7 @@ export interface StarGiftsProfileActions {
 
 export function createProfileGiftsStore(props: {
   peerId: PeerId
+  initialFilters?: StarGiftsFilters
   onCountChange?: (count: number) => void
 }): [StarGiftsProfileStore, StarGiftsProfileActions] {
   const initialState: StarGiftsProfileStore = {
@@ -57,6 +54,7 @@ export function createProfileGiftsStore(props: {
     items: [],
     loading: false,
     loaded: false,
+    canManageGifts: props.peerId === rootScope.myId,
 
     chosenCollection: ALL_COLLECTIONS_ID,
     sort: 'date',
@@ -66,6 +64,7 @@ export function createProfileGiftsStore(props: {
     unique: true,
     displayed: true,
     hidden: true,
+    ...props.initialFilters,
     get hasCollections() {
       return store.collections !== undefined && store.collections.length > 0;
     }
@@ -74,6 +73,11 @@ export function createProfileGiftsStore(props: {
 
   let currentOffset = '';
   let nextReqId = 0
+  let fetchedCanManageGifts = false;
+
+  const fetchCanManageGifts = () => getCanManagePeerGifts(props.peerId);
+
+  const collectionCache = new Map<number, {items: MyStarGift[], offset: string, loaded: boolean}>();
 
   async function loadNext(reload = false) {
     if(!reload && (store.loading || store.loaded)) return
@@ -81,23 +85,32 @@ export function createProfileGiftsStore(props: {
 
     const id = ++nextReqId
     const collectionId = store.chosenCollection === ALL_COLLECTIONS_ID ? undefined : store.chosenCollection
-    const res = await rootScope.managers.appGiftsManager.getProfileGifts({
-      peerId: props.peerId,
-      offset: currentOffset,
-      sort: store.sort,
-      unlimited: store.unlimited,
-      limited: store.limited,
-      upgradable: store.upgradable,
-      unique: store.unique,
-      displayed: store.displayed,
-      hidden: store.hidden,
-      withCollections: store.collections === undefined,
-      collectionId,
-      limit: 99 // divisible by 3 to avoid grid jumping
-    });
+    const [res, canManageGifts] = await Promise.all([
+      rootScope.managers.appGiftsManager.getProfileGifts({
+        peerId: props.peerId,
+        offset: currentOffset,
+        sort: store.sort,
+        unlimited: store.unlimited,
+        limited: store.limited,
+        upgradable: store.upgradable,
+        unique: store.unique,
+        displayed: store.displayed,
+        hidden: store.hidden,
+        withCollections: store.collections === undefined,
+        collectionId,
+        limit: 99 // divisible by 3 to avoid grid jumping
+      }),
+      fetchedCanManageGifts ? Promise.resolve(store.canManageGifts) : fetchCanManageGifts()
+    ]);
+
     if(id !== nextReqId) return;
     currentOffset = res.next;
     batch(() => {
+      if(!fetchedCanManageGifts) {
+        fetchedCanManageGifts = true;
+        setStore('canManageGifts', canManageGifts);
+      }
+
       setStore('items', reload ? res.gifts : store.items.concat(res.gifts))
       setStore('loaded', !res.next)
       setStore('loading', false)
@@ -105,11 +118,22 @@ export function createProfileGiftsStore(props: {
         setStore('collections', res.collections)
       }
     })
-    props.onCountChange?.(res.count);
+    if(
+      collectionId === undefined &&
+      store.unlimited &&
+      store.limited &&
+      store.upgradable &&
+      store.unique &&
+      store.displayed &&
+      store.hidden
+    ) {
+      props.onCountChange?.(res.count);
+    }
   }
 
   function reload(background = false) {
     currentOffset = ''
+    fetchedCanManageGifts = false
     batch(() => {
       setStore('loading', true)
       setStore('loaded', false)
@@ -123,10 +147,41 @@ export function createProfileGiftsStore(props: {
   const actions: StarGiftsProfileActions = {
     loadNext,
     setFilters: (filters) => {
+      const onlyCollectionChange = Object.keys(filters).length === 1 && filters.chosenCollection !== undefined
+      const switchingCollection = onlyCollectionChange && filters.chosenCollection !== store.chosenCollection
+
+      if(!onlyCollectionChange) {
+        collectionCache.clear()
+      }
+
+      if(switchingCollection) {
+        // save current collection state
+        collectionCache.set(store.chosenCollection, {
+          items: unwrap(store.items),
+          offset: currentOffset,
+          loaded: store.loaded
+        })
+      }
+
       setStore(filters)
+
+      if(switchingCollection) {
+        const cached = collectionCache.get(store.chosenCollection)
+        if(cached) {
+          currentOffset = cached.offset
+          batch(() => {
+            setStore('items', cached.items)
+            setStore('loaded', cached.loaded)
+            setStore('loading', false)
+          })
+          return
+        }
+      }
+
       reload()
     },
     deleteCollection: (collectionId) => {
+      collectionCache.delete(collectionId)
       const deletingChosenCollection = store.chosenCollection === collectionId
 
       batch(() => {
@@ -141,6 +196,7 @@ export function createProfileGiftsStore(props: {
       }
     },
     updateCollection: (collection, options) => {
+      collectionCache.delete(collection.collection_id)
       const needSwitch= options?.switch ?? true
       let needReload = options?.reload ?? needSwitch
 
@@ -162,7 +218,7 @@ export function createProfileGiftsStore(props: {
         reload()
       }
     },
-    handleSwipe: (xDiff: number) => {
+    handleSwipe: (xDiff: number, setCollectionOverride?: (collectionId: number) => void) => {
       if(!store.hasCollections) return false
       const direction = xDiff > 0 ? 1 : -1
 
@@ -174,8 +230,12 @@ export function createProfileGiftsStore(props: {
       const newIndex = currentIndex + direction;
       if(newIndex < -1 || newIndex >= collections$.length) return false
 
-      setStore('chosenCollection', newIndex === -1 ? ALL_COLLECTIONS_ID : collections$[newIndex].collection_id)
-      reload()
+      const newCollectionId = newIndex === -1 ? ALL_COLLECTIONS_ID : collections$[newIndex].collection_id
+      if(setCollectionOverride) {
+        setCollectionOverride(newCollectionId)
+      } else {
+        actions.setFilters({chosenCollection: newCollectionId})
+      }
 
       return true
     }
@@ -185,6 +245,7 @@ export function createProfileGiftsStore(props: {
   const listenerSetter = createListenerSetter()
   onMount(() => {
     listenerSetter.add(rootScope)('star_gift_update', (event) => {
+      collectionCache.clear()
       const items = unwrap(store.items);
       const idx = items.findIndex((it) => inputStarGiftEquals(it, event.input));
       if(idx !== -1) {
@@ -199,7 +260,10 @@ export function createProfileGiftsStore(props: {
       }
     });
 
-    listenerSetter.add(rootScope)('my_pinned_stargifts', (event) => {
+    listenerSetter.add(rootScope)('pinned_stargifts', (event) => {
+      if(event.peerId !== props.peerId) return;
+      collectionCache.clear()
+
       const items = unwrap(store.items).slice();
       for(let i = 0; i < items.length; i++) {
         const item = items[i];
@@ -225,10 +289,15 @@ export function createProfileGiftsStore(props: {
       setStore('items', items);
     })
 
-    listenerSetter.add(rootScope)('star_gift_list_update', () => {
-      // refetch list
-      currentOffset = ''
-      loadNext(true)
+    listenerSetter.add(rootScope)('star_gift_list_update', ({peerId}) => {
+      if(peerId !== props.peerId) return
+      collectionCache.clear()
+
+      // refetch list. wait a bit so that the server can process it.
+      setTimeout(() => {
+        currentOffset = ''
+        loadNext(true)
+      }, 500)
     })
   })
 

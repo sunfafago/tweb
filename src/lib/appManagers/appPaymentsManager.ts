@@ -16,10 +16,10 @@ import {
   StarsAmount,
   StarsTransactionPeer,
   Update
-} from '../../layer';
-import {AppManager} from './manager';
-import getServerMessageId from './utils/messageId/getServerMessageId';
-import formatStarsAmount from './utils/payments/formatStarsAmount';
+} from '@layer';
+import {AppManager} from '@appManagers/manager';
+import getServerMessageId from '@appManagers/utils/messageId/getServerMessageId';
+import formatStarsAmount from '@appManagers/utils/payments/formatStarsAmount';
 
 export default class AppPaymentsManager extends AppManager {
   private premiumPromo: MaybePromise<HelpPremiumPromo>;
@@ -261,7 +261,7 @@ export default class AppPaymentsManager extends AppManager {
     });
   }
 
-  public getStarsTransactions(offset: string = '', inbound?: boolean) {
+  public getStarsTransactions(offset: string = '', inbound?: boolean, ton?: boolean) {
     return this.apiManager.invokeApiSingleProcess({
       method: 'payments.getStarsTransactions',
       params: {
@@ -269,7 +269,8 @@ export default class AppPaymentsManager extends AppManager {
         offset,
         inbound,
         outbound: inbound === false,
-        limit: 30
+        limit: 30,
+        ton
       },
       processResult: this.saveStarsStatus
     });

@@ -7,25 +7,26 @@
 import {createContext, useContext, createSignal, onCleanup, JSX, Show, children, createRoot, Accessor, createEffect, untrack, on} from 'solid-js';
 import {createStore} from 'solid-js/store';
 import {Portal} from 'solid-js/web';
-import classNames from '../../helpers/string/classNames';
-import {IconTsx} from '../iconTsx';
-import RippleElement from '../rippleElement';
-import {FormatterArguments, i18n, LangPackKey} from '../../lib/langPack';
-import {AppManagers} from '../../lib/appManagers/managers';
-import overlayCounter from '../../helpers/overlayCounter';
-import {getMiddleware, MiddlewareHelper} from '../../helpers/middleware';
-import findUpClassName from '../../helpers/dom/findUpClassName';
-import blurActiveElement from '../../helpers/dom/blurActiveElement';
-import animationIntersector from '../animationIntersector';
-import appNavigationController, {NavigationItem} from '../appNavigationController';
-import {addFullScreenListener, getFullScreenElement} from '../../helpers/dom/fullScreen';
-import indexOfAndSplice from '../../helpers/array/indexOfAndSplice';
-import MarkupTooltip from '../chat/markupTooltip';
-import Button from '../buttonTsx';
+import classNames from '@helpers/string/classNames';
+import {IconTsx} from '@components/iconTsx';
+import RippleElement from '@components/rippleElement';
+import {FormatterArguments, i18n, LangPackKey} from '@lib/langPack';
+import {AppManagers} from '@lib/managers';
+import overlayCounter from '@helpers/overlayCounter';
+import {getMiddleware, MiddlewareHelper} from '@helpers/middleware';
+import findUpClassName from '@helpers/dom/findUpClassName';
+import blurActiveElement from '@helpers/dom/blurActiveElement';
+import animationIntersector from '@components/animationIntersector';
+import appNavigationController, {NavigationItem} from '@components/appNavigationController';
+import {addFullScreenListener, getFullScreenElement} from '@helpers/dom/fullScreen';
+import indexOfAndSplice from '@helpers/array/indexOfAndSplice';
+import MarkupTooltip from '@components/chat/markupTooltip';
+import Button from '@components/buttonTsx';
+import {doubleRaf} from '@helpers/schedulers';
 
 export type PopupButton = {
   text?: HTMLElement | DocumentFragment | Text,
-  callback?: (e: MouseEvent) => void | MaybePromise<boolean>,
+  callback?: (e: MouseEvent) => MaybePromise<boolean | void>,
   langKey?: LangPackKey,
   langArgs?: any[],
   isDanger?: boolean,
@@ -39,6 +40,8 @@ export type PopupButton = {
 export type PopupOptions = Partial<{
   closable: boolean,
   onBackClick: () => void | false,
+  onClose: () => void,
+  onCloseAfterTimeout: () => void,
   isConfirmationNeededOnClose: () => void | boolean | Promise<any>,
   // overlayClosable: boolean,
   withConfirm: LangPackKey | boolean,
@@ -200,6 +203,8 @@ const PopupElement = (props: {
   const destroy = () => {
     if(destroyed()) return;
 
+    props.onClose?.()
+
     setHiding(true);
     setDestroyed(true);
     setShown(false);
@@ -230,6 +235,7 @@ const PopupElement = (props: {
       }
 
       controllerContext.dispose();
+      props.onCloseAfterTimeout?.();
     }, 250);
   };
 
@@ -273,10 +279,15 @@ const PopupElement = (props: {
 
   if(props.show !== undefined) {
     createEffect(on(() => props.show, (_show) => {
+      let callback: () => void;
       if(_show) {
-        show();
+        callback = show;
       } else if(shown()) {
-        hide();
+        callback = hide;
+      }
+
+      if(callback) {
+        doubleRaf().then(callback);
       }
     }));
   } else {
@@ -302,6 +313,8 @@ const PopupElement = (props: {
             if(findUpClassName(e.target, 'popup-container') || !(e.target as HTMLElement).isConnected) {
               return;
             }
+
+            if(props.closable === false) return;
 
             hide();
           })}
@@ -356,17 +369,15 @@ PopupElement.Title = (props: {
 };
 
 PopupElement.CloseButton = (props: {
+  canGoBack?: boolean,
   onBackClick?: () => void | false
   class?: string
 }) => {
   const context = useContext(PopupContext);
-  const [backState, setBackState] = createSignal(false);
 
   const handleClick = () => {
-    if(props.onBackClick && backState()) {
-      if(props.onBackClick() !== false) {
-        setBackState(false);
-      }
+    if(props.canGoBack && props.onBackClick) {
+      props.onBackClick()
     } else {
       context.hide();
     }
@@ -378,7 +389,7 @@ PopupElement.CloseButton = (props: {
       onClick={handleClick}
     >
       <Show when={props.onBackClick} fallback={<IconTsx icon="close" />}>
-        <div class={classNames('animated-close-icon', backState() && 'state-back')} />
+        <div class={classNames('animated-close-icon', props.canGoBack && 'state-back')} />
       </Show>
     </button>
   ));
@@ -402,11 +413,12 @@ PopupElement.ConfirmButton = (props: {
 
 PopupElement.Body = (props: {
   children: JSX.Element,
+  class?: string,
   scrollable?: boolean,
   floatingHeader?: boolean
 }) => {
   return useContext(PopupContext).register('body', (
-    <div class="popup-body">
+    <div class={classNames('popup-body', props.class)}>
       {props.children}
     </div>
   ));
@@ -440,7 +452,7 @@ PopupElement.FooterButton = (props: Parameters<typeof PopupElement.Button>[0] & 
 
 PopupElement.Button = (props: {
   children?: JSX.Element,
-  callback?: (e: MouseEvent) => void | MaybePromise<boolean>,
+  callback?: (e: MouseEvent) => MaybePromise<boolean | void>,
   langKey?: LangPackKey,
   langArgs?: FormatterArguments,
   danger?: boolean,
@@ -449,7 +461,8 @@ PopupElement.Button = (props: {
   iconLeft?: Icon,
   iconRight?: Icon,
   class?: string,
-  noDefaultClass?: boolean
+  noDefaultClass?: boolean,
+  disabled?: boolean
 }) => {
   const context = useContext(PopupContext);
 
@@ -463,6 +476,7 @@ PopupElement.Button = (props: {
       try {
         result = await result;
       } catch(err) {
+        console.log('popup button error', err);
         result = false;
       }
 
@@ -487,7 +501,7 @@ PopupElement.Button = (props: {
       )}
       noRipple={props.noRipple}
       onClick={handleClick}
-      disabled={disabled()}
+      disabled={props.disabled || disabled()}
       icon={props.iconLeft}
       iconAfter={props.iconRight}
       iconClass={classNames('popup-button-icon', props.iconLeft ? 'left' : 'right')}
@@ -498,11 +512,12 @@ PopupElement.Button = (props: {
 };
 
 PopupElement.Buttons = (props: {
+  class?: string
   children?: JSX.Element
 }) => {
   const context = useContext(PopupContext);
   return context.register('buttons', (
-    <div class="popup-buttons">
+    <div class={classNames('popup-buttons', props.class)}>
       {props.children}
     </div>
   ));
@@ -527,7 +542,7 @@ export const addCancelButton = (buttons: PopupButton[]) => {
 export function createPopup(callback: () => JSX.Element) {
   createRoot((dispose) => {
     <PopupControllerContext.Provider value={{dispose}}>
-      {callback()}
+      {untrack(callback)}
     </PopupControllerContext.Provider>
   });
 }
@@ -537,7 +552,7 @@ export default PopupElement;
 /*
 Пример использования PopupElementTsx:
 
-import PopupElementTsx from './indexTsx';
+import PopupElementTsx from '@components/popups/indexTsx';
 
 // Простой попап с заголовком и кнопками (чистый JSX)
 <PopupElementTsx

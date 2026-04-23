@@ -1,15 +1,15 @@
 import {batch, onCleanup, onMount} from 'solid-js';
 
-import {addShortcutListener} from '../../helpers/shortcutListener';
-import {i18n} from '../../lib/langPack';
-import {ButtonIconTsx} from '../buttonIconTsx';
-import ripple from '../ripple';
+import {addShortcutListener} from '@helpers/shortcutListener';
+import {i18n} from '@lib/langPack';
+import {ButtonIconTsx} from '@components/buttonIconTsx';
+import ripple from '@components/ripple';
 
-import {HistoryItem, useMediaEditorContext} from './context';
-import {processHistoryItem} from './utils';
+import {HistoryItem, useMediaEditorContext} from '@components/mediaEditor/context';
+import {processHistoryItem} from '@components/mediaEditor/utils';
 
 export default function Topbar(props: {onClose: () => void; onFinish: () => void}) {
-  const {hasModifications, mediaState, editorState} = useMediaEditorContext();
+  const {canFinish, mediaState, editorState} = useMediaEditorContext();
 
   let doneButton: HTMLDivElement;
 
@@ -66,10 +66,10 @@ export default function Topbar(props: {onClose: () => void; onFinish: () => void
         ref={doneButton}
         class="media-editor__topbar-done"
         classList={{
-          'media-editor__topbar-done--disabled': !hasModifications()
+          'media-editor__topbar-done--disabled': !canFinish()
         }}
         onClick={() => {
-          if(hasModifications()) props.onFinish();
+          if(canFinish()) props.onFinish();
         }}
       >
         {i18n('Done')}

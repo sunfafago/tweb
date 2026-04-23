@@ -4,19 +4,19 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import type {LiteModeKey} from '../helpers/liteMode';
-import type {AppMediaPlaybackController} from '../components/appMediaPlaybackController';
-import type {TopPeerType, MyTopPeer} from '../lib/appManagers/appUsersManager';
-import type {AccountThemes, AutoDownloadSettings, BaseTheme, NotifyPeer, PeerNotifySettings, Theme, ThemeSettings, WallPaper} from '../layer';
-import type DialogsStorage from '../lib/storages/dialogs';
-import type FiltersStorage from '../lib/storages/filters';
-import type {AuthState, Modify} from '../types';
-import {IS_MOBILE} from '../environment/userAgent';
-import getTimeFormat from '../helpers/getTimeFormat';
-import {nextRandomUint} from '../helpers/random';
-import App from './app';
-import {MTAppConfig} from '../lib/mtproto/appConfig';
-import {ShortcutKey as PasscodeLockShortcutKey} from '../components/sidebarLeft/tabs/passcodeLock/shortcutBuilder';
+import type {LiteModeKey} from '@helpers/liteMode';
+import type {AppMediaPlaybackController} from '@components/appMediaPlaybackController';
+import type {TopPeerType, MyTopPeer} from '@appManagers/appUsersManager';
+import type {AccountContentSettings, AccountThemes, AutoDownloadSettings, BaseTheme, NotifyPeer, PeerNotifySettings, Theme, ThemeSettings, WallPaper} from '@layer';
+import type DialogsStorage from '@lib/storages/dialogs';
+import type FiltersStorage from '@lib/storages/filters';
+import type {AuthState, Modify} from '@types';
+import type {ShortcutKey as PasscodeLockShortcutKey} from '@components/sidebarLeft/tabs/passcodeLock/shortcutBuilder';
+import {IS_MOBILE} from '@environment/userAgent';
+import getTimeFormat from '@helpers/getTimeFormat';
+import App from '@config/app';
+import {ColoredBrushType} from '@components/mediaEditor/context';
+import {FontKey} from '@components/mediaEditor/types';
 
 const STATE_VERSION = App.version;
 const BUILD = App.build;
@@ -78,7 +78,14 @@ export type StateSettings = {
   themes: AppTheme[],
   theme: AppTheme['name'],
   notifications: {
-    sound: boolean
+    sound: boolean,
+    push: boolean,
+    desktop: boolean,
+    sentMessageSound: boolean,
+    suggested: boolean,
+    volume: number, // [0..1]
+    novibrate?: boolean,
+    nopreview?: boolean
   },
   nightTheme?: boolean, // ! DEPRECATED
   timeFormat: 'h12' | 'h23',
@@ -87,7 +94,8 @@ export type StateSettings = {
   notifyAllAccounts: boolean,
   tabsInSidebar: boolean,
   seenTooltips: {
-    storySound: boolean
+    storySound: boolean,
+    noForwards: boolean
   },
   playbackParams: ReturnType<AppMediaPlaybackController['getPlaybackParams']>,
   translations: {
@@ -104,7 +112,32 @@ export type StateSettings = {
     lockShortcutEnabled: boolean,
     lockShortcut: PasscodeLockShortcutKey[],
     canAttemptAgainOn: number | null
-  }
+  },
+  logsDiffView?: boolean,
+  instantView: {
+    scale: number
+  },
+  cacheTTL: number,
+  cacheSize: number,
+  showArchiveInChatList: boolean,
+  mediaEditor: {
+    colorByBrush?: Partial<Record<ColoredBrushType, SavedBrushColor>>;
+    brushSize?: number;
+    brushType?: string;
+    textColor?: SavedBrushColor;
+    textSize?: number;
+    textAlignment?: string;
+    textStyle?: string;
+    textFont?: FontKey;
+  },
+};
+
+// (1 - use swatch, 2 - use picker color), (color from swatch), (color from picker)
+export type SavedBrushColor = [1 | 2, string, string];
+
+type CacheSomething<T> = {
+  value: T,
+  timestamp: number
 };
 
 export type State = {
@@ -142,12 +175,14 @@ export type State = {
   appConfig: MTAppConfig,
   accountThemes: AccountThemes.accountThemes,
   shownUploadSpeedTimestamp?: number,
-  dontShowPaidMessageWarningFor: PeerId[]
+  dontShowPaidMessageWarningFor: PeerId[],
   ageVerification?: {
     date: string,
     layer: number,
     clientVersion: string,
-  }
+  },
+  accountContentSettings: CacheSomething<AccountContentSettings>,
+
 
   // playbackParams?: StateSettings['playbackParams'], // ! MIGRATED TO SETTINGS
   // chatContextMenuHintWasShown?: StateSettings['chatContextMenuHintWasShown'], // ! MIGRATED TO SETTINGS
@@ -309,7 +344,12 @@ export const SETTINGS_INIT: StateSettings = {
   ],
   theme: 'system',
   notifications: {
-    sound: false
+    sound: false,
+    push: true,
+    desktop: true,
+    sentMessageSound: true,
+    suggested: false,
+    volume: 0.5
   },
   timeFormat: getTimeFormat(),
   liteMode: {
@@ -348,7 +388,8 @@ export const SETTINGS_INIT: StateSettings = {
   },
   chatContextMenuHintWasShown: false,
   seenTooltips: {
-    storySound: false
+    storySound: false,
+    noForwards: false
   },
   translations: {
     peers: {},
@@ -363,6 +404,15 @@ export const SETTINGS_INIT: StateSettings = {
     lockShortcutEnabled: false,
     lockShortcut: ['Alt'],
     canAttemptAgainOn: null
+  },
+  instantView: {
+    scale: 1
+  },
+  cacheTTL: 86400 * 7, // 1 week
+  cacheSize: 0, // Auto
+  showArchiveInChatList: true,
+  mediaEditor: {
+    colorByBrush: {}
   }
 };
 
@@ -392,7 +442,8 @@ export const STATE_INIT: State = {
   hiddenSimilarChannels: [],
   appConfig: {} as any,
   accountThemes: {} as any,
-  dontShowPaidMessageWarningFor: []
+  dontShowPaidMessageWarningFor: [],
+  accountContentSettings: {} as any
 };
 
 export const COMMON_STATE_INIT: CommonState = {

@@ -4,11 +4,13 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import {markdownTags, MarkdownType} from './getRichElementValue';
+import filterUnique from '@helpers/array/filterUnique';
+import {markdownTags, MarkdownType} from '@helpers/dom/getRichElementValue';
 
-export default function getMarkupInSelection<T extends MarkdownType>(types: T[], onlyFull?: boolean) {
-  const result: Record<T, {elements: HTMLElement[], active: boolean}> = {} as any;
-  types.forEach((tag) => result[tag] = {elements: [], active: false});
+export default function getMarkupInSelection<T extends MarkdownType>(types: T[], ignoreNoContentEditable?: boolean) {
+  type ResultByType = {elements: HTMLElement[], fully: boolean, partly: boolean, textLength: number};
+  const result: Record<T, ResultByType> = {} as Record<T, ResultByType>;
+  types.forEach((tag) => result[tag] = {elements: [], fully: false, partly: false, textLength: 0});
   const selection = window.getSelection();
   if(selection.isCollapsed) {
     return result;
@@ -19,9 +21,13 @@ export default function getMarkupInSelection<T extends MarkdownType>(types: T[],
   const root = commonAncestor.nodeType === commonAncestor.ELEMENT_NODE ?
     commonAncestor as HTMLElement :
     (commonAncestor as ChildNode).parentElement;
-  const contentEditable = root.closest('[contenteditable="true"]');
+  let contentEditable = root.closest('[contenteditable="true"]');
   if(!contentEditable) {
-    return result;
+    if(ignoreNoContentEditable) {
+      contentEditable = root;
+    } else {
+      return result;
+    }
   }
 
   const treeWalker = document.createTreeWalker(
@@ -30,21 +36,27 @@ export default function getMarkupInSelection<T extends MarkdownType>(types: T[],
     {acceptNode: (node) => range.intersectsNode(node) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT}
   );
 
-  let nodes = 0, node: Node;
+  let nodes = 0, node: Node, textLength = 0;
   while(node = treeWalker.nextNode()) {
     ++nodes;
+    const nodeValueLength = node.nodeValue?.length || 0;
+    textLength += nodeValueLength;
     for(const type of types) {
       const tag = markdownTags[type];
       const _node = node.nodeType === node.ELEMENT_NODE ? node as HTMLElement : node.parentElement;
       const matches = _node.closest(tag.match);
       if(matches) {
         result[type].elements.push(_node);
+        result[type].textLength += nodeValueLength;
       }
     }
   }
 
   for(const type of types) {
-    result[type].active = result[type].elements.length >= (onlyFull ? nodes : 1);
+    const item = result[type];
+    item.elements = filterUnique(item.elements);
+    item.fully = item.textLength >= textLength;
+    item.partly = !!item.elements.length;
   }
 
   return result;

@@ -4,37 +4,43 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import {SliderSuperTab} from '../../slider';
-import ButtonMenuToggle from '../../buttonMenuToggle';
-import AppPrivacyAndSecurityTab from './privacyAndSecurity';
-import AppGeneralSettingsTab from './generalSettings';
-import AppEditProfileTab from './editProfile';
-import AppChatFoldersTab from './chatFolders';
-import AppNotificationsTab from './notifications';
-import AppLanguageTab from './language';
-import lottieLoader from '../../../lib/rlottie/lottieLoader';
-import PopupPeer from '../../popups/peer';
-import AppDataAndStorageTab from './dataAndStorage';
-import ButtonIcon from '../../buttonIcon';
-import PeerProfile from '../../peerProfile';
-import rootScope from '../../../lib/rootScope';
-import Row from '../../row';
-import AppActiveSessionsTab from './activeSessions';
-import {i18n, LangPackKey} from '../../../lib/langPack';
-import {SliderSuperTabConstructable, SliderSuperTabEventable} from '../../sliderTab';
-import PopupAvatar from '../../popups/avatar';
-import {AccountAuthorizations, Authorization} from '../../../layer';
-import PopupElement from '../../popups';
-import {attachClickEvent} from '../../../helpers/dom/clickEvent';
-import SettingSection from '../../settingSection';
-import AppStickersAndEmojiTab from './stickersAndEmoji';
-import ButtonCorner from '../../buttonCorner';
-import PopupPremium from '../../popups/premium';
-import appImManager from '../../../lib/appManagers/appImManager';
-import apiManagerProxy from '../../../lib/mtproto/mtprotoworker';
+import {SliderSuperTab} from '@components/slider';
+import ButtonMenuToggle from '@components/buttonMenuToggle';
+import AppPrivacyAndSecurityTab from '@components/sidebarLeft/tabs/privacyAndSecurity';
+import AppGeneralSettingsTab from '@components/sidebarLeft/tabs/generalSettings';
+import AppEditProfileTab from '@components/sidebarLeft/tabs/editProfile';
+import AppChatFoldersTab from '@components/sidebarLeft/tabs/chatFolders';
+import {AppNotificationsTab} from '@components/solidJsTabs';
+import AppLanguageTab from '@components/sidebarLeft/tabs/language';
+import lottieLoader from '@lib/rlottie/lottieLoader';
+import PopupPeer from '@components/popups/peer';
+import AppDataAndStorageTab from '@components/sidebarLeft/tabs/dataAndStorage';
+import ButtonIcon from '@components/buttonIcon';
+import rootScope from '@lib/rootScope';
+import Row from '@components/row';
+import AppActiveSessionsTab from '@components/sidebarLeft/tabs/activeSessions';
+import {i18n, LangPackKey} from '@lib/langPack';
+import {SliderSuperTabConstructable, SliderSuperTabEventable} from '@components/sliderTab';
+import {AccountAuthorizations, Authorization} from '@layer';
+import PopupElement from '@components/popups';
+import {attachClickEvent} from '@helpers/dom/clickEvent';
+import SettingSection from '@components/settingSection';
+import AppStickersAndEmojiTab from '@components/sidebarLeft/tabs/stickersAndEmoji';
+import ButtonCorner from '@components/buttonCorner';
+import PopupPremium from '@components/popups/premium';
+import appImManager from '@lib/appImManager';
+import apiManagerProxy from '@lib/apiManagerProxy';
 import {createEffect, createRoot} from 'solid-js';
-import useStars from '../../../stores/stars';
-import PopupStars from '../../popups/stars';
+import useStars from '@stores/stars';
+import PopupStars from '@components/popups/stars';
+import {renderPeerProfile} from '@components/peerProfile';
+import SolidJSHotReloadGuardProvider from '@lib/solidjs/hotReloadGuardProvider';
+import PopupPickUser from '@components/popups/pickUser';
+import PopupSendGift from '@components/popups/sendGift';
+import {formatNanoton} from '@helpers/paymentsWrapCurrencyAmount';
+import showLogOutPopup from '@components/popups/logOut';
+import {getFileAndOpenEditor} from '@components/avatarEdit';
+import appDownloadManager from '@lib/appDownloadManager';
 
 export default class AppSettingsTab extends SliderSuperTab {
   private buttons: {
@@ -45,7 +51,6 @@ export default class AppSettingsTab extends SliderSuperTab {
     storage: HTMLButtonElement,
     privacy: HTMLButtonElement,
   } = {} as any;
-  private profile: PeerProfile;
 
   private languageRow: Row;
   private devicesRow: Row;
@@ -64,19 +69,7 @@ export default class AppSettingsTab extends SliderSuperTab {
       buttons: [{
         icon: 'logout',
         text: 'EditAccount.Logout',
-        onClick: () => {
-          PopupElement.createPopup(PopupPeer, 'logout', {
-            titleLangKey: 'LogOut',
-            descriptionLangKey: 'LogOut.Description',
-            buttons: [{
-              langKey: 'LogOut',
-              callback: () => {
-                this.managers.apiManager.logOut();
-              },
-              isDanger: true
-            }]
-          }).show();
-        }
+        onClick: () => showLogOutPopup()
       }]
     });
 
@@ -84,35 +77,29 @@ export default class AppSettingsTab extends SliderSuperTab {
 
     this.header.append(this.buttons.edit, btnMenu);
 
-    this.profile = new PeerProfile(
-      this.managers,
-      this.scrollable,
-      this.listenerSetter,
-      false,
-      this.container,
-      (has) => {
-        let last = this.profile.element.lastElementChild;
-        if(has) {
-          last = last.previousElementSibling;
-        }
-
-        last.firstElementChild.append(changeAvatarBtn);
-      }
-    );
-    this.profile.init();
-    this.profile.setPeer(rootScope.myId);
-    const fillPromise = this.profile.fillProfileElements();
-
     const changeAvatarBtn = ButtonCorner({icon: 'cameraadd', className: 'profile-change-avatar'});
     attachClickEvent(changeAvatarBtn, () => {
-      const canvas = document.createElement('canvas');
-      PopupElement.createPopup(PopupAvatar).open(canvas, (upload) => {
-        upload().then((inputFile) => {
-          return this.managers.appProfileManager.uploadProfilePhoto(inputFile);
-        });
+      getFileAndOpenEditor({
+        dontCreatePreview: true,
+        onFinish: async(editorResult) => {
+          if(editorResult.isVideo) return;
+          const resultPayload = await editorResult.getResult();
+          const inputFile = await appDownloadManager.upload(resultPayload.blob)
+          this.managers.appProfileManager.uploadProfilePhoto(inputFile);
+        }
       });
     }, {listenerSetter: this.listenerSetter});
-    this.profile.element.lastElementChild.firstElementChild.append(changeAvatarBtn);
+
+    const peerProfileElement = createRoot((dispose) => {
+      this.middlewareHelper.onDestroy(dispose);
+      return renderPeerProfile({
+        peerId: rootScope.myId,
+        isDialog: false,
+        scrollable: this.scrollable,
+        setCollapsedOn: this.container,
+        changeAvatarBtn
+      }, SolidJSHotReloadGuardProvider);
+    });
 
     const updateChangeAvatarBtn = async() => {
       const user = await this.managers.appUsersManager.getSelf();
@@ -254,27 +241,46 @@ export default class AppSettingsTab extends SliderSuperTab {
       listenerSetter: this.listenerSetter
     });
 
-    createRoot((dispose) => {
-      this.middlewareHelper.onDestroy(dispose);
-      const stars = useStars();
-      createEffect(() => {
-        starsRow.titleRight.textContent = '' + stars();
-        starsRow.container.classList.toggle('hide', !stars());
-      });
-    });
-
-    const giftPremium = new Row({
-      titleLangKey: 'GiftPremiumGifting',
-      icon: 'gift',
+    const starsTonRow = new Row({
+      titleLangKey: 'MenuTelegramStarsTon',
+      titleRightSecondary: true,
+      icon: 'ton',
       clickable: () => {
-        appImManager.initGifting();
+        PopupElement.createPopup(PopupStars, {ton: true});
       },
       listenerSetter: this.listenerSetter
     });
 
-    const badge = i18n('New');
-    badge.classList.add('row-title-badge');
-    giftPremium.title.append(badge);
+    createRoot((dispose) => {
+      this.middlewareHelper.onDestroy(dispose);
+      const stars = useStars();
+      const starsTon = useStars(true);
+      createEffect(() => {
+        starsRow.titleRight.textContent = '' + stars();
+        starsRow.container.classList.toggle('hide', !stars());
+      });
+      createEffect(() => {
+        starsTonRow.titleRight.textContent = formatNanoton(starsTon());
+        starsTonRow.container.classList.toggle('hide', String(starsTon()) === '0');
+      });
+    });
+
+    const giftPremium = new Row({
+      titleLangKey: 'Chat.Menu.SendGift',
+      icon: 'gift',
+      clickable: () => {
+        PopupElement.createPopup(PopupPickUser, {
+          placeholder: 'Chat.Menu.SendGift',
+          selfPresence: 'SendGiftSelfCaption',
+          meAsSaved: false,
+          onSelect: (peerId) => {
+            PopupElement.createPopup(PopupSendGift, {peerId});
+          },
+          filterPeerTypeBy: ['isRegularUser', 'isBroadcast']
+        });
+      },
+      listenerSetter: this.listenerSetter
+    });
 
     const buttonsSection = new SettingSection();
     buttonsSection.content.append(buttonsDiv);
@@ -282,11 +288,16 @@ export default class AppSettingsTab extends SliderSuperTab {
     let premiumSection: SettingSection;
     if(!await apiManagerProxy.isPremiumPurchaseBlocked()) {
       premiumSection = new SettingSection();
-      premiumSection.content.append(this.premiumRow.container, starsRow.container, giftPremium.container);
+      premiumSection.content.append(
+        this.premiumRow.container,
+        starsRow.container,
+        starsTonRow.container,
+        giftPremium.container
+      );
     }
 
     this.scrollable.append(...[
-      this.profile.element,
+      peerProfileElement,
       /* profileSection.container, */
       buttonsSection.container,
       premiumSection?.container
@@ -315,14 +326,12 @@ export default class AppSettingsTab extends SliderSuperTab {
     lottieLoader.loadLottieWorkers();
 
     this.updateActiveSessions();
-
-    (await fillPromise)();
   }
 
   private getAuthorizations(overwrite?: boolean) {
     if(this.getAuthorizationsPromise && !overwrite) return this.getAuthorizationsPromise;
 
-    const promise = this.getAuthorizationsPromise = this.managers.apiManager.invokeApi('account.getAuthorizations')
+    const promise = this.getAuthorizationsPromise = this.managers.appAccountManager.getAuthorizations()
     .finally(() => {
       if(this.getAuthorizationsPromise === promise) {
         this.getAuthorizationsPromise = undefined;
@@ -337,10 +346,5 @@ export default class AppSettingsTab extends SliderSuperTab {
       this.authorizations = auths.authorizations;
       this.devicesRow.titleRight.textContent = '' + this.authorizations.length;
     });
-  }
-
-  public onCloseAfterTimeout() {
-    this.profile.destroy();
-    return super.onCloseAfterTimeout();
   }
 }

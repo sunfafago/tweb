@@ -1,13 +1,14 @@
 import {createResource, onCleanup, Ref} from 'solid-js';
-import PeerTitle from './peerTitle';
-import {attachClickEvent} from '../helpers/dom/clickEvent';
-import {attachClassName} from '../helpers/solid/classname';
-import {createListenerSetter} from './stories/viewer';
+import PeerTitle from '@components/peerTitle';
+import {attachClickEvent} from '@helpers/dom/clickEvent';
+import {attachClassName} from '@helpers/solid/classname';
+import {createListenerSetter} from '@components/stories/viewer';
 
 export const PeerTitleTsx = (props: {
   ref?: Ref<HTMLElement>;
   class?: string
   peerId: PeerId,
+  threadId?: number,
   onlyFirstName?: boolean,
   username?: boolean,
   limitSymbols?: number,
@@ -20,10 +21,11 @@ export const PeerTitleTsx = (props: {
   props.ref instanceof Function && props.ref?.(peerTitle.element); // solid will always make it a function
 
   const [loaded] = createResource(
-    () => props.peerId,
-    async(peerId) => {
+    () => [props.peerId, props.threadId],
+    async([peerId, threadId]) => {
       await peerTitle.update({
         peerId,
+        threadId,
         dialog: false,
         onlyFirstName: props.onlyFirstName,
         username: props.username,

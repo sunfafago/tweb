@@ -4,8 +4,8 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-@import "../../scss/mixins";
-@import "../../scss/variables";
+@use "../../scss/mixins" as *;
+@use "../../scss/variables" as *;
 
 $shadow: 0px 0 3px rgba(0, 0, 0, 0.20);
 $color-inactive: rgba(255, 255, 255, .5);
@@ -908,7 +908,6 @@ $color-inactive: rgba(255, 255, 255, .5);
       }
 
       .input-message-input {
-        padding-inline: 0.375rem;
         caret-color: currentColor;
       }
 
@@ -1000,6 +999,11 @@ $color-inactive: rgba(255, 255, 255, .5);
   .noSound {
     color: $color-inactive;
     // opacity: .5;
+  }
+
+  img,
+  video {
+    dynamic-range-limit: no-limit;
   }
 
   // &Slider {

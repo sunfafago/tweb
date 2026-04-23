@@ -4,6 +4,8 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
+@use "../../shared" as *;
+
 .popup-premium {
   border-bottom: 0.0625rem solid transparent;
 
@@ -149,6 +151,10 @@
       left: 50%;
       transform: translateX(-50%);
       top: -.75rem;
+
+      &.is-emoji-status {
+        width: 100px;
+      }
     }
   }
 

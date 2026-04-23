@@ -4,21 +4,21 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import getGroupCallAudioAsset from '../../components/groupCall/getAudioAsset';
-import {MOUNT_CLASS_TO} from '../../config/debug';
-import EventListenerBase from '../../helpers/eventListenerBase';
-import {GroupCallParticipant, GroupCallParticipantVideo, GroupCallParticipantVideoSourceGroup} from '../../layer';
-import {GroupCallId, GroupCallConnectionType} from '../appManagers/appGroupCallsManager';
-import {AppManagers} from '../appManagers/managers';
-import {logger} from '../logger';
-import rootScope from '../rootScope';
-import GroupCallInstance from './groupCallInstance';
-import GROUP_CALL_STATE from './groupCallState';
-import createMainStreamManager from './helpers/createMainStreamManager';
-import {generateSsrc} from './localConferenceDescription';
-import {WebRTCLineType} from './sdpBuilder';
-import StreamManager from './streamManager';
-import {Ssrc} from './types';
+import getGroupCallAudioAsset from '@components/groupCall/getAudioAsset';
+import {MOUNT_CLASS_TO} from '@config/debug';
+import EventListenerBase from '@helpers/eventListenerBase';
+import {GroupCallParticipant, GroupCallParticipantVideo, GroupCallParticipantVideoSourceGroup} from '@layer';
+import {GroupCallId, GroupCallConnectionType} from '@appManagers/appGroupCallsManager';
+import {AppManagers} from '@lib/managers';
+import {logger} from '@lib/logger';
+import rootScope from '@lib/rootScope';
+import GroupCallInstance from '@lib/calls/groupCallInstance';
+import GROUP_CALL_STATE from '@lib/calls/groupCallState';
+import createMainStreamManager from '@lib/calls/helpers/createMainStreamManager';
+import {generateSsrc} from '@lib/calls/localConferenceDescription';
+import {WebRTCLineType} from '@lib/calls/sdpBuilder';
+import StreamManager from '@lib/calls/streamManager';
+import {Ssrc} from '@lib/calls/types';
 
 const IS_MUTED = true;
 
@@ -92,11 +92,11 @@ export class GroupCallsController extends EventListenerBase<{
 
   public startConnectingSound() {
     this.stopConnectingSound();
-    this.audioAsset.playSoundWithTimeout('group_call_connect.mp3', true, 2500);
+    this.audioAsset.playWithTimeout({name: 'connect', loop: true}, 2500);
   }
 
   public stopConnectingSound() {
-    this.audioAsset.stopSound();
+    this.audioAsset.stop();
     this.audioAsset.cancelDelayedPlay();
   }
 
@@ -155,7 +155,7 @@ export class GroupCallsController extends EventListenerBase<{
         if(this.currentGroupCall === currentGroupCall && state === GROUP_CALL_STATE.CLOSED) {
           this.setCurrentGroupCall(null);
           this.stopConnectingSound();
-          this.audioAsset.playSound('group_call_end.mp3');
+          this.audioAsset.play({name: 'end'});
           rootScope.dispatchEvent('chat_update', currentGroupCall.chatId);
         }
       });
@@ -210,7 +210,7 @@ export class GroupCallsController extends EventListenerBase<{
           case 'connected': {
             if(!currentGroupCall.joined) {
               currentGroupCall.joined = true;
-              this.audioAsset.playSound('group_call_start.mp3');
+              this.audioAsset.play({name: 'start'});
               this.managers.appGroupCallsManager.getGroupCallParticipants(groupCallId);
             }
 

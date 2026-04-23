@@ -4,6 +4,9 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
+@use "sass:string";
+@use "../shared" as *;
+
 @keyframes scaleIn {
   from {
     opacity: 0;
@@ -111,7 +114,7 @@
       &.scale-in {
         animation: scaleIn .15s ease forwards;
       }
-  
+
       &.scale-out {
         animation: scaleIn .15s ease forwards;
         animation-direction: reverse;
@@ -164,7 +167,7 @@
         color: #fff;
         flex: 0 0 auto;
         pointer-events: none;
-  
+
         html.is-safari & {
           -webkit-mask-image: -webkit-radial-gradient(circle, white 100%, black 100%); // fix safari overflow
         }
@@ -203,7 +206,7 @@
 
       &,
       .selector-list-section-content2 {
-        min-height: unquote('max(360px, 100%)');
+        min-height: string.unquote('max(360px, 100%)');
         // height: 1px; // fix height
       }
     }
@@ -361,5 +364,18 @@
     line-height: 1.25rem;
     inset-inline-start: 2.25rem;
     top: 2rem;
+  }
+}
+
+.dialogs-placeholder-canvas-parent {
+  position: relative;
+
+  .dialogs-placeholder-canvas {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1;
   }
 }

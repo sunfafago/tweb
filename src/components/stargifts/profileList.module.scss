@@ -1,9 +1,27 @@
 .tab {
   background-color: var(--background-color);
   height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
-.hasCollections .grid {
+.contentWrapper {
+  position: relative;
+  overflow: clip;
+  flex: 1;
+  display: grid;
+
+  > :global(*) {
+    grid-area: 1 / 1;
+  }
+}
+
+.collectionContent {
+  min-height: 0;
+}
+
+.hasCollections .grid,
+:global(.search-super-tabs-scrollable.is-single + .search-super-tabs-container) .grid {
   padding-top: 0.25rem;
 }
 

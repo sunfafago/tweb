@@ -4,26 +4,30 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import type {WebPushApiManager} from '../mtproto/webPushApiManager';
-import type {PushNotificationObject} from './push';
-import type {MyUploadFile} from '../mtproto/apiFileManager';
-import type {Document, InputFileLocation, InputGroupCall} from '../../layer';
-import type {GroupCallRtmpState} from '../appManagers/appGroupCallsManager';
-import type {ActiveAccountNumber} from '../accounts/types';
-import type {getEnvironment} from '../../environment/utils';
-import type {ToggleUsingPasscodePayload} from '../mtproto/mtprotoMessagePort';
-import type {VideoStreamInfo} from '../calls/videoStreamInfo';
-import SuperMessagePort from '../mtproto/superMessagePort';
-import {MOUNT_CLASS_TO} from '../../config/debug';
+import type {WebPushApiManager} from '@lib/webPushApiManager';
+import type {PushNotificationObject} from '@lib/serviceWorker/push';
+import type {MyUploadFile} from '@appManagers/apiFileManager';
+import type {Document, InputFileLocation, InputGroupCall} from '@layer';
+import type {GroupCallRtmpState} from '@appManagers/appGroupCallsManager';
+import type {ActiveAccountNumber} from '@lib/accounts/types';
+import type {getEnvironment} from '@environment/utils';
+import type {VideoStreamInfo} from '@lib/calls/videoStreamInfo';
+import type {PushKey, PushSingleManager} from '@appManagers/pushSingleManager';
+import SuperMessagePort from '@lib/superMessagePort';
+import {MOUNT_CLASS_TO} from '@config/debug';
+import {CacheStorageDbName} from '@lib/files/cacheStorage';
 
 export type ServicePushPingTaskPayload = {
   localNotifications: boolean,
   lang: {
     push_action_mute1d: string
     push_action_settings: string
-    push_message_nopreview: string
+    push_message_nopreview: string,
+    push_message_error: string
   },
-  settings: WebPushApiManager['settings']
+  settings: WebPushApiManager['settings'],
+  accounts: {[key in ActiveAccountNumber]?: UserId},
+  keysIdsBase64: string[]
 };
 
 export type ServiceRequestFilePartTaskPayload = {
@@ -49,6 +53,15 @@ export type ServiceEvent = {
   port: (payload: void, source: MessageEventSource, event: MessageEvent) => void
 };
 
+export type SWToggleUsingPasscodePayload = {
+  type: 'init';
+  isUsingPasscode: boolean;
+} | {
+  type: 'full';
+  isUsingPasscode: boolean;
+  encryptionKey?: CryptoKey;
+};
+
 export default class ServiceMessagePort<Master extends boolean = false> extends SuperMessagePort<{
   // from main thread to service worker
   environment: (environment: ReturnType<typeof getEnvironment>) => void,
@@ -60,8 +73,13 @@ export default class ServiceMessagePort<Master extends boolean = false> extends 
   leaveRtmpCall: (payload: [Long, boolean]) => void,
   toggleStreamInUse: (payload: {url: string, inUse: boolean, accountNumber: ActiveAccountNumber}) => void,
   toggleCacheStorage: (value: boolean) => void,
-  toggleUsingPasscode: (payload: ToggleUsingPasscodePayload, source: MessageEventSource) => void,
+  resetEncryptableCacheStorages: () => void,
+  toggleUsingPasscode: (payload: SWToggleUsingPasscodePayload, source: MessageEventSource) => void,
   saveEncryptionKey: (payload: CryptoKey) => void,
+  fillPushObject: (payload: PushNotificationObject) => PushNotificationObject,
+  disableCacheStoragesByNames: (names: CacheStorageDbName[]) => void,
+  enableCacheStoragesByNames: (names: CacheStorageDbName[]) => void,
+  resetOpenCacheStoragesByNames: (names: CacheStorageDbName[]) => void
 
   // from mtproto worker
   download: (payload: ServiceDownloadTaskPayload) => void,
@@ -77,6 +95,7 @@ export default class ServiceMessagePort<Master extends boolean = false> extends 
   rtmpStreamDestroyed: (payload: Long) => void,
   downloadRequestReceived: (payload: string) => void,
   serviceCryptoPort: (payload: undefined, source: MessageEventSource, event: MessageEvent) => void,
+  clearCacheStoragesByNames: (payload: CacheStorageDbName[]) => void,
 
   // to mtproto worker
   requestFilePart: (payload: ServiceRequestFilePartTaskPayload) => MaybePromise<MyUploadFile>,
@@ -86,6 +105,7 @@ export default class ServiceMessagePort<Master extends boolean = false> extends 
   downloadDoc: (payload: {docId: DocId, accountNumber: ActiveAccountNumber}) => MaybePromise<Blob>,
   requestDoc: (payload: {docId: DocId, accountNumber: ActiveAccountNumber}) => MaybePromise<Document.document>,
   requestAltDocsByDoc: (payload: {docId: DocId, accountNumber: ActiveAccountNumber}) => MaybePromise<Document.document[]>,
+  decryptPush: (payload: {p: string, keyIdBase64: string}) => ReturnType<PushSingleManager['decryptPush']>
 } & ServiceEvent, Master> {
   constructor() {
     super('SERVICE');

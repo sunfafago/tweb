@@ -4,8 +4,8 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-@import "../scss/mixins";
-@import "../scss/variables";
+@use "../scss/mixins" as *;
+@use "../scss/variables" as *;
 
 $transition: .2s var(--transition-standard-easing);
 
@@ -16,7 +16,7 @@ $transition: .2s var(--transition-standard-easing);
   border-radius: $border-radius-huge;
   // top: 100px;
   // left: calc(50vw - 240px);
-  z-index: 3;
+  z-index: 4;
   backdrop-filter: blur(20px);
   // background-color: rgba(var(--surface-color-rgb), .65);
   background-color: rgba(var(--body-background-color-rgb), .65);
@@ -120,6 +120,7 @@ $transition: .2s var(--transition-standard-easing);
         font-weight: var(--font-weight-bold);
         white-space: nowrap;
         overflow: hidden;
+        text-align: left;
 
         @include animation-level-global(2) {
           transition: width $transition;
@@ -290,6 +291,12 @@ $transition: .2s var(--transition-standard-easing);
     }
   }
 
+  &.noMovable {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+
   &.collapsed {
     width: 328px !important;
     height: 3rem !important;
@@ -378,5 +385,40 @@ $transition: .2s var(--transition-standard-easing);
         width: calc(100% - 3rem);
       }
     }
+  }
+}
+
+.ScaleMenu {
+  // --padding-right: var(--padding-left);
+  display: flex;
+  text-align: center;
+  padding: 0;
+  background: none !important;
+  cursor: default;
+
+  &Smaller,
+  &Bigger {
+    flex: 0 0 auto;
+    width: 35%;
+    height: 100%;
+    cursor: pointer;
+    border-radius: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &Smaller {
+    font-size: 87.5%;
+  }
+
+  &Bigger {
+    font-size: 112.5%;
+  }
+
+  &Scale {
+    width: 30%;
+    flex: 0 0 auto;
+    color: var(--secondary-text-color);
   }
 }

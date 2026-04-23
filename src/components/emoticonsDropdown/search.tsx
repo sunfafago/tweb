@@ -5,18 +5,18 @@
  */
 
 import {Accessor, createEffect, createSignal, onCleanup, For, on} from 'solid-js';
-import {attachClickEvent} from '../../helpers/dom/clickEvent';
-import placeCaretAtEnd from '../../helpers/dom/placeCaretAtEnd';
-import fastSmoothScroll, {fastSmoothScrollToStart} from '../../helpers/fastSmoothScroll';
-import createMiddleware from '../../helpers/solid/createMiddleware';
-import {EmojiGroup} from '../../layer';
-import {AppEmojiManager} from '../../lib/appManagers/appEmojiManager';
-import {LangPackKey} from '../../lib/langPack';
-import rootScope from '../../lib/rootScope';
-import InputSearch from '../inputSearch';
-import {ScrollableXTsx} from '../stories/list';
-import wrapSticker from '../wrappers/sticker';
-import {AnimationItemGroup} from '../animationIntersector';
+import {attachClickEvent} from '@helpers/dom/clickEvent';
+import placeCaretAtEnd from '@helpers/dom/placeCaretAtEnd';
+import fastSmoothScroll, {fastSmoothScrollToStart} from '@helpers/fastSmoothScroll';
+import createMiddleware from '@helpers/solid/createMiddleware';
+import {EmojiGroup} from '@layer';
+import {AppEmojiManager} from '@appManagers/appEmojiManager';
+import {LangPackKey} from '@lib/langPack';
+import rootScope from '@lib/rootScope';
+import InputSearch from '@components/inputSearch';
+import {ScrollableXTsx} from '@components/stories/list';
+import wrapSticker from '@components/wrappers/sticker';
+import {AnimationItemGroup} from '@components/animationIntersector';
 
 /* @refresh reload */
 
@@ -26,7 +26,7 @@ function addSearchCategories(props: {
   inputSearch: InputSearch,
   onGroup: (group: EmojiGroup) => void,
   animatedItemGroup?: AnimationItemGroup,
-  color?: string
+  color?: WrapSomethingOptions['textColor']
 }) {
   const {inputSearch} = props;
   const [emojiGroups, setEmojiGroups] = createSignal<Awaited<ReturnType<AppEmojiManager['getEmojiGroups']>>>([]);
@@ -44,7 +44,6 @@ function addSearchCategories(props: {
   };
 
   const EmojiGroup = ({group, document}: ReturnType<typeof emojiGroups>[0]) => {
-    // * until layer 179
     if(props.type !== 'stickers' && group._ === 'emojiGroupPremium') {
       return;
     }
@@ -141,7 +140,7 @@ export default function EmoticonsSearch(props: {
   onFocusChange?: ConstructorParameters<typeof InputSearch>[0]['onFocusChange'],
   onGroup?: (group: EmojiGroup) => void,
   animatedItemGroup?: AnimationItemGroup,
-  categoryColor?: string
+  categoryColor?: WrapSomethingOptions['textColor']
 }) {
   const [searching, setSearching] = createSignal(false);
   const [debounced, setDebounced] = createSignal(false);

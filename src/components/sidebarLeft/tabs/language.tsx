@@ -4,23 +4,23 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import { createMemo, createRoot } from 'solid-js';
-import anchorCallback from '../../../helpers/dom/anchorCallback';
-import { randomLong } from '../../../helpers/random';
-import { LangPackLanguage } from '../../../layer';
-import I18n, { i18n, join } from '../../../lib/langPack';
-import rootScope from '../../../lib/rootScope';
-import usePremium from '../../../stores/premium';
-import { pickLanguage } from '../../chat/translation';
-import CheckboxFieldTsx from '../../checkboxFieldTsx';
-import PopupPremium from '../../popups/premium';
-import RadioField from '../../radioField';
-import Row, { RadioFormFromRows } from '../../row';
-import RowTsx from '../../rowTsx';
-import Section from '../../section';
-import SettingSection from '../../settingSection';
-import { SliderSuperTab } from '../../slider'
-import { useAppSettings } from '../../../stores/appSettings';
+import {createMemo, createRoot} from 'solid-js';
+import anchorCallback from '@helpers/dom/anchorCallback';
+import {randomLong} from '@helpers/random';
+import {LangPackLanguage} from '@layer';
+import I18n, {i18n, join} from '@lib/langPack';
+import rootScope from '@lib/rootScope';
+import usePremium from '@stores/premium';
+import {pickLanguage} from '@components/chat/translation';
+import CheckboxFieldTsx from '@components/checkboxFieldTsx';
+import PopupPremium from '@components/popups/premium';
+import RadioField from '@components/radioField';
+import Row, {RadioFormFromRows} from '@components/row';
+import RowTsx from '@components/rowTsx';
+import Section from '@components/section';
+import SettingSection from '@components/settingSection';
+import {SliderSuperTab} from '@components/slider'
+import {useAppSettings} from '@stores/appSettings';
 
 export default class AppLanguageTab extends SliderSuperTab {
   public static getInitArgs() {
@@ -95,7 +95,6 @@ export default class AppLanguageTab extends SliderSuperTab {
               }
             }}
           >
-            <RowTsx.Title>{i18n('ShowTranslateChatButton')}</RowTsx.Title>
             <RowTsx.CheckboxFieldToggle>
               <CheckboxFieldTsx
                 checked={appSettings.translations.enabled}
@@ -105,6 +104,7 @@ export default class AppLanguageTab extends SliderSuperTab {
                 }}
               />
             </RowTsx.CheckboxFieldToggle>
+            <RowTsx.Title>{i18n('ShowTranslateChatButton')}</RowTsx.Title>
           </RowTsx>
           {appSettings.translations.enabled && (<RowTsx
             clickable={async() => {
@@ -162,10 +162,9 @@ export default class AppLanguageTab extends SliderSuperTab {
           }, 50);
         });
       });
-      debugger
 
       // 获取当前实际使用的语言代码
-      const currentLangCode = I18n.lastRequestedLangCode || I18n.lastAppliedLangCode;
+      const currentLangCode = I18n.getLastRequestedLangCode() || I18n.getLastAppliedLangCode();
       I18n.getCacheLangPackAndApply().then((langPack) => {
         // 优先使用当前请求的语言代码，如果没有则使用缓存的语言包
         const targetLangCode = currentLangCode || langPack.lang_code;

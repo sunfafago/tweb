@@ -4,29 +4,32 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import type {MyDocument} from '../appManagers/appDocsManager';
-import animationIntersector, {AnimationItemGroup} from '../../components/animationIntersector';
-import LazyLoadQueue from '../../components/lazyLoadQueue';
-import wrapSticker, {videosCache} from '../../components/wrappers/sticker';
-import customProperties, {CustomProperty} from '../../helpers/dom/customProperties';
-import findUpClassName from '../../helpers/dom/findUpClassName';
-import getViewportSlice from '../../helpers/dom/getViewportSlice';
-import replaceContent from '../../helpers/dom/replaceContent';
-import framesCache from '../../helpers/framesCache';
-import {MediaSize} from '../../helpers/mediaSize';
-import mediaSizes from '../../helpers/mediaSizes';
-import {Middleware, MiddlewareHelper, getMiddleware} from '../../helpers/middleware';
-import noop from '../../helpers/noop';
-import {DocumentAttribute} from '../../layer';
-import wrapRichText from '../richTextProcessor/wrapRichText';
-import RLottiePlayer, {applyColorOnContext, getLottiePixelRatio} from '../rlottie/rlottiePlayer';
-import rootScope from '../rootScope';
-import CustomEmojiElement, {CustomEmojiElements} from './element';
-import assumeType from '../../helpers/assumeType';
-import {IS_WEBM_SUPPORTED} from '../../environment/videoSupport';
-import {observeResize, unobserveResize} from '../../components/resizeObserver';
-import {PAID_REACTION_EMOJI_DOCID} from './constants';
-import lottieLoader from '../rlottie/lottieLoader';
+import type {MyDocument} from '@appManagers/appDocsManager';
+import animationIntersector, {AnimationItemGroup} from '@components/animationIntersector';
+import LazyLoadQueue from '@components/lazyLoadQueue';
+import wrapSticker, {videosCache} from '@components/wrappers/sticker';
+import customProperties, {CustomProperty} from '@helpers/dom/customProperties';
+import findUpClassName from '@helpers/dom/findUpClassName';
+import getViewportSlice from '@helpers/dom/getViewportSlice';
+import replaceContent from '@helpers/dom/replaceContent';
+import framesCache from '@helpers/framesCache';
+import {MediaSize} from '@helpers/mediaSize';
+import mediaSizes from '@helpers/mediaSizes';
+import {Middleware, MiddlewareHelper, getMiddleware} from '@helpers/middleware';
+import noop from '@helpers/noop';
+import {DocumentAttribute} from '@layer';
+import wrapRichText from '@lib/richTextProcessor/wrapRichText';
+import RLottiePlayer, {applyColorOnContext, getLottiePixelRatio} from '@lib/rlottie/rlottiePlayer';
+import rootScope from '@lib/rootScope';
+import CustomEmojiElement, {CustomEmojiElements} from '@lib/customEmoji/element';
+import assumeType from '@helpers/assumeType';
+import {IS_WEBM_SUPPORTED} from '@environment/videoSupport';
+import {observeResize, unobserveResize} from '@components/resizeObserver';
+import {PAID_REACTION_EMOJI_DOCID} from '@lib/customEmoji/constants';
+import lottieLoader from '@lib/rlottie/lottieLoader';
+import StickerType from '@config/stickerType';
+import {Accessor, createMemo, createRoot, createSignal, Setter} from 'solid-js';
+import readValue from '@helpers/solid/readValue';
 
 const globalLazyLoadQueue = new LazyLoadQueue();
 
@@ -58,9 +61,13 @@ export class CustomEmojiRendererElement extends HTMLElement {
   public middlewareHelper: MiddlewareHelper;
 
   public auto: boolean;
-  public textColor: CustomProperty;
+  public textColor: Accessor<CustomProperty>;
+  private _textColor: Accessor<CustomProperty>;
+  private _setTextColor: Setter<CustomProperty>;
 
   public observeResizeElement: HTMLElement | false;
+
+  public renderNonSticker: boolean;
 
   constructor() {
     super();
@@ -156,7 +163,7 @@ export class CustomEmojiRendererElement extends HTMLElement {
       const {visible} = getViewportSlice({
         overflowElement,
         overflowRect,
-        elements: placeholders,
+        elements: placeholders.filter(el => !(el instanceof CustomEmojiElement) || !el.syncedPlayer?.pausedElements?.has(el)),
         extraSize: this.size.height * 2.5 // let's add some margin
       });
 
@@ -210,6 +217,7 @@ export class CustomEmojiRendererElement extends HTMLElement {
     this.isCanvasClean = false;
 
     const {width, height, dpr} = canvas;
+    let _color: string;
     for(const [elements, offsets] of offsetsMap) {
       const player = this.playersSynced.get(elements);
       const frame = syncedPlayersFrames.get(player) || (player instanceof HTMLVideoElement ? player : undefined);
@@ -240,7 +248,7 @@ export class CustomEmojiRendererElement extends HTMLElement {
 
       const maxTop = height - frameHeight;
       const maxLeft = width - frameWidth;
-      const color = this.textColored.has(elements) ? customProperties.getProperty(this.textColor) : undefined;
+      const color = this.textColored.has(elements) ? (_color ??= customProperties.getProperty(this.textColor())) : undefined;
 
       if(!this.clearedElements.has(elements) && !this.isSelectable) {
         if(this.isSelectable/*  && false */) {
@@ -438,9 +446,10 @@ export class CustomEmojiRendererElement extends HTMLElement {
     const newElements = addCustomEmojis.get(docId);
     const customEmojis = renderer.customEmojis.get(docId);
     const newElementsArray = Array.from(newElements);
-    const isLottie = doc.sticker === 2;
+    const stickerType = doc.sticker ?? (this.renderNonSticker ? StickerType.Static : undefined);
+    const isLottie = stickerType === StickerType.Lottie;
     const isStatic = newElementsArray[0].static || (doc.mime_type === 'video/webm' && !IS_WEBM_SUPPORTED);
-    const willHaveSyncedPlayer = (isLottie || (doc.sticker === 3 && this.isSelectable)) && !onlyThumb && !isStatic;
+    const willHaveSyncedPlayer = (isLottie || (stickerType === StickerType.WebM && this.isSelectable)) && !onlyThumb && !isStatic;
 
     const attribute = doc.attributes.find((attribute) => attribute._ === 'documentAttributeCustomEmoji') as DocumentAttribute.documentAttributeCustomEmoji;
     if(attribute && attribute.pFlags.text_color) {
@@ -500,7 +509,7 @@ export class CustomEmojiRendererElement extends HTMLElement {
       });
     }
 
-    if(doc.sticker === 1 || onlyThumb || isStatic) {
+    if(stickerType === StickerType.Static || onlyThumb || isStatic) {
       if(this.isSelectable) {
         addition.onRender = () => Promise.all(_loadPromises).then(() => {
           if(!middleware()) return;
@@ -784,7 +793,7 @@ export class CustomEmojiRendererElement extends HTMLElement {
   }
 
   public setTextColor(textColor: string) {
-    this.textColor = textColor;
+    this._setTextColor(textColor);
   }
 
   public static create(options: CustomEmojiRendererElementOptions) {
@@ -792,9 +801,9 @@ export class CustomEmojiRendererElement extends HTMLElement {
     renderer.animationGroup = options.animationGroup;
     renderer.size = options.customEmojiSize || mediaSizes.active.customEmoji;
     renderer.isSelectable = options.isSelectable;
-    renderer.textColor = options.textColor;
-    // renderer.textColor = typeof(options.textColor) === 'function' ? options.textColor() : options.textColor;
+    [renderer._textColor, renderer._setTextColor] = createSignal();
     renderer.observeResizeElement = options.observeResizeElement;
+    renderer.renderNonSticker = options.renderNonSticker;
     if(options.wrappingDraft) {
       renderer.contentEditable = 'false';
       renderer.style.height = 'inherit';
@@ -811,6 +820,11 @@ export class CustomEmojiRendererElement extends HTMLElement {
       renderer.auto = true;
       renderer.middlewareHelper = getMiddleware();
     }
+
+    createRoot((dispose) => {
+      renderer.textColor = createMemo(() => renderer._textColor() || readValue(options.textColor));
+      renderer.middlewareHelper.get().onDestroy(dispose);
+    });
 
     return renderer;
   }
@@ -832,7 +846,8 @@ export type CustomEmojiRendererElementOptions = Partial<{
   isSelectable: boolean,
   wrappingDraft: boolean,
 
-  observeResizeElement?: HTMLElement | false
+  observeResizeElement?: HTMLElement | false,
+  renderNonSticker?: boolean
 }> & WrapSomethingOptions;
 
 const CUSTOM_EMOJI_INSTANT_PLAY = true; // do not wait for animationIntersector

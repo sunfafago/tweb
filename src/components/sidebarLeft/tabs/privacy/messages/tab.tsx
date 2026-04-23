@@ -1,20 +1,15 @@
 import {createEffect, createSignal, Show} from 'solid-js';
 import {Portal} from 'solid-js/web';
-
-import {logger} from '../../../../../lib/logger';
-import DEBUG from '../../../../../config/debug';
-
-import {useSuperTab} from '../../../../solidJsTabs/superTabProvider';
-import {IconTsx} from '../../../../iconTsx';
-
-import useIsConfirmationNeededOnClose from './useIsConfirmationNeededOnClose';
-import AppearZoomTransition from './appearZoomTransition';
-import PaidSettingsSection from './paidSettingsSection';
-import useSaveSettings from './useSaveSettings';
-import OptionsSection from './optionsSection';
-import useStateStore from './useStateStore';
-import useSettings from './useSettings';
-import SaveButton from './saveButton';
+import DEBUG from '@config/debug';
+import useIsConfirmationNeededOnClose from '@hooks/useIsConfirmationNeededOnClose';
+import {logger} from '@lib/logger';
+import SaveButton from '@components/saveButton';
+import {useSuperTab} from '@components/solidJsTabs/superTabProvider';
+import OptionsSection from '@components/sidebarLeft/tabs/privacy/messages/optionsSection';
+import PaidSettingsSection from '@components/sidebarLeft/tabs/privacy/messages/paidSettingsSection';
+import useSaveSettings from '@components/sidebarLeft/tabs/privacy/messages/useSaveSettings';
+import useSettings from '@components/sidebarLeft/tabs/privacy/messages/useSettings';
+import useStateStore from '@components/sidebarLeft/tabs/privacy/messages/useStateStore';
 
 
 const log = logger('MessagesPrivacyTab');
@@ -44,7 +39,6 @@ const MessagesTab = () => {
   });
 
   tab.isConfirmationNeededOnClose = useIsConfirmationNeededOnClose({hasChanges, saveAllSettings, descriptionLangKey: 'UnsavedChangesDescription.Privacy'});
-
 
   const [exitAnimationPromise, setExitAnimationPromise] = createSignal<Promise<any>>();
 

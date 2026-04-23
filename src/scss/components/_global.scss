@@ -40,6 +40,7 @@ button {
 img, 
 video {
   -webkit-user-drag: none;
+  dynamic-range-limit: standard;
 }
 
 // Z-levels
@@ -169,6 +170,18 @@ Utility Classes
 
 .text-top {
   vertical-align: top;
+}
+
+.text-bottom {
+  vertical-align: bottom;
+}
+
+.text-text-bottom {
+  vertical-align: text-bottom !important;
+}
+
+.text-right {
+  text-align: right;
 }
 
 .pre-wrap {

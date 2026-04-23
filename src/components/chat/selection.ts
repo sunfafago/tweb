@@ -4,46 +4,46 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import type {MessagesStorageKey} from '../../lib/appManagers/appMessagesManager';
-import type ChatBubbles from './bubbles';
-import type ChatInput from './input';
-import type Chat from './chat';
-import IS_TOUCH_SUPPORTED from '../../environment/touchSupport';
-import Button from '../button';
-import ButtonIcon from '../buttonIcon';
-import CheckboxField from '../checkboxField';
-import PopupDeleteMessages from '../popups/deleteMessages';
-import PopupForward from '../popups/forward';
-import SetTransition from '../singleTransition';
-import ListenerSetter from '../../helpers/listenerSetter';
-import PopupSendNow from '../popups/sendNow';
-import appNavigationController, {NavigationItem} from '../appNavigationController';
-import {IS_MOBILE_SAFARI} from '../../environment/userAgent';
-import {i18n, _i18n} from '../../lib/langPack';
-import findUpClassName from '../../helpers/dom/findUpClassName';
-import blurActiveElement from '../../helpers/dom/blurActiveElement';
-import cancelEvent from '../../helpers/dom/cancelEvent';
-import cancelSelection from '../../helpers/dom/cancelSelection';
-import getSelectedText from '../../helpers/dom/getSelectedText';
-import replaceContent from '../../helpers/dom/replaceContent';
-import AppSearchSuper from '../appSearchSuper.';
-import isInDOM from '../../helpers/dom/isInDOM';
-import {randomLong} from '../../helpers/random';
-import {attachClickEvent, AttachClickOptions} from '../../helpers/dom/clickEvent';
-import findUpAsChild from '../../helpers/dom/findUpAsChild';
-import EventListenerBase from '../../helpers/eventListenerBase';
-import safeAssign from '../../helpers/object/safeAssign';
-import {AppManagers} from '../../lib/appManagers/managers';
-import {attachContextMenuListener} from '../../helpers/dom/attachContextMenuListener';
-import appImManager from '../../lib/appManagers/appImManager';
-import {Message} from '../../layer';
-import PopupElement from '../popups';
-import flatten from '../../helpers/array/flatten';
-import IS_STANDALONE from '../../environment/standalone';
-import {toastNew} from '../toast';
-import confirmationPopup from '../confirmationPopup';
-import {makeFullMid} from './bubbles';
-import {ChatType} from './chat';
+import type {MessagesStorageKey} from '@appManagers/appMessagesManager';
+import type ChatBubbles from '@components/chat/bubbles';
+import type ChatInput from '@components/chat/input';
+import type Chat from '@components/chat/chat';
+import IS_TOUCH_SUPPORTED from '@environment/touchSupport';
+import Button from '@components/button';
+import ButtonIcon from '@components/buttonIcon';
+import CheckboxField from '@components/checkboxField';
+import PopupDeleteMessages from '@components/popups/deleteMessages';
+import PopupForward from '@components/popups/forward';
+import SetTransition from '@components/singleTransition';
+import ListenerSetter from '@helpers/listenerSetter';
+import PopupSendNow from '@components/popups/sendNow';
+import appNavigationController, {NavigationItem} from '@components/appNavigationController';
+import {IS_MOBILE_SAFARI} from '@environment/userAgent';
+import {i18n, _i18n} from '@lib/langPack';
+import findUpClassName from '@helpers/dom/findUpClassName';
+import blurActiveElement from '@helpers/dom/blurActiveElement';
+import cancelEvent from '@helpers/dom/cancelEvent';
+import cancelSelection from '@helpers/dom/cancelSelection';
+import getSelectedText from '@helpers/dom/getSelectedText';
+import replaceContent from '@helpers/dom/replaceContent';
+import AppSearchSuper from '@components/appSearchSuper';
+import isInDOM from '@helpers/dom/isInDOM';
+import {randomLong} from '@helpers/random';
+import {attachClickEvent, AttachClickOptions} from '@helpers/dom/clickEvent';
+import findUpAsChild from '@helpers/dom/findUpAsChild';
+import EventListenerBase from '@helpers/eventListenerBase';
+import safeAssign from '@helpers/object/safeAssign';
+import {AppManagers} from '@lib/managers';
+import {attachContextMenuListener} from '@helpers/dom/attachContextMenuListener';
+import appImManager from '@lib/appImManager';
+import {Message} from '@layer';
+import PopupElement from '@components/popups';
+import flatten from '@helpers/array/flatten';
+import IS_STANDALONE from '@environment/standalone';
+import {toastNew} from '@components/toast';
+import confirmationPopup from '@components/confirmationPopup';
+import {makeFullMid} from '@components/chat/bubbles';
+import {ChatType} from './chatType';
 
 const accumulateMapSet = (map: Map<any, Set<number>>) => {
   return [...map.values()].reduce((acc, v) => acc + v.size, 0);
@@ -51,7 +51,7 @@ const accumulateMapSet = (map: Map<any, Set<number>>) => {
 
 // const MIN_CLICK_MOVE = 32; // minimum bubble height
 
-class AppSelection extends EventListenerBase<{
+export class AppSelection extends EventListenerBase<{
   toggle: (isSelecting: boolean) => void
 }> {
   public selectedMids: Map<PeerId, Set<number>> = new Map();
@@ -61,11 +61,10 @@ class AppSelection extends EventListenerBase<{
 
   protected listenerSetter: ListenerSetter;
   public isScheduled: boolean;
-  public isStories: boolean;
   protected listenElement: HTMLElement;
 
   protected onToggleSelection: (forwards: boolean, animate: boolean) => void | Promise<void>;
-  protected onUpdateContainer: (cantForward: boolean, cantDelete: boolean, cantSend: boolean, cantPin: boolean) => void;
+  protected onUpdateContainer: (cantForward: boolean, cantDelete: boolean, cantSend: boolean) => void;
   protected onCancelSelection: () => void;
   protected toggleByMid: (peerId: PeerId, mid: number) => void;
   protected toggleByElement: (bubble: HTMLElement) => void;
@@ -112,6 +111,9 @@ class AppSelection extends EventListenerBase<{
     this.listenerSetter = listenerSetter;
 
     if(!listenElement) {
+      if(this.navigationType) {
+        appNavigationController.removeByType(this.navigationType);
+      }
       return;
     }
 
@@ -377,19 +379,11 @@ class AppSelection extends EventListenerBase<{
     const size = this.selectedMids.size;
     if(!size && !forceSelection) return;
 
-    let cantForward = !size,
-      cantDelete = !size,
-      cantSend = !size,
-      cantPin = !size;
+    let cantForward = !size;
+    let cantDelete = !size;
+    const cantSend = !size;
 
-    if(this.isStories) {
-      cantForward = true;
-      cantSend = true;
-      const peerId = this.selectedMids.keys().next().value;
-      const r = await this.managers.appStoriesManager.cantPinDeleteStories(peerId, Array.from(this.selectedMids.get(peerId)));
-      cantPin = r.cantPin;
-      cantDelete = r.cantDelete;
-    } else for(const [peerId, mids] of this.selectedMids) {
+    for(const [peerId, mids] of this.selectedMids) {
       const storageKey = this.getStorageKey(peerId);
       const r = await this.managers.appMessagesManager.cantForwardDeleteMids(storageKey, Array.from(mids));
       cantForward = r.cantForward;
@@ -398,7 +392,7 @@ class AppSelection extends EventListenerBase<{
       if(cantForward && cantDelete) break;
     }
 
-    this.onUpdateContainer?.(cantForward, cantDelete, cantSend, cantPin);
+    this.onUpdateContainer?.(cantForward, cantDelete, cantSend);
   }
 
   private getStorageKey(peerId: PeerId): MessagesStorageKey {
@@ -521,7 +515,7 @@ class AppSelection extends EventListenerBase<{
     return accumulateMapSet(this.selectedMids);
   }
 
-  protected toggleMid(peerId: PeerId, mid: number, unselect?: boolean) {
+  public toggleMid(peerId: PeerId, mid: number, unselect?: boolean) {
     let set = this.selectedMids.get(peerId);
     if(unselect || (unselect === undefined && set?.has(mid))) {
       if(set) {
@@ -595,9 +589,7 @@ export class SearchSelection extends AppSelection {
   public selectionForwardBtn: HTMLElement;
   public selectionDeleteBtn: HTMLElement;
   public selectionGotoBtn: HTMLElement;
-  public selectionPinBtn: HTMLElement;
 
-  public isStoriesArchive: boolean;
   private isPrivate: boolean;
 
   constructor(
@@ -657,56 +649,10 @@ export class SearchSelection extends AppSelection {
     this.toggleByElement(element);
   };
 
-  private getSelectedStoriesPeerId() {
-    return [...this.selectedMids.keys()][0] || this.searchSuper.searchContext.peerId;
-  }
-
-  public onDeleteStoriesClick = async(ids?: number[]) => {
-    const peerId = this.getSelectedStoriesPeerId();
-    ids ||= [...this.selectedMids.get(peerId)];
-    await confirmationPopup({
-      titleLangKey: ids.length === 1 ? 'DeleteStoryTitle' : 'DeleteStoriesTitle',
-      descriptionLangKey: ids.length === 1 ? 'DeleteStorySubtitle' : 'DeleteStoriesSubtitle',
-      descriptionLangArgs: [ids.length],
-      button: {
-        langKey: 'Delete',
-        isDanger: true
-      }
-    });
-    this.cancelSelection();
-    this.managers.appStoriesManager.deleteStories(peerId, ids);
-  };
-
-  public onPinStoriesClick = (ids: number[], pin: boolean) => {
-    const peerId = this.getSelectedStoriesPeerId();
-    ids ||= [...this.selectedMids.get(peerId)];
-    const promise = this.managers.appStoriesManager.togglePinned(peerId, ids, pin);
-    this.cancelSelection();
-    promise.then(() => {
-      if(ids.length === 1) {
-        toastNew({langPackKey: pin ? 'StoryPinnedToProfile' : 'StoryArchivedFromProfile'});
-      } else {
-        toastNew({langPackKey: pin ? 'StorySavedTitle' : 'StoryArchived', langPackArguments: [ids.length]});
-      }
-    });
-  };
-
-  public onPinStoriesToTopClick = (ids: number[], pin: boolean) => {
-    const peerId = this.getSelectedStoriesPeerId();
-    const promise = this.managers.appStoriesManager.togglePinnedToTop(peerId, ids, pin);
-    this.cancelSelection();
-    promise.catch((err: ApiError) => {
-      if(err.type === 'STORY_ID_TOO_MANY') {
-        toastNew({langPackKey: 'StoriesPinLimit', langPackArguments: [+err.message]});
-      }
-    });
-  };
-
-  protected onUpdateContainer = (cantForward: boolean, cantDelete: boolean, cantSend: boolean, cantPin: boolean) => {
+  protected onUpdateContainer = (cantForward: boolean, cantDelete: boolean) => {
     const length = this.length();
-    replaceContent(this.selectionCountEl, i18n(this.isStories ? 'StoriesCount' : 'messages', [length]));
-    this.selectionPinBtn.classList.toggle('hide', !this.isStories || cantPin);
-    this.selectionGotoBtn.classList.toggle('hide', this.isStories || length !== 1);
+    replaceContent(this.selectionCountEl, i18n('messages', [length]));
+    this.selectionGotoBtn.classList.toggle('hide', length !== 1);
     this.selectionForwardBtn.classList.toggle('hide', cantForward);
     this.selectionDeleteBtn && this.selectionDeleteBtn.classList.toggle('hide', cantDelete);
   };
@@ -750,9 +696,6 @@ export class SearchSelection extends AppSelection {
 
         const attachClickOptions: AttachClickOptions = {listenerSetter: this.listenerSetter};
 
-        this.selectionPinBtn = ButtonIcon(`${this.isStoriesArchive ? 'pin' : 'unpin'} ${BASE_CLASS}-pin`);
-        attachClickEvent(this.selectionPinBtn, () => this.onPinStoriesClick(undefined, this.isStoriesArchive), attachClickOptions);
-
         this.selectionGotoBtn = ButtonIcon(`message ${BASE_CLASS}-goto`);
         attachClickEvent(this.selectionGotoBtn, () => {
           const peerId = [...this.selectedMids.keys()][0];
@@ -781,11 +724,6 @@ export class SearchSelection extends AppSelection {
         if(this.isPrivate) {
           this.selectionDeleteBtn = ButtonIcon(`delete danger ${BASE_CLASS}-delete`);
           attachClickEvent(this.selectionDeleteBtn, () => {
-            if(this.isStories) {
-              this.onDeleteStoriesClick();
-              return;
-            }
-
             const peerId = this.searchSuper.searchContext.peerId;
             PopupElement.createPopup(
               PopupDeleteMessages,
@@ -802,7 +740,6 @@ export class SearchSelection extends AppSelection {
         this.selectionContainer.append(...[
           btnCancel,
           this.selectionCountEl,
-          this.selectionPinBtn,
           this.selectionGotoBtn,
           this.selectionForwardBtn,
           this.selectionDeleteBtn

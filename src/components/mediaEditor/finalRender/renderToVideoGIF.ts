@@ -1,21 +1,22 @@
 import {createRoot, createSignal, getOwner, runWithOwner} from 'solid-js';
 
-import noop from '../../../helpers/noop';
+import noop from '@helpers/noop';
 
-import {useMediaEditorContext} from '../context';
-import {delay} from '../utils';
+import {useMediaEditorContext} from '@components/mediaEditor/context';
+import {delay} from '@components/mediaEditor/utils';
 
-import {FRAMES_PER_SECOND, STICKER_SIZE} from './constants';
-import {MediaEditorFinalResultPayload} from './createFinalResult';
-import drawStickerLayer from './drawStickerLayer';
-import drawTextLayer from './drawTextLayer';
-import {generateVideoPreview} from './generateVideoPreview';
-import {ScaledLayersAndLines} from './getScaledLayersAndLines';
-import ImageStickerFrameByFrameRenderer from './imageStickerFrameByFrameRenderer';
-import LottieStickerFrameByFrameRenderer from './lottieStickerFrameByFrameRenderer';
-import {StickerFrameByFrameRenderer} from './types';
-import VideoStickerFrameByFrameRenderer from './videoStickerFrameByFrameRenderer';
-import calcCodecAndBitrate, {BITRATE_TARGET_FPS} from './calcCodecAndBitrate';
+import {FRAMES_PER_SECOND, STICKER_SIZE} from '@components/mediaEditor/finalRender/constants';
+import {MediaEditorFinalResultPayload} from '@components/mediaEditor/finalRender/createFinalResult';
+import drawStickerLayer from '@components/mediaEditor/finalRender/drawStickerLayer';
+import drawTextLayer from '@components/mediaEditor/finalRender/drawTextLayer';
+import {generateVideoPreview} from '@components/mediaEditor/finalRender/generateVideoPreview';
+import {ScaledLayersAndLines} from '@components/mediaEditor/finalRender/getScaledLayersAndLines';
+import ImageStickerFrameByFrameRenderer from '@components/mediaEditor/finalRender/imageStickerFrameByFrameRenderer';
+import LottieStickerFrameByFrameRenderer from '@components/mediaEditor/finalRender/lottieStickerFrameByFrameRenderer';
+import {StickerFrameByFrameRenderer} from '@components/mediaEditor/finalRender/types';
+import VideoStickerFrameByFrameRenderer from '@components/mediaEditor/finalRender/videoStickerFrameByFrameRenderer';
+import calcCodecAndBitrate, {BITRATE_TARGET_FPS} from '@components/mediaEditor/finalRender/calcCodecAndBitrate';
+import StickerType from '@config/stickerType';
 
 type Args = {
   scaledLayers: ScaledLayersAndLines['scaledLayers'];
@@ -39,7 +40,7 @@ export default async function renderToVideoGIF({
   const owner = getOwner();
   const context = useMediaEditorContext();
 
-  const {editorState: {pixelRatio}} = context;
+  const {editorState: {pixelRatio}, dontCreatePreview} = context;
 
   const creationProgress = createRoot(dispose => {
     const signal = createSignal(0);
@@ -94,9 +95,9 @@ export default async function renderToVideoGIF({
         const stickerType = layer.sticker?.sticker;
         let renderer: StickerFrameByFrameRenderer;
 
-        if(stickerType === 1) renderer = new ImageStickerFrameByFrameRenderer();
-        if(stickerType === 2) renderer = new LottieStickerFrameByFrameRenderer();
-        if(stickerType === 3) renderer = new VideoStickerFrameByFrameRenderer();
+        if(stickerType === StickerType.Static) renderer = new ImageStickerFrameByFrameRenderer();
+        if(stickerType === StickerType.Lottie) renderer = new LottieStickerFrameByFrameRenderer();
+        if(stickerType === StickerType.WebM) renderer = new VideoStickerFrameByFrameRenderer();
         if(!renderer) return;
 
         renderers.set(layer.id, renderer);
@@ -155,7 +156,7 @@ export default async function renderToVideoGIF({
   resultPromise.then((value) => (result = value)).catch(noop);
 
   return {
-    preview: await runWithOwner(owner, () => generateVideoPreview({scaledWidth, scaledHeight})),
+    preview: dontCreatePreview ? undefined : await runWithOwner(owner, () => generateVideoPreview({scaledWidth, scaledHeight})),
     isVideo: true,
     getResult: () => {
       return result ?? resultPromise;

@@ -4,19 +4,18 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import deferredPromise from '../helpers/cancellablePromise';
-import {Middleware} from '../helpers/middleware';
-import {modifyAckedPromise} from '../helpers/modifyAckedResult';
-import usePeerTranslation from '../hooks/usePeerTranslation';
-import {Message, TextWithEntities} from '../layer';
-import wrapRichText from '../lib/richTextProcessor/wrapRichText';
-import {createRoot, createSignal, createMemo, onCleanup, createEffect} from 'solid-js';
-import rootScope from '../lib/rootScope';
-import SuperIntersectionObserver from '../helpers/dom/superIntersectionObserver';
-import {processMessageForTranslation} from '../stores/peerLanguage';
-import createMiddleware from '../helpers/solid/createMiddleware';
-import wrapMessageEntities from '../lib/richTextProcessor/wrapMessageEntities';
-import wrapTextWithEntities from '../lib/richTextProcessor/wrapTextWithEntities';
+import deferredPromise from '@helpers/cancellablePromise';
+import {Middleware} from '@helpers/middleware';
+import {modifyAckedPromise} from '@helpers/modifyAckedResult';
+import usePeerTranslation from '@hooks/usePeerTranslation';
+import {Message, TextWithEntities} from '@layer';
+import wrapRichText from '@lib/richTextProcessor/wrapRichText';
+import {createRoot, createSignal, createMemo, onCleanup, createEffect, Accessor, untrack} from 'solid-js';
+import rootScope from '@lib/rootScope';
+import SuperIntersectionObserver from '@helpers/dom/superIntersectionObserver';
+import {processMessageForTranslation} from '@stores/peerLanguage';
+import createMiddleware from '@helpers/solid/createMiddleware';
+import wrapTextWithEntities from '@lib/richTextProcessor/wrapTextWithEntities';
 
 const USE_OBSERVER = false;
 
@@ -29,8 +28,11 @@ export function TranslatableMessageTsx(props: {
   observeElement?: HTMLElement,
   container?: HTMLElement,
   enabled?: boolean,
+  summarizing?: Accessor<boolean>,
   onTranslation?: (callback: () => void) => void,
-  onTextWithEntities?: (textWithEntities: TextWithEntities) => TextWithEntities
+  onTextWithEntities?: (textWithEntities: TextWithEntities) => TextWithEntities,
+  onFragment?: (fragment: DocumentFragment) => DocumentFragment,
+  onError?: (error: ApiError) => void
 }) {
   const useObserver = USE_OBSERVER && props.observer && props.enabled === undefined;
   const [visible, setVisible] = createSignal(!useObserver);
@@ -71,6 +73,14 @@ export function TranslatableMessageTsx(props: {
     }));
   };
 
+  const summarizeText = (lang?: string) => {
+    return modifyAckedPromise(rootScope.managers.acknowledged.appTranslationsManager.summarizeText({
+      peerId: props.peerId,
+      mid: props.message.mid,
+      lang
+    }));
+  };
+
   const setOriginalText = (loading?: boolean) => {
     setTextWithEntities(originalText);
     container.classList.toggle('text-loading', !!loading);
@@ -92,19 +102,23 @@ export function TranslatableMessageTsx(props: {
     const _first = first;
     first = false;
 
+    const summarizing = props.summarizing?.();
+
     // if the message is invisible and it's not the first time we're opening the chat
-    if((!translation.enabled() && !props.enabled) || (!wasVisible() && !_first)) {
+    if(!summarizing && ((!translation.enabled() && !props.enabled) || (!wasVisible() && !_first))) {
       setOriginalText();
       return;
     }
 
-    const r = await translate(translation.language(), _first && useObserver);
+    const r = await (summarizing ?
+      summarizeText(translation.enabled() ? translation.language() : undefined) :
+      translate(translation.language(), _first && useObserver));
     if(!middleware()) {
       return;
     }
 
     if(!r.cached) {
-      if(!dontShowOriginalFirst) {
+      if(!dontShowOriginalFirst && !untrack(textWithEntities)) {
         setOriginalText(true);
       } else {
         container.classList.add('text-loading');
@@ -114,17 +128,26 @@ export function TranslatableMessageTsx(props: {
       return;
     }
 
-    const textWithEntities = await r.result;
-    if(!middleware()) {
-      return;
-    }
+    try {
+      const textWithEntities$ = await r.result;
+      if(!middleware()) {
+        return;
+      }
 
-    if(!textWithEntities) {
+      if(!textWithEntities$) {
+        setOriginalText();
+        return;
+      }
+
+      setTextWithEntities(textWithEntities$);
+    } catch(err) {
+      if(!middleware()) {
+        return;
+      }
+
       setOriginalText();
-      return;
+      props.onError?.(err as ApiError);
     }
-
-    setTextWithEntities(textWithEntities);
   });
 
   createEffect(() => {
@@ -143,7 +166,7 @@ export function TranslatableMessageTsx(props: {
 
     const middleware = createMiddleware().get();
     const loadPromises: Promise<any>[] = [];
-    const wrapped = wrapRichText(r.text, {
+    let wrapped = wrapRichText(r.text, {
       ...(props.richTextOptions || {}),
       loadPromises,
       entities: r.entities
@@ -155,6 +178,11 @@ export function TranslatableMessageTsx(props: {
       const set = () => {
         if(!middleware()) return;
         deferred.resolve();
+
+        if(props.onFragment) {
+          wrapped = props.onFragment(wrapped);
+        }
+
         container.replaceChildren(wrapped);
         if(hadText || dontShowOriginalFirst) container.classList.remove('text-loading');
         hadText = true;

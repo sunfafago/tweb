@@ -1,15 +1,15 @@
 import {ComponentProps, For, JSX, splitProps, untrack} from 'solid-js';
-import {LangPackKey, i18n} from '../lib/langPack';
-import {AvatarNew} from './avatarNew';
-import {PeerTitleTsx} from './peerTitleTsx';
-import classNames from '../helpers/string/classNames';
+import {LangPackKey, i18n} from '@lib/langPack';
+import {AvatarNew} from '@components/avatarNew';
+import {PeerTitleTsx} from '@components/peerTitleTsx';
+import classNames from '@helpers/string/classNames';
 
-import styles from './table.module.scss';
-import {NULL_PEER_ID} from '../lib/mtproto/mtproto_config';
-import Button from './buttonTsx';
-import showTooltip from './tooltip';
+import styles from '@components/table.module.scss';
+import {NULL_PEER_ID} from '@appManagers/constants';
+import Button from '@components/buttonTsx';
+import showTooltip from '@components/tooltip';
 
-export type TableRow = [LangPackKey, JSX.Element];
+export type TableRow = [LangPackKey | JSX.Element, JSX.Element];
 
 const keyCellClass = classNames(styles.cell, styles.key);
 
@@ -20,6 +20,7 @@ export default function Table(props: {
   footer?: JSX.Element
   footerClass?: string
   cellClass?: string
+  keyCellClass?: string
 }) {
   return (
     <table
@@ -32,7 +33,9 @@ export default function Table(props: {
       <For each={props.content}>
         {([key, value]) => (
           <tr class={/* @once */ styles.row}>
-            <td class={classNames(keyCellClass, props.cellClass)}>{i18n(key)}</td>
+            <td class={classNames(keyCellClass, props.cellClass, props.keyCellClass)}>
+              {typeof key === 'string' ? i18n(key as LangPackKey) : key}
+            </td>
             <td class={classNames(styles.cell, props.cellClass)}>
               <div class={/* @once */ styles.value}>
                 {value}
@@ -90,22 +93,22 @@ export function TableButton(props: ComponentProps<typeof Button>) {
 
 export function TableButtonWithTooltip(props: ComponentProps<typeof Button> & {
   tooltipClass?: string
-  tooltipTextElement: HTMLElement
+  tooltipTextElement?: HTMLElement
 }) {
   const [, rest] = splitProps(props, ['tooltipClass', 'tooltipTextElement']);
   return (
     <Button
       {...rest}
-      class={/* @once */ styles.button}
+      class={classNames(rest.class, styles.button)}
       onClick={(evt) => {
         props.onClick?.(evt);
-        showTooltip({
+        if(props.tooltipTextElement) showTooltip({
           element: evt.target as HTMLElement,
           vertical: 'top',
           container: document.body,
           class: props.tooltipClass,
           textElement: props.tooltipTextElement
-        })
+        });
       }}
     />
   )

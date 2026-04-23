@@ -4,22 +4,22 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import type ChatTopbar from './topbar';
-import DivAndCaption from '../divAndCaption';
-import PinnedContainer from './pinnedContainer';
-import Chat from './chat';
-import cancelEvent from '../../helpers/dom/cancelEvent';
-import {attachClickEvent} from '../../helpers/dom/clickEvent';
-import I18n from '../../lib/langPack';
-import {ChatFull} from '../../layer';
-import {AppManagers} from '../../lib/appManagers/managers';
-import StackedAvatars from '../stackedAvatars';
-import appSidebarRight from '../sidebarRight';
-import AppChatRequestsTab from '../sidebarRight/tabs/chatRequests';
-import callbackify from '../../helpers/callbackify';
-import apiManagerProxy from '../../lib/mtproto/mtprotoworker';
-import {ONE_DAY} from '../../helpers/date';
-import {MiddlewareHelper, getMiddleware} from '../../helpers/middleware';
+import type ChatTopbar from '@components/chat/topbar';
+import DivAndCaption from '@components/divAndCaption';
+import PinnedContainer from '@components/chat/pinnedContainer';
+import Chat from '@components/chat/chat';
+import cancelEvent from '@helpers/dom/cancelEvent';
+import {attachClickEvent} from '@helpers/dom/clickEvent';
+import I18n from '@lib/langPack';
+import {ChatFull} from '@layer';
+import {AppManagers} from '@lib/managers';
+import StackedAvatars from '@components/stackedAvatars';
+import appSidebarRight from '@components/sidebarRight';
+import AppChatRequestsTab from '@components/sidebarRight/tabs/chatRequests';
+import callbackify from '@helpers/callbackify';
+import apiManagerProxy from '@lib/apiManagerProxy';
+import {ONE_DAY} from '@helpers/date';
+import {MiddlewareHelper, getMiddleware} from '@helpers/middleware';
 
 export default class ChatRequests extends PinnedContainer {
   protected titleElement: I18n.IntlElement;
@@ -42,10 +42,7 @@ export default class ChatRequests extends PinnedContainer {
         }
       ),
       onClose: () => {
-        apiManagerProxy.getState().then((state) => {
-          state.hideChatJoinRequests[this.peerId] = Date.now();
-          this.managers.appStateManager.pushToState('hideChatJoinRequests', state.hideChatJoinRequests);
-        });
+        this.chat.setAppState('hideChatJoinRequests', this.peerId, Date.now());
       },
       floating: true,
       height: 52
@@ -116,15 +113,14 @@ export default class ChatRequests extends PinnedContainer {
   public setPeerId(peerId: PeerId) {
     // const middleware = this.getMiddleware();
     return Promise.all([
-      this.chat.managers.acknowledged.appProfileManager.getProfileByPeerId(peerId),
-      apiManagerProxy.getState()
-    ]).then(([peerFullAcked, state]) => {
+      this.chat.managers.acknowledged.appProfileManager.getProfileByPeerId(peerId)
+    ]).then(([peerFullAcked]) => {
       return {
         cached: peerFullAcked.cached,
         result: callbackify(peerFullAcked.result, (peerFull) => {
           const recentRequesters = (peerFull as ChatFull.channelFull)?.recent_requesters;
           if(recentRequesters &&
-            (!state.hideChatJoinRequests[peerId] || (Date.now() - state.hideChatJoinRequests[peerId]) >= ONE_DAY)) {
+            (!this.chat.appState.hideChatJoinRequests[peerId] || (Date.now() - this.chat.appState.hideChatJoinRequests[peerId]) >= ONE_DAY)) {
             return this.set(
               peerId,
               recentRequesters.slice(0, 3).map((userId) => userId.toPeerId(false)),

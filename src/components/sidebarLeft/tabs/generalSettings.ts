@@ -4,32 +4,34 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import RangeSelector from '../../rangeSelector';
-import Button from '../../button';
-import CheckboxField from '../../checkboxField';
-import RadioField from '../../radioField';
-import rootScope from '../../../lib/rootScope';
-import {IS_APPLE, IS_SAFARI} from '../../../environment/userAgent';
-import Row from '../../row';
-import AppBackgroundTab from './background';
-import I18n, {LangPackKey, _i18n, join} from '../../../lib/langPack';
-import {attachClickEvent} from '../../../helpers/dom/clickEvent';
-import {BaseTheme} from '../../../layer';
-import eachMinute from '../../../helpers/eachMinute';
-import {SliderSuperTabEventable} from '../../sliderTab';
-import IS_GEOLOCATION_SUPPORTED from '../../../environment/geolocationSupport';
-import {DEFAULT_THEME, StateSettings} from '../../../config/state';
-import {generateSection} from '../../settingSection';
-import {ScrollableX} from '../../scrollable';
-import wrapStickerEmoji from '../../wrappers/stickerEmoji';
-import {Theme} from '../../../layer';
-import findUpClassName from '../../../helpers/dom/findUpClassName';
-import RLottiePlayer from '../../../lib/rlottie/rlottiePlayer';
-import themeController from '../../../helpers/themeController';
-import liteMode from '../../../helpers/liteMode';
-import AppPowerSavingTab from './powerSaving';
-import {toastNew} from '../../toast';
-import {joinDeepPath} from '../../../helpers/object/setDeepProperty';
+import RangeSelector from '@components/rangeSelector';
+import Button from '@components/button';
+import CheckboxField from '@components/checkboxField';
+import RadioField from '@components/radioField';
+import rootScope from '@lib/rootScope';
+import {IS_APPLE, IS_SAFARI} from '@environment/userAgent';
+import Row from '@components/row';
+import AppBackgroundTab from '@components/sidebarLeft/tabs/background';
+import I18n, {LangPackKey, _i18n, join} from '@lib/langPack';
+import {attachClickEvent} from '@helpers/dom/clickEvent';
+import {BaseTheme} from '@layer';
+import eachMinute from '@helpers/eachMinute';
+import {SliderSuperTabEventable} from '@components/sliderTab';
+import IS_GEOLOCATION_SUPPORTED from '@environment/geolocationSupport';
+import {DEFAULT_THEME, StateSettings} from '@config/state';
+import {generateSection} from '@components/settingSection';
+import {ScrollableX} from '@components/scrollable';
+import wrapStickerEmoji from '@components/wrappers/stickerEmoji';
+import {Theme} from '@layer';
+import findUpClassName from '@helpers/dom/findUpClassName';
+import RLottiePlayer from '@lib/rlottie/rlottiePlayer';
+import themeController from '@helpers/themeController';
+import liteMode from '@helpers/liteMode';
+import AppPowerSavingTab from '@components/sidebarLeft/tabs/powerSaving';
+import {toastNew} from '@components/toast';
+import {joinDeepPath} from '@helpers/object/setDeepProperty';
+import {useAppSettings} from '@stores/appSettings';
+import pause from '@helpers/schedulers/pause';
 
 export class RangeSettingSelector {
   public container: HTMLDivElement;
@@ -99,6 +101,7 @@ export default class AppGeneralSettingsTab extends SliderSuperTabEventable {
   public init(p: ReturnType<typeof AppGeneralSettingsTab['getInitArgs']>) {
     this.container.classList.add('general-settings-container');
     this.setTitle('General');
+    const [appSettings, setAppSettings] = useAppSettings();
 
     const section = generateSection.bind(null, this.scrollable);
     const promises: Promise<any>[] = [];
@@ -106,9 +109,9 @@ export default class AppGeneralSettingsTab extends SliderSuperTabEventable {
     {
       const container = section('Settings');
 
-      const range = new RangeSettingSelector('TextSize', 1, rootScope.settings.messagesTextSize, 12, 20);
+      const range = new RangeSettingSelector('TextSize', 1, appSettings.messagesTextSize, 12, 20);
       range.onChange = (value) => {
-        rootScope.managers.appStateManager.setByKey(joinDeepPath('settings', 'messagesTextSize'), value);
+        setAppSettings('messagesTextSize', value);
       };
 
       const chatBackgroundButton = Button('btn-primary btn-transparent', {icon: 'image', text: 'ChatBackground'});
@@ -118,7 +121,7 @@ export default class AppGeneralSettingsTab extends SliderSuperTabEventable {
         this.slider.createTab(AppBackgroundTab).open(initArgs);
       });
 
-      const getLiteModeStatus = (): LangPackKey => rootScope.settings.liteMode.all ? 'Checkbox.Enabled' : 'Checkbox.Disabled';
+      const getLiteModeStatus = (): LangPackKey => appSettings.liteMode.all ? 'Checkbox.Enabled' : 'Checkbox.Disabled';
       const i = new I18n.IntlElement();
 
       const onUpdate = () => {
@@ -521,6 +524,9 @@ export default class AppGeneralSettingsTab extends SliderSuperTabEventable {
       container.append(form);
     }
 
-    return Promise.all(promises);
+    return Promise.race([
+      pause(500),
+      Promise.all(promises)
+    ]);
   }
 }

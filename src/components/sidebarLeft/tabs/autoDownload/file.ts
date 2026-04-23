@@ -4,21 +4,21 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import formatBytes from '../../../../helpers/formatBytes';
-import {joinDeepPath} from '../../../../helpers/object/setDeepProperty';
-import debounce from '../../../../helpers/schedulers/debounce';
-import I18n from '../../../../lib/langPack';
-import rootScope from '../../../../lib/rootScope';
-import {SliderSuperTabEventable} from '../../../sliderTab';
-import {RangeSettingSelector} from '../generalSettings';
-import {autoDownloadPeerTypeSection} from './photo';
+import formatBytes from '@helpers/formatBytes';
+import debounce from '@helpers/schedulers/debounce';
+import I18n from '@lib/langPack';
+import {useAppSettings} from '@stores/appSettings';
+import {SliderSuperTabEventable} from '@components/sliderTab';
+import {RangeSettingSelector} from '@components/sidebarLeft/tabs/generalSettings';
+import {autoDownloadPeerTypeSection} from '@components/sidebarLeft/tabs/autoDownload/photo';
 
 export default class AppAutoDownloadFileTab extends SliderSuperTabEventable {
   public init() {
     this.setTitle('AutoDownloadFiles');
+    const [appSettings, setAppSettings] = useAppSettings();
 
     const debouncedSave = debounce((sizeMax: number) => {
-      this.managers.appStateManager.setByKey(joinDeepPath('settings', 'autoDownloadNew', 'file_size_max'), sizeMax);
+      setAppSettings('autoDownloadNew', 'file_size_max', sizeMax);
     }, 200, false, true);
 
     const section = autoDownloadPeerTypeSection('file', 'AutoDownloadFilesTitle', this.listenerSetter);
@@ -28,7 +28,7 @@ export default class AppAutoDownloadFileTab extends SliderSuperTabEventable {
     const MAX = 20 * 1024 * 1024;
     const MAX_RANGE = MAX - MIN;
 
-    const sizeMax = rootScope.settings.autoDownloadNew.file_size_max;
+    const sizeMax = appSettings.autoDownloadNew.file_size_max;
     const value = Math.sqrt(Math.sqrt((sizeMax - MIN) / MAX_RANGE));
     const upTo = new I18n.IntlElement({
       key: 'AutodownloadSizeLimitUpTo',

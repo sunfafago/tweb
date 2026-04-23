@@ -9,27 +9,27 @@
  * https://github.com/zhukov/webogram/blob/master/LICENSE
  */
 
-import type {MyTopPeer} from './appUsersManager';
-import tsNow from '../../helpers/tsNow';
-import {ChannelParticipantsFilter, ChannelsChannelParticipants, ChannelParticipant, Chat, ChatFull, ChatParticipants, ChatPhoto, ExportedChatInvite, InputChannel, InputFile, SendMessageAction, Update, UserFull, Photo, PhotoSize, Updates, ChatParticipant, PeerSettings, SendAsPeer, InputGroupCall} from '../../layer';
-import SearchIndex from '../searchIndex';
-import {AppManager} from './manager';
-import getServerMessageId from './utils/messageId/getServerMessageId';
-import getPhotoInput from './utils/photos/getPhotoInput';
-import getParticipantPeerId from './utils/chats/getParticipantPeerId';
-import ctx from '../../environment/ctx';
-import {ReferenceContext} from '../mtproto/referenceDatabase';
-import assumeType from '../../helpers/assumeType';
-import makeError from '../../helpers/makeError';
-import callbackify from '../../helpers/callbackify';
-import getPeerActiveUsernames from './utils/peers/getPeerActiveUsernames';
-import getParticipantsCount from './utils/chats/getParticipantsCount';
-import callbackifyAll from '../../helpers/callbackifyAll';
-import indexOfAndSplice from '../../helpers/array/indexOfAndSplice';
+import type {MyTopPeer} from '@appManagers/appUsersManager';
+import tsNow from '@helpers/tsNow';
+import {ChannelParticipantsFilter, ChannelsChannelParticipants, ChannelParticipant, Chat, ChatFull, ChatParticipants, ChatPhoto, ExportedChatInvite, InputChannel, InputFile, SendMessageAction, Update, UserFull, Photo, PhotoSize, Updates, ChatParticipant, PeerSettings, SendAsPeer, InputGroupCall, Birthday, TextWithEntities} from '@layer';
+import SearchIndex from '@lib/searchIndex';
+import {AppManager} from '@appManagers/manager';
+import getServerMessageId from '@appManagers/utils/messageId/getServerMessageId';
+import getPhotoInput from '@appManagers/utils/photos/getPhotoInput';
+import getParticipantPeerId from '@appManagers/utils/chats/getParticipantPeerId';
+import ctx from '@environment/ctx';
+import {ReferenceContext} from '@lib/storages/references';
+import assumeType from '@helpers/assumeType';
+import makeError from '@helpers/makeError';
+import callbackify from '@helpers/callbackify';
+import getPeerActiveUsernames from '@appManagers/utils/peers/getPeerActiveUsernames';
+import getParticipantsCount from '@appManagers/utils/chats/getParticipantsCount';
+import callbackifyAll from '@helpers/callbackifyAll';
+import indexOfAndSplice from '@helpers/array/indexOfAndSplice';
+import {PEER_FULL_TTL} from '@appManagers/constants';
+import {isParticipantAdmin} from '@lib/appManagers/utils/chats/isParticipantAdmin';
 
 export type UserTyping = Partial<{userId: UserId, action: SendMessageAction, timeout: number}>;
-
-const PEER_FULL_TTL = 3 * 60e3;
 
 type GetChannelParticipantsOptions = {
   id: ChatId,
@@ -61,13 +61,17 @@ export class AppProfileManager extends AppManager {
 
       updateChatParticipantDelete: this.onUpdateChatParticipantDelete,
 
+      updateChatParticipantAdmin: this.onUpdateChatParticipantAdmin,
+
       updateUserTyping: this.onUpdateUserTyping,
       updateChatUserTyping: this.onUpdateUserTyping,
       updateChannelUserTyping: this.onUpdateUserTyping,
 
       updatePeerBlocked: this.onUpdatePeerBlocked,
 
-      updatePeerSettings: this.onUpdatePeerSettings
+      updatePeerSettings: this.onUpdatePeerSettings,
+
+      updatePeerHistoryTTL: this.onUpdatePeerHistoryTTL
     });
 
     this.rootScope.addEventListener('chat_update', (chatId) => {
@@ -119,35 +123,11 @@ export class AppProfileManager extends AppManager {
       this.invalidateChannelParticipants(chatId);
     });
 
-    this.rootScope.addEventListener('peer_bio_edit', (peerId) => {
-      this.rootScope.dispatchEvent('user_full_update', peerId.toUserId());
-    });
-
     this.typingsInPeer = {};
     this.peerSettings = {};
   }
 
-  /* public saveBotInfo(botInfo: any) {
-    const botId = botInfo && botInfo.user_id;
-    if(!botId) {
-      return null;
-    }
-
-    const commands: any = {};
-    botInfo.commands.forEach((botCommand: any) => {
-      commands[botCommand.command] = botCommand.description;
-    });
-
-    return this.botInfos[botId] = {
-      id: botId,
-      version: botInfo.version,
-      shareText: botInfo.share_text,
-      description: botInfo.description,
-      commands: commands
-    };
-  } */
-
-  public getProfile(id: UserId, override?: true) {
+  public getProfile(id: UserId, override?: boolean) {
     if(this.usersFull[id] && !override && Date.now() < this.fullExpiration[id.toPeerId()]) {
       return this.usersFull[id];
     }
@@ -170,8 +150,8 @@ export class AppProfileManager extends AppManager {
         userFull.wallpaper = this.appThemesManager.saveWallPaper(userFull.wallpaper);
 
         const botInfo = userFull.bot_info;
+        const referenceContext: ReferenceContext = {type: 'userFull', userId: id};
         if(botInfo) {
-          const referenceContext: ReferenceContext = {type: 'userFull', userId: id};
           botInfo.description_document = this.appDocsManager.saveDoc(botInfo.description_document, referenceContext);
           botInfo.description_photo = this.appPhotosManager.savePhoto(botInfo.description_photo, referenceContext);
         }
@@ -184,6 +164,9 @@ export class AppProfileManager extends AppManager {
             userFull.personal_channel_id
           );
         }
+        if(userFull.saved_music) {
+          userFull.saved_music = this.appDocsManager.saveDoc(userFull.saved_music, referenceContext);
+        }
 
         this.appNotificationsManager.savePeerSettings({
           peerId,
@@ -192,10 +175,6 @@ export class AppProfileManager extends AppManager {
 
         this.usersFull[id] = userFull;
         this.fullExpiration[peerId] = Date.now() + PEER_FULL_TTL;
-
-        /* if(userFull.bot_info) {
-          userFull.bot_info = this.saveBotInfo(userFull.bot_info) as any;
-        } */
 
         // appMessagesManager.savePinnedMessage(id, userFull.pinned_msg_id);
 
@@ -213,7 +192,27 @@ export class AppProfileManager extends AppManager {
     return intro && (intro.title || intro.description || intro.sticker);
   }
 
-  public getProfileByPeerId(peerId: PeerId, override?: true) {
+  public async getSavedMusic(userId: UserId, offset: number = 0, limit: number = 50) {
+    const result = await this.apiManager.invokeApi('users.getSavedMusic', {
+      id: this.appUsersManager.getUserInput(userId),
+      offset,
+      limit,
+      hash: 0
+    });
+
+    if(result._ === 'users.savedMusicNotModified') {
+      return {count: result.count, documents: []};
+    }
+
+    const referenceContext: ReferenceContext = {type: 'savedMusic', userId};
+    const documents = result.documents
+    .map((doc) => this.appDocsManager.saveDoc(doc, referenceContext))
+    .filter(Boolean);
+
+    return {count: result.count, documents};
+  }
+
+  public getProfileByPeerId(peerId: PeerId, override?: boolean) {
     if(this.appPeersManager.isAnyChat(peerId)) return this.getChatFull(peerId.toChatId(), override);
     else return this.getProfile(peerId.toUserId(), override);
   }
@@ -235,7 +234,7 @@ export class AppProfileManager extends AppManager {
   }
 
   public modifyCachedFullUser(userId: UserId, modify: (fullUser: UserFull) => boolean | void) {
-    this.modifyCachedFullPeer(userId.toPeerId(true), modify as any);
+    this.modifyCachedFullPeer(userId.toPeerId(false), modify as any);
   }
 
   public modifyCachedFullPeer(peerId: PeerId, modify: (fullPeer: UserFull | ChatFull) => boolean | void) {
@@ -299,7 +298,7 @@ export class AppProfileManager extends AppManager {
     });
   } */
 
-  public getChatFull(id: ChatId, override?: true) {
+  public getChatFull(id: ChatId, override?: boolean) {
     if(this.appChatsManager.isChannel(id)) {
       return this.getChannelFull(id, override);
     }
@@ -331,7 +330,7 @@ export class AppProfileManager extends AppManager {
         }
 
         if(chatFull.call) {
-          this.appGroupCallsManager.saveGroupCall(chatFull.call as InputGroupCall.inputGroupCall, id);
+          this.appGroupCallsManager.saveGroupCall(chatFull.call as InputGroupCall.inputGroupCall, peerId);
         }
 
         // appMessagesManager.savePinnedMessage(peerId, fullChat.pinned_msg_id);
@@ -397,14 +396,22 @@ export class AppProfileManager extends AppManager {
         throw makeError('CHAT_PRIVATE');
       }
 
-      if(filter._ === 'channelParticipantsSearch' && filter.q.trim()) {
-        return {
-          ...chatParticipants,
-          participants: this.filterParticipantsByQuery(chatParticipants.participants, filter.q)
-        };
+      let {participants} = chatParticipants;
+      if(filter._ === 'channelParticipantsAdmins') {
+        participants = participants.filter((participant) => {
+          return isParticipantAdmin(participant);
+        });
       }
 
-      return chatParticipants;
+      const query = (filter as ChannelParticipantsFilter.channelParticipantsAdmins).q;
+      if(query?.trim()) {
+        participants = this.filterParticipantsByQuery(participants, query);
+      }
+
+      return {
+        ...chatParticipants,
+        participants
+      };
     });
   }
 
@@ -550,7 +557,7 @@ export class AppProfileManager extends AppManager {
     });
   }
 
-  public getChannelFull(id: ChatId, override?: true) {
+  public getChannelFull(id: ChatId, override?: boolean) {
     const peerId = id.toPeerId(true);
     if(this.chatsFull[id] !== undefined && !override && Date.now() < this.fullExpiration[peerId]) {
       return this.chatsFull[id] as ChatFull.channelFull;
@@ -578,7 +585,7 @@ export class AppProfileManager extends AppManager {
         fullChannel.wallpaper = this.appThemesManager.saveWallPaper(fullChannel.wallpaper);
 
         if(fullChannel.call) {
-          this.appGroupCallsManager.saveGroupCall(fullChannel.call as InputGroupCall.inputGroupCall, id);
+          this.appGroupCallsManager.saveGroupCall(fullChannel.call as InputGroupCall.inputGroupCall, peerId);
         }
 
         this.appNotificationsManager.savePeerSettings({
@@ -714,7 +721,7 @@ export class AppProfileManager extends AppManager {
 
     // ! эта строчка будет создавать race condition:
     // ! запрос вернёт chat с установленным флагом call_not_empty, хотя сам апдейт уже будет применён
-    // this.getProfileByPeerId(peerId, true);
+    this.getProfileByPeerId(peerId, true);
   }
 
   public refreshFullPeerIfNeeded(peerId: PeerId) {
@@ -732,17 +739,9 @@ export class AppProfileManager extends AppManager {
     }).then((user) => {
       this.appUsersManager.saveApiUser(user);
 
-      if(about !== undefined) {
-        const peerId = user.id.toPeerId();
-        const userFull = this.usersFull[user.id];
-        if(userFull) {
-          userFull.about = about;
-        }
-
-        this.rootScope.dispatchEvent('peer_bio_edit', peerId);
-      }
-
-      return this.getProfile(user.id, true);
+      this.modifyCachedFullUser(user.id, (userFull) => {
+        userFull.about = about;
+      });
     });
   }
 
@@ -761,16 +760,9 @@ export class AppProfileManager extends AppManager {
         });
       }
 
-      const userFull = this.getCachedFullUser(botId);
-      if(about !== undefined) {
-        if(userFull) {
-          userFull.about = about;
-        }
-
-        this.rootScope.dispatchEvent('peer_bio_edit', botId.toPeerId());
-      }
-
-      return this.getProfile(botId, true);
+      this.modifyCachedFullUser(botId, (userFull) => {
+        userFull.about = about;
+      });
     });
   }
 
@@ -900,7 +892,7 @@ export class AppProfileManager extends AppManager {
 
   public canGiftPremium(userId: UserId) {
     const user = this.appUsersManager.getUser(userId);
-    if(user?.pFlags?.premium) {
+    if(user?.pFlags?.premium || user?.pFlags?.bot_forum_view) {
       return false;
     }
 
@@ -973,31 +965,21 @@ export class AppProfileManager extends AppManager {
     });
   }
 
-  private onUpdateChatParticipants = (update: Update.updateChatParticipants) => {
+  private onUpdateChatParticipants = (update: Update.updateChatParticipants) => this.modifyCachedFullChat(update.participants.chat_id, (chatFull) => {
     const participants = update.participants;
-    if(participants._ !== 'chatParticipants') {
-      return;
+    (chatFull as ChatFull.chatFull).participants = participants;
+  });
+
+  private onUpdateChatParticipantAdd = (update: Update.updateChatParticipantAdd) => this.modifyCachedFullChat(update.chat_id, (chatFull) => {
+    const _participants = (chatFull as ChatFull.chatFull).participants as ChatParticipants.chatParticipants;
+    if(_participants?._ !== 'chatParticipants') {
+      return false;
     }
 
-    const chatId = participants.chat_id;
-    const chatFull = this.chatsFull[chatId] as ChatFull.chatFull;
-    if(chatFull !== undefined) {
-      chatFull.participants = participants;
-      this.rootScope.dispatchEvent('chat_full_update', chatId);
-    }
-  };
-
-  private onUpdateChatParticipantAdd = (update: Update.updateChatParticipantAdd) => {
-    const chatFull = this.chatsFull[update.chat_id] as ChatFull.chatFull;
-    if(chatFull === undefined) {
-      return;
-    }
-
-    const _participants = chatFull.participants as ChatParticipants.chatParticipants;
-    const participants = _participants.participants || [];
-    for(let i = 0, length = participants.length; i < length; i++) {
+    const participants = _participants.participants;
+    for(let i = 0, length = participants.length; i < length; ++i) {
       if(participants[i].user_id === update.user_id) {
-        return;
+        return false;
       }
     }
 
@@ -1009,26 +991,47 @@ export class AppProfileManager extends AppManager {
     });
 
     _participants.version = update.version;
-    this.rootScope.dispatchEvent('chat_full_update', update.chat_id);
-  };
+  });
 
-  private onUpdateChatParticipantDelete = (update: Update.updateChatParticipantDelete) => {
-    const chatFull = this.chatsFull[update.chat_id] as ChatFull.chatFull;
-    if(chatFull === undefined) {
-      return;
+  private onUpdateChatParticipantDelete = (update: Update.updateChatParticipantDelete) => this.modifyCachedFullChat(update.chat_id, (chatFull) => {
+    const _participants = (chatFull as ChatFull.chatFull).participants as ChatParticipants.chatParticipants;
+    if(_participants?._ !== 'chatParticipants') {
+      return false;
     }
 
-    const _participants = chatFull.participants as ChatParticipants.chatParticipants;
-    const participants = _participants.participants || [];
+    const participants = _participants.participants;
     for(let i = 0, length = participants.length; i < length; i++) {
       if(participants[i].user_id === update.user_id) {
         participants.splice(i, 1);
         _participants.version = update.version;
-        this.rootScope.dispatchEvent('chat_full_update', update.chat_id);
         return;
       }
     }
-  };
+
+    return false;
+  });
+
+  private onUpdateChatParticipantAdmin = (update: Update.updateChatParticipantAdmin) => this.modifyCachedFullChat(update.chat_id, (chatFull) => {
+    const _participants = (chatFull as ChatFull.chatFull).participants as ChatParticipants.chatParticipants;
+    if(_participants?._ !== 'chatParticipants') {
+      return false;
+    }
+
+    const participants = _participants.participants;
+    for(let i = 0, length = participants.length; i < length; i++) {
+      if(participants[i].user_id === update.user_id) {
+        participants[i] = {
+          _: update.is_admin ? 'chatParticipantAdmin' : 'chatParticipant',
+          user_id: update.user_id,
+          inviter_id: this.appUsersManager.getSelf().id,
+          date: tsNow(true)
+        };
+        return;
+      }
+    }
+
+    return false;
+  });
 
   private onUpdateUserTyping = (update: Update.updateUserTyping | Update.updateChatUserTyping | Update.updateChannelUserTyping) => {
     const fromId = (update as Update.updateUserTyping).user_id ?
@@ -1045,6 +1048,11 @@ export class AppProfileManager extends AppManager {
     const typings = this.typingsInPeer[key] ??= [];
     const action = update.action;
     let typing = typings.find((t) => t.userId === fromId);
+
+    if(update._ === 'updateUserTyping' && action._ === 'sendMessageTextDraftAction') {
+      this.appMessagesManager.handleTypingBotforumUpdate(update);
+      return;
+    }
 
     if((action as SendMessageAction.sendMessageEmojiInteraction).msg_id) {
       (action as SendMessageAction.sendMessageEmojiInteraction).msg_id = this.appMessagesIdsManager.generateMessageId((action as SendMessageAction.sendMessageEmojiInteraction).msg_id, (update as Update.updateChannelUserTyping).channel_id);
@@ -1147,4 +1155,83 @@ export class AppProfileManager extends AppManager {
     const peerId = this.appPeersManager.getPeerId(update.peer);
     this.rootScope.dispatchEvent('peer_settings', {peerId, settings: update.settings});
   };
+
+  private onUpdatePeerHistoryTTL = (update: Update.updatePeerHistoryTTL) => {
+    const peerId = this.appPeersManager.getPeerId(update.peer);
+
+    // const peerFull = peerId.isUser() ? this.usersFull[peerId.toUserId()] : this.chatsFull[peerId.toChatId()];
+    this.modifyCachedFullPeer(peerId, (peerFull) => {
+      peerFull.ttl_period = update.ttl_period;
+    });
+
+    const dialog = this.dialogsStorage.getDialogOnly(peerId);
+    if(dialog) {
+      dialog.ttl_period = update.ttl_period;
+      this.dialogsStorage.setDialogToState(dialog);
+    }
+
+    this.rootScope.dispatchEvent('auto_delete_period_update', {peerId, period: update.ttl_period});
+  };
+
+  public setMyBirthday(date: Birthday | null) {
+    return this.apiManager.invokeApiSingleProcess({
+      method: 'account.updateBirthday',
+      params: {
+        birthday: date ?? undefined
+      },
+      processResult: (result) => {
+        this.modifyCachedFullUser(this.rootScope.myId, (userFull) => {
+          userFull.birthday = date ?? undefined;
+          return true;
+        });
+      }
+    });
+  }
+
+  public suggestUserBirthday(userId: UserId, date: Birthday) {
+    return this.apiManager.invokeApiSingleProcess({
+      method: 'users.suggestBirthday',
+      params: {
+        id: this.appUsersManager.getUserInput(userId),
+        birthday: date
+      },
+      processResult: (updates) => {
+        if(!updates) return
+
+        this.apiUpdatesManager.processUpdateMessage(updates);
+      }
+    });
+  }
+
+  public updateUserNote(userId: UserId, note: TextWithEntities) {
+    return this.apiManager.invokeApiSingleProcess({
+      method: 'contacts.updateContactNote',
+      params: {
+        id: this.appUsersManager.getUserInput(userId),
+        note: note
+      },
+      processResult: (result) => {
+        if(!result) return
+
+        this.modifyCachedFullUser(userId, (userFull) => {
+          userFull.note = note.text === '' ? undefined : note;
+          return true;
+        });
+      }
+    });
+  }
+
+  public toggleNoForwards(peerId: PeerId, enabled: boolean, requestMsgId?: number) {
+    return this.apiManager.invokeApi('messages.toggleNoForwards', {
+      peer: this.appPeersManager.getInputPeerById(peerId),
+      enabled,
+      request_msg_id: requestMsgId ? getServerMessageId(requestMsgId) : undefined
+    }).then((updates) => {
+      if(peerId.isAnyChat()) {
+        this.appChatsManager.onChatUpdated(peerId.toChatId(), updates);
+      } else {
+        this.apiUpdatesManager.processUpdateMessage(updates);
+      }
+    });
+  }
 }

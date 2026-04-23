@@ -1,5 +1,5 @@
-@import "../../../../scss/variables";
-@import "../../../../scss/mixins";
+@use "../../../../scss/variables" as *;
+@use "../../../../scss/mixins" as *;
 
 .Overlay {
   position: fixed;
@@ -8,7 +8,7 @@
   bottom: 0;
   top: 0;
 
-  z-index: 4;
+  z-index: 5;
 }
 
 .Value {
@@ -39,14 +39,8 @@
   display: flex;
   flex-direction: column;
 
-  background-color: rgba(var(--surface-color-rgb), 0.75);
-  backdrop-filter: blur(8px);
+  background-color: var(--surface-color);
   box-shadow: var(--menu-box-shadow);
-
-  :global(html.no-backdrop) & {
-    background-color: var(--surface-color);
-    backdrop-filter: none;
-  }
 }
 
 .Option {
@@ -60,6 +54,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  padding-inline: 0.75rem;
 
   color: var(--primary-text-color);
 

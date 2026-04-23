@@ -4,32 +4,35 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import {putPreloader} from '../components/putPreloader';
-import Page from './page';
-import Button from '../components/button';
-import IS_TOUCH_SUPPORTED from '../environment/touchSupport';
-import App from '../config/app';
-import I18n, {_i18n, i18n} from '../lib/langPack';
-import lottieLoader from '../lib/rlottie/lottieLoader';
-import ripple from '../components/ripple';
-import pageSignQR from './pageSignQR';
-import getLanguageChangeButton from '../components/languageChangeButton';
-import cancelEvent from '../helpers/dom/cancelEvent';
-import {attachClickEvent} from '../helpers/dom/clickEvent';
-import replaceContent from '../helpers/dom/replaceContent';
-import toggleDisability from '../helpers/dom/toggleDisability';
-import {TrueDcId} from '../types';
-import placeCaretAtEnd from '../helpers/dom/placeCaretAtEnd';
-import {HelpCountry, HelpCountryCode} from '../layer';
-import rootScope from '../lib/rootScope';
-import TelInputField from '../components/telInputField';
-import CountryInputField from '../components/countryInputField';
-import {getCurrentAccount} from '../lib/accounts/getCurrentAccount';
-import AccountController from '../lib/accounts/accountController';
-import commonStateStorage from '../lib/commonStateStorage';
+import {putPreloader} from '@components/putPreloader';
+import Page from '@/pages/page';
+import Button from '@components/button';
+import IS_TOUCH_SUPPORTED from '@environment/touchSupport';
+import App from '@config/app';
+import I18n, {_i18n, i18n} from '@lib/langPack';
+import lottieLoader from '@lib/rlottie/lottieLoader';
+import ripple from '@components/ripple';
+import pageSignQR from '@/pages/pageSignQR';
+import getLanguageChangeButton from '@components/languageChangeButton';
+import cancelEvent from '@helpers/dom/cancelEvent';
+import {attachClickEvent} from '@helpers/dom/clickEvent';
+import replaceContent from '@helpers/dom/replaceContent';
+import toggleDisability from '@helpers/dom/toggleDisability';
+import {TrueDcId} from '@types';
+import placeCaretAtEnd from '@helpers/dom/placeCaretAtEnd';
+import {HelpCountry, HelpCountryCode} from '@layer';
+import rootScope from '@lib/rootScope';
+import TelInputField from '@components/telInputField';
+import CountryInputField from '@components/countryInputField';
+import {getCurrentAccount} from '@lib/accounts/getCurrentAccount';
+import AccountController from '@lib/accounts/accountController';
+import commonStateStorage from '@lib/commonStateStorage';
+import PasskeyLoginButton from '@components/passkeyLoginButton';
 
-// import _countries from '../countries_pretty.json';
-let btnNext: HTMLButtonElement = null, btnQr: HTMLButtonElement;
+// import _countries from '@/countries_pretty.json';
+let btnNext: HTMLButtonElement = null,
+  btnQr: HTMLButtonElement,
+  passkeyButton: ReturnType<typeof PasskeyLoginButton>;
 
 const onFirstMount = () => {
   /* if(Modes.test) {
@@ -119,7 +122,7 @@ const onFirstMount = () => {
       cancelEvent(e);
     }
 
-    const toggle = toggleDisability([/* telEl, countryInput,  */btnNext, btnQr], true);
+    const toggle = toggleDisability([/* telEl, countryInput,  */btnNext, btnQr, passkeyButton?.button].filter(Boolean), true);
 
     replaceContent(btnNext, i18n('PleaseWait'));
     putPreloader(btnNext);
@@ -172,6 +175,7 @@ const onFirstMount = () => {
   attachClickEvent(btnNext, onSubmit);
 
   btnQr = Button('btn-primary btn-secondary btn-primary-transparent primary', {text: 'Login.QR.Login'});
+  passkeyButton = PasskeyLoginButton();
 
   const qrMounted = false;
   btnQr.addEventListener('click', () => {
@@ -197,7 +201,7 @@ const onFirstMount = () => {
     }); */
   });
 
-  inputWrapper.append(countryInputField.container, telInputField.container, btnNext, btnQr);
+  inputWrapper.append(...[countryInputField.container, telInputField.container, btnNext, btnQr, passkeyButton?.button].filter(Boolean));
 
   const h4 = document.createElement('h4');
   h4.classList.add('text-center');
@@ -239,7 +243,7 @@ const onFirstMount = () => {
           if(!dcId) return;
 
           const accountData = await AccountController.get(getCurrentAccount());
-          const key = accountData?.[`dc${dcId as TrueDcId}_auth_key`];
+          const key = accountData[`dc${dcId as TrueDcId}_auth_key`];
 
           if(key) {
             return g();
@@ -274,18 +278,19 @@ const onFirstMount = () => {
   }
 
   tryAgain();
+
+  passkeyButton && passkeyButton.fetch();
 };
 
 const page = new Page('page-sign', true, onFirstMount, () => {
   if(btnNext) {
     replaceContent(btnNext, i18n('Login.Next'));
     ripple(btnNext);
-    btnNext.removeAttribute('disabled');
   }
 
-  if(btnQr) {
-    btnQr.removeAttribute('disabled');
-  }
+  [btnNext, btnQr, passkeyButton?.button].filter(Boolean).forEach((btn) => {
+    btn.removeAttribute('disabled');
+  });
 
   rootScope.managers.appStateManager.pushToState('authState', {_: 'authStateSignIn'});
 });

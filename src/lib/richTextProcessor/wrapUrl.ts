@@ -4,13 +4,13 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import type addAnchorListener from '../../helpers/addAnchorListener';
+import type addAnchorListener from '@helpers/addAnchorListener';
 import {PHONE_NUMBER_REG_EXP} from '.';
-import {MOUNT_CLASS_TO} from '../../config/debug';
-import matchUrlProtocol from './matchUrlProtocol';
-import {T_ME_PREFIXES} from '../mtproto/mtproto_config';
+import {MOUNT_CLASS_TO} from '@config/debug';
+import matchUrlProtocol from '@lib/richTextProcessor/matchUrlProtocol';
+import {T_ME_PREFIXES} from '@appManagers/constants';
 
-export default function wrapUrl(url: string, unsafe?: number | boolean) {
+export default function wrapUrl(url: string, safe?: boolean) {
   if(!matchUrlProtocol(url)) {
     url = 'https://' + url;
   }
@@ -66,8 +66,24 @@ export default function wrapUrl(url: string, unsafe?: number | boolean) {
   } else if((telescoPeMatch = url.match(/^(?:https?:\/\/)?telesco\.pe\/([^/?]+)\/(\d+)/))) {
     onclick = 'im';
   } else if((tgMatch = url.match(/tg:(?:\/\/)?(.+?)(?:\?|$)/))) {
-    onclick = 'tg_' + tgMatch[1] as any;
-  }/*  else if(unsafe) {
+    onclick = 'tg_' + tgMatch[1].split('/')[0] as any;
+
+    switch(tgMatch[1]) {
+      // * local
+      case 'iv': {
+        try {
+          if(!safe) {
+            throw 'unsafe';
+          }
+
+          out.url = decodeURIComponent(new URL(url).searchParams.get('url'));
+        } catch(err) {
+          onclick = undefined;
+        }
+        break;
+      }
+    }
+  }/*  else if(!safe) {
     url = 'tg://unsafe_url?url=' + encodeURIComponent(url);
   } */
 

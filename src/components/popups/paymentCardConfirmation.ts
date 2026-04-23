@@ -5,12 +5,12 @@
  */
 
 import PopupElement from '.';
-import placeCaretAtEnd from '../../helpers/dom/placeCaretAtEnd';
-import {AccountPassword, AccountTmpPassword} from '../../layer';
-import {InputState} from '../inputField';
-import PasswordInputField from '../passwordInputField';
-import SettingSection from '../settingSection';
-import {PaymentButton} from './payment';
+import placeCaretAtEnd from '@helpers/dom/placeCaretAtEnd';
+import {AccountPassword, AccountTmpPassword} from '@layer';
+import {InputState} from '@components/inputField';
+import PasswordInputField from '@components/passwordInputField';
+import SettingSection from '@components/settingSection';
+import {PaymentButton} from '@components/popups/payment';
 
 export default class PopupPaymentCardConfirmation extends PopupElement<{
   finish: (tmpPassword: AccountTmpPassword) => void
@@ -41,10 +41,7 @@ export default class PopupPaymentCardConfirmation extends PopupElement<{
       onClick: async() => {
         try {
           const inputCheckPassword = await this.managers.passwordManager.getInputCheckPassword(passwordInputField.value, passwordState);
-          const tmpPassword = await this.managers.apiManager.invokeApi('account.getTmpPassword', {
-            password: inputCheckPassword,
-            period: 60
-          });
+          const tmpPassword = await this.managers.passwordManager.getTmpPassword(inputCheckPassword, 60);
 
           this.dispatchEvent('finish', tmpPassword);
           this.hide();

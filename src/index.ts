@@ -6,57 +6,59 @@
 
 /* @refresh reload */
 
-import App from './config/app';
-import blurActiveElement from './helpers/dom/blurActiveElement';
-import {IS_STICKY_INPUT_BUGGED} from './helpers/dom/fixSafariStickyInputFocusing';
-import loadFonts from './helpers/dom/loadFonts';
-import IS_EMOJI_SUPPORTED from './environment/emojiSupport';
-import {IS_ANDROID, IS_APPLE, IS_APPLE_MOBILE, IS_FIREFOX, IS_MOBILE, IS_MOBILE_SAFARI, IS_SAFARI} from './environment/userAgent';
-import './materialize.scss';
-import './scss/style.scss';
-import pause from './helpers/schedulers/pause';
-import setWorkerProxy from './helpers/setWorkerProxy';
-import toggleAttributePolyfill from './helpers/dom/toggleAttributePolyfill';
-import rootScope from './lib/rootScope';
-import IS_TOUCH_SUPPORTED from './environment/touchSupport';
-import I18n, {checkLangPackForUpdates, i18n} from './lib/langPack';
-import './helpers/peerIdPolyfill';
-import './lib/polyfill';
-import apiManagerProxy from './lib/mtproto/mtprotoworker';
-import getProxiedManagers from './lib/appManagers/getProxiedManagers';
-import themeController from './helpers/themeController';
-import overlayCounter from './helpers/overlayCounter';
-import singleInstance, {InstanceDeactivateReason} from './lib/mtproto/singleInstance';
-import {parseUriParamsLine} from './helpers/string/parseUriParams';
-import Modes from './config/modes';
-import {AuthState} from './types';
-import DEBUG, {IS_BETA} from './config/debug';
-import IS_INSTALL_PROMPT_SUPPORTED from './environment/installPrompt';
-import cacheInstallPrompt from './helpers/dom/installPrompt';
-import {fillLocalizedDates} from './helpers/date';
-import {nextRandomUint} from './helpers/random';
-import {IS_OVERLAY_SCROLL_SUPPORTED, USE_CUSTOM_SCROLL, USE_NATIVE_SCROLL} from './environment/overlayScrollSupport';
-import IMAGE_MIME_TYPES_SUPPORTED, {IMAGE_MIME_TYPES_SUPPORTED_PROMISE} from './environment/imageMimeTypesSupport';
-import MEDIA_MIME_TYPES_SUPPORTED from './environment/mediaMimeTypesSupport';
-import {doubleRaf} from './helpers/schedulers';
-import {getCurrentAccount} from './lib/accounts/getCurrentAccount';
-import AccountController from './lib/accounts/accountController';
-import {changeAccount} from './lib/accounts/changeAccount';
-import {MAX_ACCOUNTS_FREE, MAX_ACCOUNTS_PREMIUM} from './lib/accounts/constants';
-import sessionStorage from './lib/sessionStorage';
-import replaceChildrenPolyfill from './helpers/dom/replaceChildrenPolyfill';
-import listenForWindowPrint from './helpers/dom/windowPrint';
-import cancelImageEvents from './helpers/dom/cancelImageEvents';
-import PopupElement from './components/popups';
-import appRuntimeManager from './lib/appManagers/appRuntimeManager';
-import PasscodeLockScreenController from './components/passcodeLock/passcodeLockScreenController'; PasscodeLockScreenController;
-import type {LangPackDifference} from './layer';
-import commonStateStorage from './lib/commonStateStorage';
-import {MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, SIDEBAR_COLLAPSE_FACTOR} from './components/sidebarLeft/constants';
-import useHasFoldersSidebar, {useIsSidebarCollapsed} from './stores/foldersSidebar';
+import App from '@config/app';
+import blurActiveElement from '@helpers/dom/blurActiveElement';
+import {IS_STICKY_INPUT_BUGGED} from '@helpers/dom/fixSafariStickyInputFocusing';
+import loadFonts from '@helpers/dom/loadFonts';
+import IS_EMOJI_SUPPORTED from '@environment/emojiSupport';
+import {IS_ANDROID, IS_APPLE, IS_APPLE_MOBILE, IS_FIREFOX, IS_MOBILE, IS_MOBILE_SAFARI, IS_SAFARI} from '@environment/userAgent';
+import '@/materialize.scss';
+import '@/scss/style.scss';
+import pause from '@helpers/schedulers/pause';
+import setWorkerProxy from '@helpers/setWorkerProxy';
+import toggleAttributePolyfill from '@helpers/dom/toggleAttributePolyfill';
+import rootScope from '@lib/rootScope';
+import IS_TOUCH_SUPPORTED from '@environment/touchSupport';
+import I18n, {checkLangPackForUpdates, i18n, LangPackKey} from '@lib/langPack';
+import '@helpers/peerIdPolyfill';
+import '@lib/polyfill';
+import apiManagerProxy from '@lib/apiManagerProxy';
+import getProxiedManagers from '@lib/getProxiedManagers';
+import themeController from '@helpers/themeController';
+import overlayCounter from '@helpers/overlayCounter';
+import singleInstance, {InstanceDeactivateReason} from '@lib/singleInstance';
+import {parseUriParamsLine} from '@helpers/string/parseUriParams';
+import Modes from '@config/modes';
+import {AuthState} from '@types';
+import DEBUG, {IS_BETA} from '@config/debug';
+import IS_INSTALL_PROMPT_SUPPORTED from '@environment/installPrompt';
+import cacheInstallPrompt from '@helpers/dom/installPrompt';
+import {fillLocalizedDates} from '@helpers/date';
+import {nextRandomUint} from '@helpers/random';
+import {createEffect} from 'solid-js';
+import {IS_OVERLAY_SCROLL_SUPPORTED, USE_CUSTOM_SCROLL, USE_NATIVE_SCROLL} from '@environment/overlayScrollSupport';
+import IMAGE_MIME_TYPES_SUPPORTED, {IMAGE_MIME_TYPES_SUPPORTED_PROMISE} from '@environment/imageMimeTypesSupport';
+import MEDIA_MIME_TYPES_SUPPORTED from '@environment/mediaMimeTypesSupport';
+import {doubleRaf, fastRafPromise} from '@helpers/schedulers';
+import {getCurrentAccount} from '@lib/accounts/getCurrentAccount';
+import AccountController from '@lib/accounts/accountController';
+import {changeAccount} from '@lib/accounts/changeAccount';
+import {MAX_ACCOUNTS_FREE, MAX_ACCOUNTS_PREMIUM} from '@lib/accounts/constants';
+import sessionStorage from '@lib/sessionStorage';
+import replaceChildrenPolyfill from '@helpers/dom/replaceChildrenPolyfill';
+import listenForWindowPrint from '@helpers/dom/windowPrint';
+import cancelImageEvents from '@helpers/dom/cancelImageEvents';
+import PopupElement from '@components/popups';
+import PasscodeLockScreenController from '@components/passcodeLock/passcodeLockScreenController'; PasscodeLockScreenController;
+import type {LangPackDifference} from '@layer';
+import commonStateStorage from '@lib/commonStateStorage';
+import {MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, SIDEBAR_COLLAPSE_FACTOR} from '@components/sidebarLeft/constants';
+import useHasFoldersSidebar, {useIsSidebarCollapsed} from '@stores/foldersSidebar';
+import appNavigationController from '@components/appNavigationController';
+import {preventCrossTabDynamicImportDeadlock} from '@helpers/preventDeadlock';
 
-// import commonStateStorage from './lib/commonStateStorage';
-// import { STATE_INIT } from './config/state';
+// import commonStateStorage from '@lib/commonStateStorage';
+// import { STATE_INIT } from '@config/state';
 
 // if(DEBUG) {
 //   (async() => {
@@ -88,9 +90,28 @@ function randomlyChooseVersionFromSearch() {
       const version = localStorage.getItem('kz_version');
       if(version === 'Z' || nextRandomUint(8) > 127) {
         localStorage.setItem('kz_version', 'Z');
-        location.href = 'https://web.telegram.org/a/';
+        appNavigationController.navigateToUrl('https://web.telegram.org/a/');
       } else {
         localStorage.setItem('kz_version', 'K');
+      }
+    }
+  } catch(err) {}
+}
+
+async function checkLastActiveAccountFromTMe() {
+  try {
+    if(
+      App.isMainDomain &&
+      document.referrer &&
+      /^(t|telegram)\.me/i.test(new URL(document.referrer).host)
+    ) {
+      const [totalAccounts, {accountNumber}] = await Promise.all([
+        AccountController.getUnencryptedTotalAccounts(),
+        sessionStorage.get('xt_instance')
+      ]);
+
+      if(accountNumber <= totalAccounts && accountNumber !== getCurrentAccount()) {
+        changeAccount(accountNumber, false, true);
       }
     }
   } catch(err) {}
@@ -196,10 +217,17 @@ function setRootClasses() {
 
   if(USE_NATIVE_SCROLL) {
     add.push('native-scroll');
-  } else if(IS_OVERLAY_SCROLL_SUPPORTED) {
-    add.push('overlay-scroll');
-  } else if(USE_CUSTOM_SCROLL) {
-    add.push('custom-scroll');
+  } else {
+    createEffect(() => {
+      const root = document.documentElement;
+      if(IS_OVERLAY_SCROLL_SUPPORTED()) {
+        root.classList.add('overlay-scroll');
+        root.classList.remove('custom-scroll');
+      } else if(USE_CUSTOM_SCROLL()) {
+        root.classList.remove('overlay-scroll');
+        root.classList.add('custom-scroll');
+      }
+    });
   }
 
   // root.style.setProperty('--quote-icon', `"${getIconContent('quote')}"`);
@@ -270,6 +298,48 @@ function setRootClasses() {
 }
 
 function onInstanceDeactivated(reason: InstanceDeactivateReason) {
+  const onVersionClick = () => {
+    appNavigationController.reload();
+  };
+
+  const onTabsClick = () => {
+    document.body.classList.add('deactivated-backwards');
+
+    if(reason === 'otherClient') {
+      singleInstance.onMyClient();
+    } else {
+      singleInstance.activateInstance();
+    }
+
+    setTimeout(() => {
+      document.body.classList.remove('deactivated', 'deactivated-backwards');
+    }, 333);
+  };
+
+  const onOtherClientClick = onTabsClick;
+
+  const map: {[key in InstanceDeactivateReason]: {
+    title: LangPackKey,
+    subtitle: LangPackKey,
+    onClick: () => void
+  }} = {
+    version: {
+      title: 'Deactivated.Version.Title',
+      subtitle: 'Deactivated.Version.Subtitle',
+      onClick: onVersionClick
+    },
+    tabs: {
+      title: 'Deactivated.Title',
+      subtitle: 'Deactivated.Subtitle',
+      onClick: onTabsClick
+    },
+    otherClient: {
+      title: 'Deactivated.OtherClient.Title',
+      subtitle: 'Deactivated.OtherClient.Subtitle',
+      onClick: onOtherClientClick
+    }
+  };
+
   const isUpdated = reason === 'version';
   const popup = PopupElement.createPopup(PopupElement, 'popup-instance-deactivated', {overlayClosable: true});
   const c = document.createElement('div');
@@ -278,29 +348,17 @@ function onInstanceDeactivated(reason: InstanceDeactivateReason) {
 
   const header = document.createElement('div');
   header.classList.add('header');
-  header.append(i18n(isUpdated ? 'Deactivated.Version.Title' : 'Deactivated.Title'));
+  header.append(i18n(map[reason].title));
 
   const subtitle = document.createElement('div');
   subtitle.classList.add('subtitle');
-  subtitle.append(i18n(isUpdated ? 'Deactivated.Version.Subtitle' : 'Deactivated.Subtitle'));
+  subtitle.append(i18n(map[reason].subtitle));
 
   c.append(header, subtitle);
 
   document.body.classList.add('deactivated');
 
-  const onClose = isUpdated ? () => {
-    appRuntimeManager.reload();
-  } : () => {
-    document.body.classList.add('deactivated-backwards');
-
-    singleInstance.activateInstance();
-
-    setTimeout(() => {
-      document.body.classList.remove('deactivated', 'deactivated-backwards');
-    }, 333);
-  };
-
-  popup.addEventListener('close', onClose);
+  popup.addEventListener('close', map[reason].onClick);
   popup.show();
 };
 
@@ -335,10 +393,15 @@ function setDocumentLangPackProperties(langPack: LangPackDifference.langPackDiff
   listenForWindowPrint();
   cancelImageEvents();
   setRootClasses();
+  await checkLastActiveAccountFromTMe();
 
   if(IS_INSTALL_PROMPT_SUPPORTED) {
     cacheInstallPrompt();
   }
+
+  // Make sure this is before checking if the app is locked.
+  // If this value is cached, and a different tab locks/unlocks, we'll see the wrong state of the app.
+  await preventCrossTabDynamicImportDeadlock();
 
   await PasscodeLockScreenController.waitForUnlock(async() => {
     rootScope.settings = await commonStateStorage.get('settings');
@@ -363,6 +426,9 @@ function setDocumentLangPackProperties(langPack: LangPackDifference.langPackDiff
   // * (1)
   const allStates = await apiManagerProxy.loadAllStates();
   const stateResult = allStates[getCurrentAccount()];
+
+  // console.log(stateResult);
+  // await pause(10000000);
 
   console.timeLog(TIME_LABEL, 'allStates loaded');
 
@@ -401,6 +467,7 @@ function setDocumentLangPackProperties(langPack: LangPackDifference.langPackDiff
     return;
   }
 
+  apiManagerProxy.onLanguageChange(I18n.getLastRequestedLangCode());
   await apiManagerProxy.sendAllStates(allStates);
 
   console.timeLog(TIME_LABEL, 'sent all states (2)');
@@ -463,20 +530,22 @@ function setDocumentLangPackProperties(langPack: LangPackDifference.langPackDiff
     };
 
     if(data.isTest !== Modes.test) {
-      const urlSearchParams = new URLSearchParams(location.search);
+      const url = new URL(location.href);
       if(+params.tgWebAuthTest) {
-        urlSearchParams.set('test', '1');
+        url.searchParams.set('test', '1');
       } else {
-        urlSearchParams.delete('test');
+        url.searchParams.delete('test');
       }
 
-      location.search = urlSearchParams.toString();
+      appNavigationController.navigateToUrl(url.toString());
       return;
     }
 
     rootScope.managers.appStateManager.pushToState('authState', authState = {_: 'authStateSignImport', data});
+  }
 
-    // appNavigationController.overrideHash('?tgaddr=' + encodeURIComponent(params.tgaddr));
+  if(params.tgWebAuthToken) {
+    appNavigationController.overrideHash(params.tgaddr ? '#?tgaddr=' + encodeURIComponent(params.tgaddr) : '');
   }
 
   if(authState._ !== 'authStateSignedIn'/*  || 1 === 1 */) {
@@ -534,13 +603,14 @@ function setDocumentLangPackProperties(langPack: LangPackDifference.langPackDiff
       scrollable.append(placeholder.cloneNode());
     }
 
+
     try {
       await Promise.all([
-        import('./lib/mtproto/telegramMeWebManager'),
-        import('./lib/mtproto/webPushApiManager')
+        import('./lib/telegramMeWebManager'),
+        import('./lib/webPushApiManager')
       ]).then(([meModule, pushModule]) => {
         meModule.default.setAuthorized(false);
-        pushModule.default.forceUnsubscribe();
+        pushModule.default.unsubscribe();
       });
     } catch(err) {
 
@@ -627,6 +697,7 @@ function setDocumentLangPackProperties(langPack: LangPackDifference.langPackDiff
       import('./pages/pageIm').then((module) => module.default),
       sessionStorage.get('should_animate_main')
     ]);
+
     if(shouldAnimate) {
       await sessionStorage.delete('should_animate_main');
       page.pageEl.classList.add('main-screen-enter');

@@ -4,30 +4,31 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import type CustomEmojiElement from '../lib/customEmoji/element';
-import type {AnimationItemGroup} from './animationIntersector';
-import {CustomEmojiRendererElement} from '../lib/customEmoji/renderer';
-import cancelEvent from '../helpers/dom/cancelEvent';
-import simulateEvent from '../helpers/dom/dispatchEvent';
-import documentFragmentToHTML from '../helpers/dom/documentFragmentToHTML';
-import findUpAttribute from '../helpers/dom/findUpAttribute';
-import findUpTag from '../helpers/dom/findUpTag';
-import getCaretPosNew from '../helpers/dom/getCaretPosNew';
-import getRichValueWithCaret from '../helpers/dom/getRichValueWithCaret';
-import isInputEmpty from '../helpers/dom/isInputEmpty';
-import replaceContent from '../helpers/dom/replaceContent';
-import RichInputHandler, {USING_BOMS} from '../helpers/dom/richInputHandler';
-import selectElementContents from '../helpers/dom/selectElementContents';
-import setInnerHTML, {setDirection} from '../helpers/dom/setInnerHTML';
-import {MessageEntity} from '../layer';
-import {i18n, LangPackKey, _i18n} from '../lib/langPack';
-import {NULL_PEER_ID} from '../lib/mtproto/mtproto_config';
-import mergeEntities from '../lib/richTextProcessor/mergeEntities';
-import parseEntities from '../lib/richTextProcessor/parseEntities';
-import wrapDraftText from '../lib/richTextProcessor/wrapDraftText';
-import {createCustomFiller, insertCustomFillers} from '../lib/richTextProcessor/wrapRichText';
-import type {MarkupTooltipTypes} from './chat/markupTooltip';
-import forEachReverse from '../helpers/array/forEachReverse';
+import type CustomEmojiElement from '@lib/customEmoji/element';
+import type {AnimationItemGroup} from '@components/animationIntersector';
+import {CustomEmojiRendererElement} from '@lib/customEmoji/renderer';
+import cancelEvent from '@helpers/dom/cancelEvent';
+import simulateEvent from '@helpers/dom/dispatchEvent';
+import documentFragmentToHTML from '@helpers/dom/documentFragmentToHTML';
+import findUpAttribute from '@helpers/dom/findUpAttribute';
+import findUpTag from '@helpers/dom/findUpTag';
+import getCaretPosNew from '@helpers/dom/getCaretPosNew';
+import getRichValueWithCaret from '@helpers/dom/getRichValueWithCaret';
+import isInputEmpty from '@helpers/dom/isInputEmpty';
+import replaceContent from '@helpers/dom/replaceContent';
+import RichInputHandler, {USING_BOMS} from '@helpers/dom/richInputHandler';
+import selectElementContents from '@helpers/dom/selectElementContents';
+import setInnerHTML, {setDirection} from '@helpers/dom/setInnerHTML';
+import {MessageEntity} from '@layer';
+import {i18n, LangPackKey, _i18n} from '@lib/langPack';
+import {NULL_PEER_ID} from '@appManagers/constants';
+import mergeEntities from '@lib/richTextProcessor/mergeEntities';
+import parseEntities from '@lib/richTextProcessor/parseEntities';
+import wrapDraftText from '@lib/richTextProcessor/wrapDraftText';
+import {createCustomFiller, insertCustomFillers} from '@lib/richTextProcessor/wrapRichText';
+import type {MarkupTooltipTypes} from '@components/chat/markupTooltip';
+import forEachReverse from '@helpers/array/forEachReverse';
+import findAndSpliceAll from '@helpers/array/findAndSpliceAll';
 
 export async function insertRichTextAsHTML(input: HTMLElement, text: string, entities: MessageEntity[], wrappingForPeerId?: PeerId) {
   const loadPromises: Promise<any>[] = [];
@@ -276,8 +277,13 @@ let init = () => {
         richValue.value = correctedText;
       } */
 
+      const hasCustomEmoji = richValue.entities.some((entity) => entity._ === 'messageEntityCustomEmoji');
+
       // * fix new lines
-      {
+      // * if we have custom emoji, plain text will miss plain emoji
+      // * so we won't be able to fix new lines
+      // * hopefully we won't have same problem from other websites
+      if(!hasCustomEmoji) {
         // * first we clear all the new lines from rich value
         const richValueSplitted = richValue.value.split('');
         forEachReverse(richValueSplitted, (char, index, arr) => {
@@ -293,12 +299,14 @@ let init = () => {
 
         // * then we add new lines to rich value
         const plainTextLines = plainText.split('\n');
+        const plainTextLinesLength = plainTextLines.length;
         let plainTextLength = 0;
-        for(const line of plainTextLines) {
+        for(let lineIndex = 0; lineIndex < plainTextLinesLength - 1; ++lineIndex) {
+          const line = plainTextLines[lineIndex];
           plainTextLength += line.length;
           richValueSplitted.splice(plainTextLength, 0, '\n');
           richValue.entities.forEach((entity) => {
-            if(entity.offset >= plainTextLength) {
+            if(entity.offset > (plainTextLength - lineIndex + 1)) {
               entity.offset += 1;
             }
           });
@@ -311,8 +319,7 @@ let init = () => {
 
       const richTextLength = richValue.value.replace(/\s/g, '').length;
       const plainTextLength = plainText.replace(/\s/g, '').length;
-      if(richTextLength === plainTextLength ||
-        richValue.entities.find((entity) => entity._ === 'messageEntityCustomEmoji')) {
+      if(richTextLength === plainTextLength || hasCustomEmoji) {
         text = richValue.value;
         entities = richValue.entities;
         usePlainText = false;
@@ -329,6 +336,13 @@ let init = () => {
       text = plainText;
       entities = parseEntities(text);
       entities = entities.filter(filterEntity);
+    }
+
+    if(entities?.length) {
+      const ignoreEntities = new Set<MessageEntity['_']>([
+        'messageEntityPhone'
+      ]);
+      findAndSpliceAll(entities, (entity) => ignoreEntities.has(entity._));
     }
 
     insertRichTextAsHTML(input, text, entities, peerId);

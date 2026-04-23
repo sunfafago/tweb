@@ -4,22 +4,23 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import type { DcId } from '../types';
-import Page from './page';
-import { AuthAuthorization, AuthLoginToken } from '../layer';
-import App from '../config/app';
-import Button from '../components/button';
-import { _i18n, i18n, LangPackKey } from '../lib/langPack';
-import rootScope from '../lib/rootScope';
-import { putPreloader } from '../components/putPreloader';
-import getLanguageChangeButton from '../components/languageChangeButton';
-import pause from '../helpers/schedulers/pause';
-import fixBase64String from '../helpers/fixBase64String';
-import bytesCmp from '../helpers/bytes/bytesCmp';
-import bytesToBase64 from '../helpers/bytes/bytesToBase64';
-import textToSvgURL from '../helpers/textToSvgURL';
-import AccountController from '../lib/accounts/accountController';
-import { getCurrentAccount } from '../lib/accounts/getCurrentAccount';
+import type {DcId} from '@types';
+import Page from '@/pages/page';
+import {AuthAuthorization, AuthLoginToken} from '@layer';
+import App from '@config/app';
+import Button from '@components/button';
+import {_i18n, i18n, LangPackKey} from '@lib/langPack';
+import rootScope from '@lib/rootScope';
+import {putPreloader} from '@components/putPreloader';
+import getLanguageChangeButton from '@components/languageChangeButton';
+import pause from '@helpers/schedulers/pause';
+import fixBase64String from '@helpers/fixBase64String';
+import bytesCmp from '@helpers/bytes/bytesCmp';
+import bytesToBase64 from '@helpers/bytes/bytesToBase64';
+import textToSvgURL from '@helpers/textToSvgURL';
+import AccountController from '@lib/accounts/accountController';
+import {getCurrentAccount} from '@lib/accounts/getCurrentAccount';
+import PasskeyLoginButton from '@components/passkeyLoginButton';
 
 const FETCH_INTERVAL = 3;
 
@@ -32,8 +33,9 @@ const onFirstMount = async () => {
   const inputWrapper = document.createElement('div');
   inputWrapper.classList.add('input-wrapper');
 
-  const btnBack = Button('btn-primary btn-secondary btn-primary-transparent primary', { text: 'Login.QR.Cancel' });
-  inputWrapper.append(btnBack);
+  const btnBack = Button('btn-primary btn-secondary btn-primary-transparent primary', {text: 'Login.QR.Cancel'});
+  const passkeyButton = PasskeyLoginButton();
+  inputWrapper.append(...[btnBack, passkeyButton?.button].filter(Boolean));
 
   if (getCurrentAccount() === 1) {
     getLanguageChangeButton(inputWrapper);
@@ -207,6 +209,9 @@ const onFirstMount = async () => {
           stop = true;
           cachedPromise = null;
           break;
+        case 'AUTH_TOKEN_EXPIRED':
+          console.warn('pageSignQR: AUTH_TOKEN_EXPIRED');
+          return false;
         default:
           console.error('pageSignQR: default error:', err);
           stop = true;
@@ -221,7 +226,14 @@ const onFirstMount = async () => {
 
   // await iterate(false);
 
-  return async () => {
+  let first = true;
+
+  return async() => {
+    if(first) {
+      first = false;
+      passkeyButton && passkeyButton.fetch();
+    }
+
     stop = false;
 
     do {

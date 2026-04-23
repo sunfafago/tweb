@@ -4,20 +4,24 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import {attachClickEvent} from '../../../../helpers/dom/clickEvent';
-import Button from '../../../button';
-import SettingSection from '../../../settingSection';
-import {SliderSuperTab} from '../../../slider';
-import wrapStickerEmoji from '../../../wrappers/stickerEmoji';
-import AppSettingsTab from '../settings';
+import {attachClickEvent} from '@helpers/dom/clickEvent';
+import Button from '@components/button';
+import SettingSection from '@components/settingSection';
+import {SliderSuperTab} from '@components/slider';
+import wrapStickerEmoji from '@components/wrappers/stickerEmoji';
+import AppSettingsTab from '@components/sidebarLeft/tabs/settings';
+
+type ConstructorArgs = {
+  messageFor: 'password' | 'email';
+};
 
 export default class AppTwoStepVerificationSetTab extends SliderSuperTab {
-  public init() {
+  public init({messageFor}: ConstructorArgs) {
     this.container.classList.add('two-step-verification', 'two-step-verification-set');
-    this.setTitle('TwoStepVerificationPasswordSet');
+    this.setTitle(messageFor === 'password' ? 'TwoStepVerificationPasswordSet' : 'TwoStepVerificationEmailSet');
 
     const section = new SettingSection({
-      captionOld: 'TwoStepVerificationPasswordSetInfo',
+      captionOld: messageFor === 'password' ? 'TwoStepVerificationPasswordSetInfo' : 'TwoStepVerificationEmailSetInfo',
       noDelimiter: true
     });
 

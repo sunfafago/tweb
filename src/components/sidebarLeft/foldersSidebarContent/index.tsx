@@ -1,27 +1,28 @@
-import {batch, createEffect, createRoot, createSelector, createSignal, For, onCleanup, onMount, Show} from 'solid-js';
+import {batch, createEffect, createSelector, createSignal, For, onCleanup, onMount, Show} from 'solid-js';
 import {createStore, reconcile} from 'solid-js/store';
 import {render} from 'solid-js/web';
-import indexOfAndSplice from '../../../helpers/array/indexOfAndSplice';
-import createFolderContextMenu from '../../../helpers/dom/createFolderContextMenu';
-import ListenerSetter from '../../../helpers/listenerSetter';
-import {Middleware} from '../../../helpers/middleware';
-import pause from '../../../helpers/schedulers/pause';
-import Animated from '../../../helpers/solid/animations';
-import {i18n} from '../../../lib/langPack';
-import {logger, LogTypes} from '../../../lib/logger';
-import {FOLDER_ID_ALL, FOLDER_ID_ARCHIVE, REAL_FOLDERS} from '../../../lib/mtproto/mtproto_config';
-import {useHotReloadGuard} from '../../../lib/solidjs/hotReloadGuard';
-import type SolidJSHotReloadGuardProvider from '../../../lib/solidjs/hotReloadGuardProvider';
-import {MyDialogFilter} from '../../../lib/storages/filters';
-import useHasFoldersSidebar from '../../../stores/foldersSidebar';
-import {IconTsx} from '../../iconTsx';
-import ripple from '../../ripple';
-import Scrollable from '../../scrollable2';
-import extractEmojiFromFilterTitle, {ExtractEmojiFromFilterTitleResult} from './extractEmojiFromFilterTitle';
-import FolderItem from './folderItem';
-import type {FolderItemPayload} from './types';
-import {getFolderItemsInOrder, getIconForFilter, getNotificationCountForFilter} from './utils';
-ripple; // keep
+import indexOfAndSplice from '@helpers/array/indexOfAndSplice';
+import createFolderContextMenu from '@helpers/dom/createFolderContextMenu';
+import {keepMe} from '@helpers/keepMe';
+import ListenerSetter from '@helpers/listenerSetter';
+import {Middleware} from '@helpers/middleware';
+import pause from '@helpers/schedulers/pause';
+import Animated from '@helpers/solid/animations';
+import {logger, LogTypes} from '@lib/logger';
+import {FOLDER_ID_ALL, FOLDER_ID_ARCHIVE, REAL_FOLDERS} from '@appManagers/constants';
+import {useHotReloadGuard} from '@lib/solidjs/hotReloadGuard';
+import type SolidJSHotReloadGuardProvider from '@lib/solidjs/hotReloadGuardProvider';
+import {MyDialogFilter} from '@lib/storages/filters';
+import useHasFoldersSidebar from '@stores/foldersSidebar';
+import {IconTsx} from '@components/iconTsx';
+import ripple from '@components/ripple';
+import Scrollable from '@components/scrollable2';
+import extractEmojiFromFilterTitle, {ExtractEmojiFromFilterTitleResult} from '@components/sidebarLeft/foldersSidebarContent/extractEmojiFromFilterTitle';
+import FolderItem from '@components/sidebarLeft/foldersSidebarContent/folderItem';
+import type {FolderItemPayload} from '@components/sidebarLeft/foldersSidebarContent/types';
+import {getFolderItemsInOrder, getIconForFilter, getNotificationCountForFilter} from '@components/sidebarLeft/foldersSidebarContent/utils';
+
+keepMe(ripple);
 
 
 const log = logger('FoldersSidebarContent', LogTypes.Debug);
@@ -44,7 +45,8 @@ export function FoldersSidebarContent(props: {
     appSidebarLeft,
     AppChatFoldersTab,
     AppEditFolderTab,
-    showLimitPopup
+    showLimitPopup,
+    i18n
   } = useHotReloadGuard();
 
   const [selectedFolderId, setSelectedFolderId] = createSignal<number>(FOLDER_ID_ALL);
@@ -184,11 +186,12 @@ export function FoldersSidebarContent(props: {
   }
 
   createEffect(() => {
-    if(!menuTarget()) return;
+    const _menuTarget = menuTarget();
+    if(!_menuTarget) return;
 
-    appSidebarLeft.createToolsMenu(menuTarget(), true);
-    menuTarget().classList.add('sidebar-tools-button', 'is-visible');
-    menuTarget().append(props.notificationsElement);
+    appSidebarLeft.createToolsMenu(_menuTarget);
+    _menuTarget.classList.add('sidebar-tools-button', 'is-visible');
+    _menuTarget.append(props.notificationsElement);
   });
 
   let contextMenu: ReturnType<typeof createFolderContextMenu>;
@@ -340,30 +343,21 @@ export function renderFoldersSidebarContent(
   middleware: Middleware
 ): FoldersSidebarControls {
   const [hasFoldersSidebar] = useHasFoldersSidebar();
+  const [filters, setFilters] = createSignal<MyDialogFilter[]>([]);
+  const [isFiltersInited, setIsFiltersInited] = createSignal(false);
 
-  const {
-    filters: [filters, setFilters],
-    isFiltersInited: [isFiltersInited, setIsFiltersInited]
-  } = createRoot((dispose) => {
-    middleware.onDestroy(() => dispose());
-
-    return {
-      filters: createSignal<MyDialogFilter[]>([]),
-      isFiltersInited: createSignal(false)
-    };
-  });
-
-  createRoot((dispose) => {
-    render(() => (
-      <HotReloadGuardProvider>
-        <Show when={hasFoldersSidebar()}>
-          <FoldersSidebarContent notificationsElement={notificationsElement} filters={filters()} isFiltersInited={isFiltersInited()} />
-        </Show>
-      </HotReloadGuardProvider>
-    ), element);
-
-    middleware.onDestroy(() => dispose());
-  });
+  const dispose = render(() => (
+    <HotReloadGuardProvider>
+      <Show when={hasFoldersSidebar()}>
+        <FoldersSidebarContent
+          notificationsElement={notificationsElement}
+          filters={filters()}
+          isFiltersInited={isFiltersInited()}
+        />
+      </Show>
+    </HotReloadGuardProvider>
+  ), element);
+  middleware.onDestroy(dispose);
 
   return {
     hydrateFilters: (filters) => batch(() => {

@@ -9,17 +9,16 @@
  * https://github.com/evgeny-nadymov/telegram-react/blob/master/LICENSE
  */
 
-import type GroupCallConnectionInstance from '../calls/groupCallConnectionInstance';
-import safeReplaceObject from '../../helpers/object/safeReplaceObject';
-import {nextRandomUint} from '../../helpers/random';
-import {DataJSON, GroupCall, GroupCallParticipant, GroupCallParticipantVideoSourceGroup, GroupCallStreamChannel, InputFileLocation, InputGroupCall, PhoneJoinGroupCall, PhoneJoinGroupCallPresentation, Update, Updates} from '../../layer';
-import {logger} from '../logger';
-import {NULL_PEER_ID} from '../mtproto/mtproto_config';
-import {AppManager} from './manager';
-import getPeerId from './utils/peers/getPeerId';
-import {DcId} from '../../types';
-import assumeType from '../../helpers/assumeType';
-import {parseVideoStreamInfo} from '../calls/videoStreamInfo';
+import type GroupCallConnectionInstance from '@lib/calls/groupCallConnectionInstance';
+import safeReplaceObject from '@helpers/object/safeReplaceObject';
+import {nextRandomUint} from '@helpers/random';
+import {DataJSON, GroupCall, GroupCallParticipant, GroupCallParticipantVideoSourceGroup, GroupCallStreamChannel, InputFileLocation, InputGroupCall, PhoneJoinGroupCall, PhoneJoinGroupCallPresentation, Update, Updates} from '@layer';
+import {NULL_PEER_ID} from '@appManagers/constants';
+import {AppManager} from '@appManagers/manager';
+import getPeerId from '@appManagers/utils/peers/getPeerId';
+import {DcId} from '@types';
+import assumeType from '@helpers/assumeType';
+import {parseVideoStreamInfo} from '@lib/calls/videoStreamInfo';
 
 export type GroupCallId = GroupCall['id'];
 export type MyGroupCall = GroupCall | Exclude<
@@ -58,8 +57,6 @@ export interface CallRecordParams {
 }
 
 export class AppGroupCallsManager extends AppManager {
-  private log: ReturnType<typeof logger>;
-
   private groupCalls: Map<GroupCallId, MyGroupCall>;
   private participants: Map<GroupCallId, Map<PeerId, GroupCallParticipant>>;
   private nextOffsets: Map<GroupCallId, string>;
@@ -69,7 +66,7 @@ export class AppGroupCallsManager extends AppManager {
   // private doNotDispatchParticipantUpdate: PeerId;
 
   protected after() {
-    this.log = logger('GROUP-CALLS');
+    this.name = 'GROUP-CALLS';
 
     this.groupCalls = new Map();
     this.participants = new Map();
@@ -79,7 +76,7 @@ export class AppGroupCallsManager extends AppManager {
 
     this.apiUpdatesManager.addMultipleEventsListeners({
       updateGroupCall: (update) => {
-        this.saveGroupCall(update.call, update.chat_id);
+        this.saveGroupCall(update.call, this.appPeersManager.getPeerId(update.peer));
       },
 
       updateGroupCallParticipants: (update) => {
@@ -243,7 +240,7 @@ export class AppGroupCallsManager extends AppManager {
     });
   }
 
-  public saveGroupCall(call: MyGroupCall, chatId?: ChatId) {
+  public saveGroupCall(call: MyGroupCall, peerId?: PeerId) {
     const oldCall = this.groupCalls.get(call.id);
     const shouldUpdate = call._ !== 'inputGroupCall' && (!oldCall || oldCall._ !== 'groupCallDiscarded');
     if(oldCall) {
@@ -348,7 +345,7 @@ export class AppGroupCallsManager extends AppManager {
         call: groupCallInput,
         source: discard
       });
-    } else {
+    } else { // ! this doesn't work anymore
       promise = this.apiManager.invokeApi('phone.joinGroupCall', {
         call: groupCallInput,
         join_as: this.appPeersManager.getInputPeerSelf(),

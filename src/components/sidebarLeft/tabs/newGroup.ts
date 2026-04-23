@@ -4,17 +4,21 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import {InputFile} from '../../../layer';
-import appDialogsManager from '../../../lib/appManagers/appDialogsManager';
-import InputField from '../../inputField';
-import {SliderSuperTab} from '../../slider';
-import AvatarEdit from '../../avatarEdit';
-import I18n, {joinElementsWith} from '../../../lib/langPack';
-import ButtonCorner from '../../buttonCorner';
-import getUserStatusString from '../../wrappers/getUserStatusString';
-import appImManager from '../../../lib/appManagers/appImManager';
-import {attachClickEvent} from '../../../helpers/dom/clickEvent';
-import SettingSection from '../../settingSection';
+import {InputFile, MissingInvitee} from '@layer';
+import appDialogsManager from '@lib/appDialogsManager';
+import InputField from '@components/inputField';
+import {SliderSuperTab} from '@components/slider';
+import AvatarEdit from '@components/avatarEdit';
+import I18n from '@lib/langPack';
+import ButtonCorner from '@components/buttonCorner';
+import getUserStatusString from '@components/wrappers/getUserStatusString';
+import appImManager from '@lib/appImManager';
+import {attachClickEvent} from '@helpers/dom/clickEvent';
+import SettingSection from '@components/settingSection';
+import {handleMissingInvitees} from '@components/addChatUsers';
+import type {AppChatsManager} from '@lib/appManagers/appChatsManager';
+import {handleChannelsTooMuch} from '@components/popups/channelsTooMuch';
+import toggleDisability from '@helpers/dom/toggleDisability';
 
 interface OpenStreetMapInterface {
   place_id?: number;
@@ -29,6 +33,7 @@ interface OpenStreetMapInterface {
 }
 
 export default class AppNewGroupTab extends SliderSuperTab {
+  public static noSame = true;
   private avatarEdit: AvatarEdit;
   private uploadAvatar: () => Promise<InputFile> = null;
   private peerIds: PeerId[];
@@ -98,11 +103,16 @@ export default class AppNewGroupTab extends SliderSuperTab {
     attachClickEvent(this.nextBtn, () => {
       const title = this.groupNameInputField.value;
       const userIds = this.peerIds.map((peerId) => peerId.toUserId());
+      const toggle = toggleDisability(this.nextBtn, true);
 
-      let promise: Promise<ChatId>;
+      let promise: Promise<{chatId: ChatId, missingInvitees: MissingInvitee[]}>;
       if(this.isGeoChat) {
-        if(!this.userLocationAddress || !this.userLocationCoords) return;
-        promise = this.managers.appChatsManager.createChannel({
+        if(!this.userLocationAddress || !this.userLocationCoords) {
+          toggle();
+          return;
+        }
+
+        const options: Parameters<AppChatsManager['createChannel']>[0] = {
           title,
           about: '',
           geo_point: {
@@ -111,33 +121,34 @@ export default class AppNewGroupTab extends SliderSuperTab {
           },
           address: this.userLocationAddress,
           megagroup: true
-        }).then((chatId) => {
+        };
+        promise = handleChannelsTooMuch(() => this.managers.appChatsManager.createChannel(options))
+        .then(async(chatId) => {
           if(this.uploadAvatar) {
             this.uploadAvatar().then((inputFile) => {
               this.managers.appChatsManager.editPhoto(chatId, inputFile);
             });
           }
 
-          if(this.peerIds.length) {
-            this.managers.appChatsManager.inviteToChannel(chatId, this.peerIds);
-          }
-
-          return chatId;
+          const missingInvitees = this.peerIds.length ?
+            await this.managers.appChatsManager.inviteToChannel(chatId, this.peerIds) :
+            [];
+          return {chatId, missingInvitees};
         });
       } else {
-        this.nextBtn.disabled = true;
-
         if(asChannel) {
-          promise = this.managers.appChatsManager.createChannel({
+          const options: Parameters<AppChatsManager['createChannel']>[0] = {
             megagroup: true,
             title,
             about: ''
-          });
+          };
+          promise = handleChannelsTooMuch(() => this.managers.appChatsManager.createChannel(options))
+          .then((chatId) => ({chatId, missingInvitees: [] as MissingInvitee[]}));
 
           if(peerIds.length) {
-            promise = promise.then((chatId) => {
+            promise = promise.then(({chatId}) => {
               return this.managers.appChatsManager.inviteToChannel(chatId, userIds)
-              .then(() => chatId);
+              .then((missingInvitees) => ({chatId, missingInvitees}));
             });
           }
         } else {
@@ -147,25 +158,30 @@ export default class AppNewGroupTab extends SliderSuperTab {
           );
         }
 
-        promise = promise.then((chatId) => {
+        promise = promise.then((result) => {
           if(this.uploadAvatar) {
             this.uploadAvatar().then((inputFile) => {
-              this.managers.appChatsManager.editPhoto(chatId, inputFile);
+              this.managers.appChatsManager.editPhoto(result.chatId, inputFile);
             });
           }
 
-          return chatId;
+          return result;
         });
       }
 
       if(!promise) {
+        toggle();
         return;
       }
 
-      promise.then((chatId) => {
+      promise.then(({chatId, missingInvitees}) => {
         onCreate?.(chatId);
         this.close();
         if(openAfter) appImManager.setInnerPeer({peerId: chatId.toPeerId(true)});
+        handleMissingInvitees(chatId, missingInvitees);
+      }, (err) => {
+        console.error('createGroup error', err);
+        toggle();
       });
     }, {listenerSetter: this.listenerSetter});
 
@@ -220,11 +236,11 @@ export default class AppNewGroupTab extends SliderSuperTab {
     let setTitlePromise: Promise<void>;
 
     if(!title) setTitlePromise = this.peerIds.length > 0 && this.peerIds.length < 5 ? Promise.all([usersPromise, myUserPromise]).then(([users, myUser]) => {
-      const names = users.map((user) => [user.first_name, user.last_name].filter(Boolean).join(' '));
+      const names = users.map((user) => [user.first_name, user.last_name, user.username].find(Boolean));
       names.unshift(myUser.first_name);
 
-      const joined = joinElementsWith(names, (isLast) => isLast ? ', ' : ' & ').join('');
-      this.groupNameInputField.setDraftValue(joined);
+      names[0] = names[0] + ' & ' + names.splice(1, 1)[0];
+      this.groupNameInputField.setDraftValue(names.join(', '));
     }) : Promise.resolve();
     else {
       this.groupNameInputField.setDraftValue(title);
@@ -272,3 +288,4 @@ export default class AppNewGroupTab extends SliderSuperTab {
     });
   }
 }
+

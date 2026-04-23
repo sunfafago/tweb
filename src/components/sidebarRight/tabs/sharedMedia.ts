@@ -4,31 +4,37 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import rootScope, {BroadcastEvents} from '../../../lib/rootScope';
-import AppSearchSuper, {SearchSuperMediaTab, SearchSuperMediaType, SearchSuperType} from '../../appSearchSuper.';
-import SidebarSlider, {SliderSuperTab} from '../../slider';
-import TransitionSlider from '../../transition';
-import AppEditChatTab from './editChat';
-import AppEditContactTab from './editContact';
-import Button from '../../button';
-import ButtonIcon from '../../buttonIcon';
-import I18n, {LangPackKey, i18n} from '../../../lib/langPack';
-import ButtonCorner from '../../buttonCorner';
-import {attachClickEvent} from '../../../helpers/dom/clickEvent';
-import PeerProfile from '../../peerProfile';
-import {Chat, Message} from '../../../layer';
-import getMessageThreadId from '../../../lib/appManagers/utils/messages/getMessageThreadId';
-import AppEditTopicTab from './editTopic';
-import liteMode from '../../../helpers/liteMode';
-import AppEditBotTab from './editBot';
-import addChatUsers from '../../addChatUsers';
-import apiManagerProxy from '../../../lib/mtproto/mtprotoworker';
-import getPeerId from '../../../lib/appManagers/utils/peers/getPeerId';
-import wrapPeerTitle from '../../wrappers/peerTitle';
-import ButtonMenuToggle from '../../buttonMenuToggle';
-import appImManager from '../../../lib/appManagers/appImManager';
-import {useIsFrozen} from '../../../stores/appState';
-import {profileStarGiftsButtonMenu} from '../../stargifts/profileList';
+import rootScope, {BroadcastEvents} from '@lib/rootScope';
+import AppSearchSuper, {SearchSuperMediaTab, SearchSuperMediaType, SearchSuperType} from '@components/appSearchSuper';
+import SidebarSlider, {SliderSuperTab} from '@components/slider';
+import TransitionSlider from '@components/transition';
+import AppEditChatTab from '@components/sidebarRight/tabs/editChat';
+import AppEditContactTab from '@components/sidebarRight/tabs/editContact';
+import Button from '@components/button';
+import ButtonIcon from '@components/buttonIcon';
+import I18n, {LangPackKey, i18n} from '@lib/langPack';
+import ButtonCorner from '@components/buttonCorner';
+import {attachClickEvent} from '@helpers/dom/clickEvent';
+import {renderPeerProfile} from '@components/peerProfile';
+import {Chat, Message} from '@layer';
+import getMessageThreadId from '@appManagers/utils/messages/getMessageThreadId';
+import AppEditTopicTab from '@components/sidebarRight/tabs/editTopic';
+import liteMode from '@helpers/liteMode';
+import AppEditBotTab from '@components/sidebarRight/tabs/editBot';
+import addChatUsers from '@components/addChatUsers';
+import apiManagerProxy from '@lib/apiManagerProxy';
+import getPeerId from '@appManagers/utils/peers/getPeerId';
+import wrapPeerTitle from '@components/wrappers/peerTitle';
+import ButtonMenuToggle, {filterButtonMenuItems} from '@components/buttonMenuToggle';
+import appImManager from '@lib/appImManager';
+import {useIsFrozen} from '@stores/appState';
+import {profileStarGiftsButtonMenu} from '@components/stargifts/profileList';
+import {profileStoriesButtonMenu} from '@components/stories/profileList';
+import {createRoot} from 'solid-js';
+import SolidJSHotReloadGuardProvider from '@lib/solidjs/hotReloadGuardProvider';
+import namedPromises from '@helpers/namedPromises';
+import hasRights from '@lib/appManagers/utils/chats/hasRights';
+import {ButtonMenuItemOptionsVerifiable} from '../../buttonMenu';
 
 type SharedMediaHistoryStorage = Partial<{
   [type in SearchSuperType]: {mid: number, peerId: PeerId}[]
@@ -49,7 +55,6 @@ export default class AppSharedMediaTab extends SliderSuperTab {
 
   public searchSuper: AppSearchSuper;
 
-  private profile: PeerProfile;
   private peerChanged: boolean;
 
   private titleI18n: I18n.IntlElement;
@@ -115,24 +120,39 @@ export default class AppSharedMediaTab extends SliderSuperTab {
     this.editBtn = ButtonIcon('edit');
 
     const self = this;
+    let lastMediaTabType: SearchSuperMediaTab['type'];
+    const btnMenuButtons: ButtonMenuItemOptionsVerifiable[] = [
+      {
+        icon: 'message',
+        text: 'SavedViewAsMessages',
+        onClick: () => {
+          appImManager.toggleViewAsMessages(rootScope.myId, true);
+        },
+        verify: () => this.peerId === rootScope.myId && this.isFirst
+      },
+      ...profileStoriesButtonMenu({
+        peerId: this.peerId,
+        slider: this.slider,
+        verify: () => lastMediaTabType === 'stories',
+        canEdit: () => {
+          if(this.peerId === rootScope.myId) return true;
+          if(this.peerId.isAnyChat()) {
+            return this.managers.appChatsManager.hasRights(this.peerId.toChatId(), 'edit_stories');
+          }
+          return false;
+        }
+      }),
+      ...profileStarGiftsButtonMenu({
+        get store() { return self.searchSuper.stargiftsStore },
+        get actions() { return self.searchSuper.stargiftsActions },
+        verify: () => lastMediaTabType === 'gifts',
+        peerId: this.peerId
+      })
+    ];
     const btnMenu = this.btnMenu = ButtonMenuToggle({
       listenerSetter: this.listenerSetter,
       direction: 'bottom-left',
-      buttons: [
-        {
-          icon: 'message',
-          text: 'SavedViewAsMessages',
-          onClick: () => {
-            appImManager.toggleViewAsMessages(rootScope.myId, true);
-          },
-          verify: () => this.peerId === rootScope.myId && this.isFirst
-        },
-        ...profileStarGiftsButtonMenu({
-          get store() { return self.searchSuper.stargiftsStore },
-          get actions() { return self.searchSuper.stargiftsActions },
-          peerId: this.peerId
-        })
-      ]
+      buttons: btnMenuButtons
     });
 
     transitionFirstItem.element.append(this.editBtn);
@@ -180,18 +200,10 @@ export default class AppSharedMediaTab extends SliderSuperTab {
 
     // * body
 
-    if(!this.noProfile) {
-      this.profile = new PeerProfile(this.managers, this.scrollable, this.listenerSetter, true, this.container);
-      this.profile.init();
-      this.profile.onPinnedGiftsChange = (gifts) => {
-        this.searchSuper.setPinnedGifts(gifts);
-      }
-      this.scrollable.append(this.profile.element);
-    }
-
     const HEADER_HEIGHT = 56;
     this.scrollable.onAdditionalScroll = () => {
-      const rect = this.searchSuper.nav.getBoundingClientRect();
+      const isSingle = this.searchSuper.navScrollableContainer.classList.contains('is-single');
+      const rect = (isSingle ? this.searchSuper.container : this.searchSuper.nav).getBoundingClientRect();
       if(!rect.width) return;
 
       const top = rect.top - 1;
@@ -225,7 +237,7 @@ export default class AppSharedMediaTab extends SliderSuperTab {
       isHeavy: false
     });
 
-    transition(this.profile ? TitleIndex.Profile : TitleIndex.Media);
+    transition(this.noProfile ? TitleIndex.Media : TitleIndex.Profile);
 
     const transitionSubtitle = TransitionSlider({
       content: sharedMediaTransitionContainer,
@@ -237,7 +249,7 @@ export default class AppSharedMediaTab extends SliderSuperTab {
     transitionSubtitle(0);
 
     attachClickEvent(this.closeBtn, (e) => {
-      if(transition.prevId() && this.profile) {
+      if(transition.prevId() && !this.noProfile) {
         this.scrollable.scrollIntoViewNew({
           element: this.scrollable.container.querySelector('.profile-content') as HTMLElement,
           position: 'start'
@@ -312,7 +324,6 @@ export default class AppSharedMediaTab extends SliderSuperTab {
 
     // this.container.prepend(this.closeBtn.parentElement);
 
-    // let lastMediaTabType: SearchSuperMediaTab['type'];
     this.searchSuper = new AppSearchSuper({
       mediaTabs: [{
         name: 'SharedMedia.SavedDialogs',
@@ -359,8 +370,8 @@ export default class AppSharedMediaTab extends SliderSuperTab {
       }],
       scrollable: this.scrollable,
       onChangeTab: (mediaTab) => {
-        // lastMediaTabType = mediaTab.type;
         transitionSubtitle(c.findIndex((item) => item[0] === mediaTab.type));
+        lastMediaTabType = mediaTab.type;
 
         const timeout = mediaTab.type === 'members' && liteMode.isAvailable('animations') ? 250 : 0;
         setTimeout(() => {
@@ -368,7 +379,13 @@ export default class AppSharedMediaTab extends SliderSuperTab {
         }, timeout);
 
         if(!this.isFirst) {
-          this.btnMenu.classList.toggle('hide', mediaTab.type !== 'gifts');
+          if(mediaTab.type === 'gifts' || mediaTab.type === 'stories') {
+            filterButtonMenuItems(btnMenuButtons).then((items) => {
+              this.btnMenu.classList.toggle('hide', items.length === 0);
+            })
+          } else {
+            this.btnMenu.classList.add('hide');
+          }
         }
       },
       managers: this.managers,
@@ -392,9 +409,7 @@ export default class AppSharedMediaTab extends SliderSuperTab {
     // * fix scroll position to media tab because of absolute header
     this.searchSuper.scrollOffset = 56;
 
-    if(this.profile) {
-      this.profile.element.append(this.searchSuper.container);
-    } else {
+    if(this.noProfile) {
       this.scrollable.append(this.searchSuper.container);
     }
 
@@ -449,8 +464,9 @@ export default class AppSharedMediaTab extends SliderSuperTab {
         this.threadId === threadId
       ) {
         this.searchSuper.usedFromHistory[inputFilter] += filtered.length;
-        this.searchSuper.performSearchResult(filtered, mediaTab, false);
-        this.searchSuper.setCounter(mediaTab.type, this.searchSuper.counters[mediaTab.type] + filtered.length);
+        this.searchSuper.performSearchResult({messages: filtered, mediaTab, append: false}).then((length) => {
+          this.searchSuper.setCounter(mediaTab.type, this.searchSuper.counters[mediaTab.type] + length);
+        });
       }
     }
   }
@@ -460,7 +476,7 @@ export default class AppSharedMediaTab extends SliderSuperTab {
 
     const {peerId} = message;
     const isForum = await this.managers.appPeersManager.isForum(peerId);
-    const threadId = getMessageThreadId(message, isForum);
+    const threadId = getMessageThreadId(message, {isForum});
 
     this._renderNewMessage(message);
     if(threadId) {
@@ -468,7 +484,13 @@ export default class AppSharedMediaTab extends SliderSuperTab {
     }
   }
 
-  public _deleteDeletedMessages(historyStorage: SharedMediaHistoryStorage, peerId: PeerId, mids: number[], threadId?: number) {
+  public _deleteDeletedMessages(
+    historyStorage: SharedMediaHistoryStorage,
+    peerId: PeerId,
+    mids: number[],
+    threadId?: number
+  ) {
+    const notFound: Set<SearchSuperMediaTab> = new Set();
     for(const mid of mids) {
       for(const mediaTab of this.searchSuper.mediaTabs) {
         const inputFilter = mediaTab.inputFilter;
@@ -479,9 +501,6 @@ export default class AppSharedMediaTab extends SliderSuperTab {
         const isGood = mediaTab.type === 'saved' ?
           this.peerId === threadId :
           this.peerId === peerId && this.threadId === threadId;
-        if(isGood) {
-          this.searchSuper.setCounter(mediaTab.type, this.searchSuper.counters[mediaTab.type] - mids.length);
-        }
 
         const idx = history.findIndex((m) => m.mid === mid);
         if(idx === -1) {
@@ -503,6 +522,13 @@ export default class AppSharedMediaTab extends SliderSuperTab {
             if(idx !== -1 && this.searchSuper.usedFromHistory[inputFilter] >= (idx + 1)) {
               --this.searchSuper.usedFromHistory[inputFilter];
             }
+
+            this.searchSuper.setCounter(
+              mediaTab.type,
+              this.searchSuper.counters[mediaTab.type] - 1
+            );
+          } else {
+            notFound.add(mediaTab);
           }
         }
 
@@ -510,6 +536,25 @@ export default class AppSharedMediaTab extends SliderSuperTab {
         // break;
       }
     }
+
+    const filters = Array.from(notFound).map((mediaTab) => ({_: mediaTab.inputFilter}));
+    if(!filters.length) {
+      return;
+    }
+
+    const middleware = this.searchSuper.middleware.get();
+    this.searchSuper.getSearchCounters(filters).then((counters) => {
+      if(!middleware()) {
+        return;
+      }
+
+      notFound.forEach((mediaTab) => {
+        const counter = counters.find((c) => c.filter._ === mediaTab.inputFilter);
+        if(counter) {
+          this.searchSuper.setCounter(mediaTab.type, counter.count);
+        }
+      });
+    });
   }
 
   public deleteDeletedMessages(peerId: PeerId, msgs: BroadcastEvents['history_delete']['msgs']) {
@@ -535,7 +580,6 @@ export default class AppSharedMediaTab extends SliderSuperTab {
     ]);
 
     return () => {
-      this.profile?.cleanupHTML();
       this.editBtn.classList.add('hide');
       this.searchSuper.cleanupHTML(true);
       this.container.classList.toggle('can-add-members', canViewMembers && hasRights);
@@ -572,8 +616,6 @@ export default class AppSharedMediaTab extends SliderSuperTab {
       historyStorage
     });
 
-    this.profile?.setPeer(peerId, threadId);
-
     return true;
   }
 
@@ -581,21 +623,36 @@ export default class AppSharedMediaTab extends SliderSuperTab {
     const {peerId, threadId} = this;
     const isSavedDialog = !!(peerId === rootScope.myId && threadId);
     const usePeerId = isSavedDialog ? threadId : peerId;
-    const [isForum, isBroadcast, isBot, peerTitle] = await Promise.all([
-      this.managers.appPeersManager.isForum(usePeerId),
-      this.managers.appPeersManager.isBroadcast(usePeerId),
-      this.managers.appPeersManager.isBot(usePeerId),
-      wrapPeerTitle({
+    const {isForum, isBotforum, isBroadcast, isBot, peerTitle} = await namedPromises({
+      isForum: this.managers.appPeersManager.isForum(usePeerId),
+      isBotforum: this.managers.appPeersManager.isBotforum(usePeerId),
+      isBroadcast: this.managers.appPeersManager.isBroadcast(usePeerId),
+      isBot: this.managers.appPeersManager.isBot(usePeerId),
+      peerTitle: wrapPeerTitle({
         peerId,
         threadId: isSavedDialog ? undefined : threadId,
         meAsNotes: isSavedDialog && threadId === rootScope.myId,
         dialog: true
       })
-    ]);
+    });
+
+    const titleKey = ((): LangPackKey => {
+      if((isForum || isBotforum) && threadId) {
+        return 'Profile.Info.Topic';
+      } else if(isBot) {
+        return 'Profile.Info.Bot';
+      } else if(isBroadcast) {
+        return 'Profile.Info.Channel';
+      } else if(usePeerId.isUser()) {
+        return 'Profile.Info.User';
+      } else {
+        return 'Profile.Info.Group';
+      }
+    })();
 
     return () => {
       this.titleI18n.compareAndUpdate({
-        key: isBot ? 'Profile.Info.Bot' : (isBroadcast ? 'Profile.Info.Channel' : (threadId && isForum ? 'Profile.Info.Topic' : (usePeerId.isUser() ? 'Profile.Info.User' : 'Profile.Info.Group')))
+        key: titleKey
       });
       this.sharedMediaTitle.replaceChildren(peerTitle);
       this.btnMenu.classList.toggle('hide', !this.isFirst || isSavedDialog || peerId !== rootScope.myId);
@@ -611,8 +668,26 @@ export default class AppSharedMediaTab extends SliderSuperTab {
     const callbacks = await Promise.all([
       this.cleanupHTML(),
       this.toggleEditBtn(true),
-      this.profile?.fillProfileElements(),
-      this.changeTitleKey()
+      // this.profile?.fillProfileElements(),
+      this.changeTitleKey(),
+      (() => {
+        !this.noProfile && createRoot((dispose) => {
+          this.middlewareHelper.onDestroy(dispose);
+          this.scrollable.append(renderPeerProfile({
+            peerId: this.peerId,
+            threadId: this.threadId,
+            isDialog: true,
+            scrollable: this.scrollable,
+            setCollapsedOn: this.container,
+            searchSuperContainer: this.searchSuper.container,
+            onPinnedGiftsChange: (gifts) => {
+              this.searchSuper.setPinnedGifts(gifts);
+            }
+          }, SolidJSHotReloadGuardProvider));
+        });
+
+        return () => {};
+      })()
     ]);
 
     return () => {
@@ -624,7 +699,6 @@ export default class AppSharedMediaTab extends SliderSuperTab {
 
   private async toggleEditBtn(manual: true): Promise<() => void>;
   private async toggleEditBtn(manual?: false): Promise<void>;
-
   private async toggleEditBtn(manual?: boolean): Promise<(() => void) | void> {
     const {peerId} = this;
     let show: boolean;
@@ -639,7 +713,7 @@ export default class AppSharedMediaTab extends SliderSuperTab {
         show = await this.managers.dialogsStorage.canManageTopic(await this.managers.dialogsStorage.getForumTopic(peerId, this.threadId));
       } else {
         const chat = apiManagerProxy.getChat(chatId);
-        show = !!(chat as Chat.channel).admin_rights || await this.managers.appChatsManager.hasRights(chatId, 'change_info');
+        show = hasRights(chat, 'change_info');
       }
     }
 
@@ -670,7 +744,6 @@ export default class AppSharedMediaTab extends SliderSuperTab {
     super.onCloseAfterTimeout();
 
     if(this.destroyable) {
-      this.profile?.destroy();
       this.searchSuper.destroy();
     }
   }

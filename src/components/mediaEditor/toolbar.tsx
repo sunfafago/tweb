@@ -1,18 +1,18 @@
 import {batch, createEffect, createMemo, createSignal, JSX, on, onCleanup, onMount} from 'solid-js';
-
-import {doubleRaf} from '../../helpers/schedulers';
-
-import AdjustmentsTab from './tabs/adjustmentsTab';
-import {animateValue, delay, lerp} from './utils';
-import {useMediaEditorContext} from './context';
-import StickersTab from './tabs/stickersTab';
-import TabContent from './tabs/tabContent';
-import useIsMobile from './useIsMobile';
-import BrushTab from './tabs/brushTab';
-import CropTab from './tabs/cropTab';
-import TextTab from './tabs/textTab';
-import Tabs from './tabs/tabs';
-import Topbar from './topbar';
+import {doubleRaf} from '@helpers/schedulers';
+import {useMediaEditorContext} from '@components/mediaEditor/context';
+import AdjustmentsTab from '@components/mediaEditor/tabs/adjustmentsTab';
+import BrushTab from '@components/mediaEditor/tabs/brushTab';
+import CropTab from '@components/mediaEditor/tabs/cropTab';
+import StickersTab from '@components/mediaEditor/tabs/stickersTab';
+import TabContent from '@components/mediaEditor/tabs/tabContent';
+import Tabs from '@components/mediaEditor/tabs/tabs';
+import TextTab from '@components/mediaEditor/tabs/textTab';
+import Topbar from '@components/mediaEditor/topbar';
+import useIsMobile from '@components/mediaEditor/useIsMobile';
+import {delay} from '@components/mediaEditor/utils';
+import {animateValue} from '@helpers/animateValue';
+import {lerp} from '@helpers/lerp';
 
 
 export default function Toolbar(props: {onFinish: () => void; onClose: () => void}) {

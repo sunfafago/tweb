@@ -1,22 +1,35 @@
 // @import "../scss/mixins";
-@import "../../scss/variables";
+@use "../../scss/variables" as *;
 
 .container {
   order: 0;
   // padding: 0 .5rem;
   // margin: .5rem 0;
+
+  // interpolate-size: allow-keywords;
+  // height: 0;
+  // overflow: hidden;
+  // transition: height 200ms ease-in-out;
+
+  // &.shown {
+  //   height: max-content;
+  // }
 }
 
 .suggestion {
   margin: .5rem;
 
-  :global(.has-folders-sidebar) & {
+  :global(.has-vertical-folders) & {
     margin-bottom: 0;
   }
 
   &Subtitle {
     font-size: var(--font-size-16);
     line-height: var(--line-height-16);
+  }
+
+  &Container {
+    overflow: hidden;
   }
 
   &.danger {
@@ -26,9 +39,13 @@
       color: var(--danger-color);
     }
   }
+
+  &.secondary {
+    background-color: rgba(var(--secondary-text-color-rgb), $hover-alpha);
+  }
 }
 
-.banned {
+.collapsed {
   width: 100%;
   height: 3.75rem;
   display: flex;
@@ -41,6 +58,15 @@
     width: 1.5rem;
     height: 1.5rem;
   }
+}
+
+.close {
+  font-size: 1.0625rem;
+  padding: .375rem;
+  position: absolute;
+  inset-inline-end: .25rem;
+  top: .25rem;
+  z-index: 1;
 }
 
 // .container {

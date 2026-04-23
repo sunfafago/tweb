@@ -4,25 +4,24 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import type {MTAppConfig} from '../../lib/mtproto/appConfig';
-import PopupElement from './index';
-import PromoSlideTab, {getGiftDetails} from '../premium/promoSlideTab';
-import TransitionSlider from '../transition';
-import FeatureSlideTab from '../premium/featureSlideTab';
-import I18n, {FormatterArguments} from '../../lib/langPack';
-import Button from '../button';
-import paymentsWrapCurrencyAmount from '../../helpers/paymentsWrapCurrencyAmount';
-import {HelpPremiumPromo, MessageAction, PaymentsCheckedGiftCode, PremiumSubscriptionOption} from '../../layer';
-import {PREMIUM_FEATURES, PremiumPromoFeature} from '../premium/featuresConfig';
-import Icon from '../icon';
-import {Middleware} from '../../helpers/middleware';
-import {AppManagers} from '../../lib/appManagers/managers';
-import appImManager, {ChatSetPeerOptions} from '../../lib/appManagers/appImManager';
-import rootScope from '../../lib/rootScope';
-import safeAssign from '../../helpers/object/safeAssign';
-import ListenerSetter from '../../helpers/listenerSetter';
-import {attachClickEvent} from '../../helpers/dom/clickEvent';
-import PopupGiftLink from './giftLink';
+import PopupElement from '@components/popups/index';
+import PromoSlideTab, {getGiftDetails} from '@components/premium/promoSlideTab';
+import TransitionSlider from '@components/transition';
+import FeatureSlideTab from '@components/premium/featureSlideTab';
+import I18n, {FormatterArguments} from '@lib/langPack';
+import Button from '@components/button';
+import paymentsWrapCurrencyAmount from '@helpers/paymentsWrapCurrencyAmount';
+import {HelpPremiumPromo, MessageAction, PaymentsCheckedGiftCode, PremiumSubscriptionOption} from '@layer';
+import {PREMIUM_FEATURES, PremiumPromoFeature} from '@components/premium/featuresConfig';
+import Icon from '@components/icon';
+import {Middleware} from '@helpers/middleware';
+import {AppManagers} from '@lib/managers';
+import appImManager, {ChatSetPeerOptions} from '@lib/appImManager';
+import rootScope from '@lib/rootScope';
+import safeAssign from '@helpers/object/safeAssign';
+import ListenerSetter from '@helpers/listenerSetter';
+import {attachClickEvent} from '@helpers/dom/clickEvent';
+import PopupGiftLink from '@components/popups/giftLink';
 
 export type PopupPremiumProps = {
   order: PremiumPromoFeatureType[],
@@ -34,6 +33,7 @@ export type PopupPremiumProps = {
   isPremiumActive?: boolean,
   gift: MessageAction.messageActionGiftPremium | PaymentsCheckedGiftCode,
   peerId: PeerId,
+  emojiStatusId?: DocId,
   isOut: boolean,
   type: 'premium' | 'gift',
   stack: ChatSetPeerOptions['stack'],
@@ -54,6 +54,7 @@ export default class PopupPremium extends PopupElement {
   private feature: PremiumPromoFeatureType;
   private gift: PopupPremiumProps['gift'];
   private peerId: PeerId;
+  private emojiStatusId?: DocId;
   private isOut: boolean;
   private stack: PopupPremiumProps['stack'];
   private transition: ReturnType<typeof TransitionSlider>;
@@ -67,6 +68,7 @@ export default class PopupPremium extends PopupElement {
     peerId?: PopupPremium['peerId'],
     isOut?: PopupPremium['isOut'],
     stack?: PopupPremium['stack']
+    emojiStatusId?: PopupPremium['emojiStatusId']
   } = {}) {
     super('popup-premium', {
       overlayClosable: true,
@@ -159,6 +161,7 @@ export default class PopupPremium extends PopupElement {
       isPremiumActive,
       gift: this.gift,
       peerId: this.peerId || this.stack?.peerId,
+      emojiStatusId: this.emojiStatusId,
       isOut: this.isOut || this.stack?.isOut,
       type: this.gift ? 'gift' : 'premium',
       stack: this.stack,
@@ -180,7 +183,7 @@ export default class PopupPremium extends PopupElement {
 
     this.createTransitionSlider();
     this.createActionButton();
-    this.createPromoSlideTab();
+    await this.createPromoSlideTab();
     this.createFeatureSlideTab();
 
     const tabs = [this.promoSlideTab.tab, this.featureSlideTab.tab].filter(Boolean);
@@ -258,7 +261,7 @@ export default class PopupPremium extends PopupElement {
     this.actionButtonContainer.append(this.actionButton);
   }
 
-  private createPromoSlideTab() {
+  private async createPromoSlideTab() {
     this.promoSlideTab = new PromoSlideTab({
       container: this.tabsContainer,
       header: this.header,
@@ -273,6 +276,7 @@ export default class PopupPremium extends PopupElement {
       this.updateActionLayout();
     };
     this.promoSlideTab.close = this.close;
+    await this.promoSlideTab.initPromise;
   }
 
   private createFeatureSlideTab() {

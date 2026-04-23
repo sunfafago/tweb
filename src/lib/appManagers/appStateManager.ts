@@ -4,15 +4,17 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import type {State, StateSettings} from '../../config/state';
-import rootScope from '../rootScope';
-import StateStorage from '../stateStorage';
-import setDeepProperty, {splitDeepPath} from '../../helpers/object/setDeepProperty';
-import MTProtoMessagePort from '../mtproto/mtprotoMessagePort';
-import {ActiveAccountNumber} from '../accounts/types';
-import deferredPromise, {CancellablePromise} from '../../helpers/cancellablePromise';
-import {StoragesResults} from './utils/storages/loadStorages';
-import commonStateStorage from '../commonStateStorage';
+import type {State, StateSettings} from '@config/state';
+import rootScope from '@lib/rootScope';
+import StateStorage from '@lib/stateStorage';
+import setDeepProperty, {splitDeepPath} from '@helpers/object/setDeepProperty';
+import MTProtoMessagePort from '@lib/mainWorker/mainMessagePort';
+import {ActiveAccountNumber} from '@lib/accounts/types';
+import deferredPromise, {CancellablePromise} from '@helpers/cancellablePromise';
+import {StoragesResults} from '@appManagers/utils/storages/loadStorages';
+import commonStateStorage from '@lib/commonStateStorage';
+import callbackify from '@helpers/callbackify';
+import isObject from '@helpers/object/isObject';
 
 export type ResetStoragesPromise = CancellablePromise<{
   storages: Map<keyof StoragesResults, (PeerId | UserId | ChatId)[]>,
@@ -86,6 +88,36 @@ export default class AppStateManager {
     return this.storage.set({
       [key]: value
     }, onlyLocal);
+  }
+
+  public getSomethingCached<T extends Extract<keyof State, 'accountContentSettings'>>({
+    key,
+    defaultValue,
+    getValue,
+    overwrite
+  }: {
+    key: T,
+    defaultValue: State[T]['value'],
+    getValue: () => Promise<State[T]['value']>,
+    overwrite?: boolean
+  }) {
+    return callbackify(this.state ?? this.getState(), (state) => {
+      const cached = state[key];
+      const hasValue = isObject(cached) && Object.keys(cached).length;
+      const now = Date.now();
+      const shouldRefresh = !hasValue || cached.timestamp < (now - 86400e3);
+      if(shouldRefresh || overwrite) {
+        getValue().then((value) => {
+          this.pushToState(key, {value, timestamp: now});
+        });
+      }
+
+      if(!hasValue) {
+        return defaultValue;
+      }
+
+      return cached.value;
+    });
   }
 
   /* public resetState() {

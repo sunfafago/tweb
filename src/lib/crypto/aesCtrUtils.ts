@@ -4,8 +4,8 @@
  * https://github.com/morethanwords/tweb/blob/master/LICENSE
  */
 
-import CTR from './utils/aesCTR';
-import subtle from './subtle';
+import CTR from '@lib/crypto/utils/aesCTR';
+import subtle from '@lib/crypto/subtle';
 
 const aesCTRs: Map<number, K> = new Map();
 let lastCTRId = -1;
@@ -22,7 +22,7 @@ export async function aesCtrPrepare({encKey, encIv, decKey, decIv}: {[k in 'encK
   const promises = a.map(([mode, key]) => {
     return subtle.importKey(
       'raw',
-      key,
+      key as BufferSource,
       {name: 'AES-CTR'},
       false,
       [mode]

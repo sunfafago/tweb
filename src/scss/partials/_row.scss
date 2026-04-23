@@ -5,6 +5,7 @@
  */
 
 @use "sass:math";
+@use "../shared" as *;
 
 $row-border-radius: $border-radius-medium;
 
@@ -145,9 +146,7 @@ $row-border-radius: $border-radius-medium;
 
     .row-title,
     .row-subtitle {
-      overflow: visible;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      @include text-overflow(true);
       min-width: 0;
       flex: 1 1 auto;
 
