@@ -11,7 +11,6 @@ const USE_FIX = IS_CHROMIUM;
 export const SHOULD_HANDLE_VIDEO_LEAK = USE_FIX;
 
 export async function onVideoLeak(video: HTMLVideoElement) {
-  debugger
   // console.error('video is stuck', video.src, video, video.paused, videoPlaybackQuality);
   const firstElementChild = video.firstElementChild as HTMLSourceElement;
   if(!firstElementChild) {
