@@ -4,10 +4,9 @@ __pycache__
 /dist
 **/.DS_Store
 stats.json
-/public/*
+/public
 certs
 /public_back/*
-/public/*
 .vscode
 session_name.session
 tasks.txt
@@ -19,6 +18,3 @@ archive.zip
 .env.local
 src/langPackLocalVersion.ts
 /.ai
-
-# Throw files you don't need in this folder
-ignore
